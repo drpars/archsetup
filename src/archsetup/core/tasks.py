@@ -24,6 +24,8 @@ from . import (
     network,
     pacman,
     sddm,
+    virt,
+    waydroid,
 )
 from .pacman import run
 
@@ -170,6 +172,13 @@ TASKS: tuple[Task, ...] = (
         "network-sharing",
         "task.network_sharing",
         network.configure,
+        group="config",
+    ),
+    Task("virt-config", "task.virt_config", virt.configure, group="config"),
+    Task(
+        "waydroid-setup",
+        "task.waydroid_setup",
+        waydroid.setup,
         group="config",
     ),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),

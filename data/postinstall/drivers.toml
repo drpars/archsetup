@@ -80,6 +80,23 @@ condition = "gpu:nvidia"
   note = { tr = "VA-API donanım hızlandırma", en = "VA-API hardware acceleration" }
 
 [[category]]
+id = "openrazer"
+
+  [[category.packages]]
+  name = "openrazer-daemon"
+  note = { tr = "Razer aygıtları için DBus servisi", en = "DBus service for Razer devices" }
+  post_msg = "msg.plugdev_hint"
+
+  [[category.packages]]
+  name = "openrazer-driver-dkms"
+  note = "DKMS"
+  post_msg = "msg.reboot_required"
+
+  [[category.packages]]
+  name = "python-openrazer"
+  note = { tr = "OpenRazer Python kütüphanesi", en = "OpenRazer Python library" }
+
+[[category]]
 id = "sound"
 
   [[category.packages]]

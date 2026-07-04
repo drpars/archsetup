@@ -189,6 +189,10 @@ id = "system"
   note = "grub çoklu önyükleme"
   default = false
 
+  [[category.packages]]
+  name = "xorg-xhost"
+  note = { tr = "X sunucusu erişim denetimi", en = "X server access control" }
+
 [[category]]
 id = "internet"
 
@@ -237,6 +241,7 @@ id = "common"
   [[category.packages]]
   name = "waydroid"
   aur = true
+  post_msg = "msg.waydroid_hint"
 
   [[category.packages]]
   name = "waydroid-helper"
@@ -394,3 +399,144 @@ id = "multimedia"
 
   [[category.packages]]
   name = "libde265"
+
+[[category]]
+id = "fonts"
+
+  [[category.packages]]
+  name = "ttf-jetbrains-mono-nerd"
+
+  [[category.packages]]
+  name = "ttf-fantasque-nerd"
+
+  [[category.packages]]
+  name = "ttf-ubuntu-nerd"
+
+  [[category.packages]]
+  name = "ttf-ubuntu-mono-nerd"
+
+  [[category.packages]]
+  name = "ttf-hack-nerd"
+
+  [[category.packages]]
+  name = "ttf-firacode-nerd"
+
+  [[category.packages]]
+  name = "otf-font-awesome"
+
+[[category]]
+id = "theme_engines"
+
+  [[category.packages]]
+  name = "lxappearance"
+  note = "GTK"
+  default = false
+
+  [[category.packages]]
+  name = "nwg-look"
+  note = "GTK"
+  default = false
+
+  [[category.packages]]
+  name = "kvantum"
+  note = "Qt6"
+  default = false
+
+  [[category.packages]]
+  name = "kvantum-qt5"
+  note = "Qt5"
+  default = false
+
+  [[category.packages]]
+  name = "qt5ct"
+  default = false
+
+  [[category.packages]]
+  name = "qt6ct"
+  default = false
+
+  [[category.packages]]
+  name = "qt6ct-kde"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "darkly-bin"
+  aur = true
+
+  [[category.packages]]
+  name = "darkly-qt6-git"
+  aur = true
+  default = false
+
+[[category]]
+id = "themes"
+
+  [[category.packages]]
+  name = "qogir-icon-theme"
+  aur = true
+  note = { tr = "Simge teması", en = "Icon theme" }
+
+  [[category.packages]]
+  name = "tokyonight-gtk-theme-git"
+  aur = true
+  note = { tr = "GTK teması", en = "GTK theme" }
+
+  [[category.packages]]
+  name = "mocu-xcursor"
+  aur = true
+  note = { tr = "İmleç teması", en = "Cursor theme" }
+
+[[category]]
+id = "gaming"
+
+  [[category.packages]]
+  name = "lutris"
+  default = false
+
+  [[category.packages]]
+  name = "steam"
+  default = false
+
+  [[category.packages]]
+  name = "heroic-games-launcher-bin"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "gamescope"
+  default = false
+
+[[category]]
+id = "virtualization"
+
+  [[category.packages]]
+  name = "libvirt"
+  post_msg = "msg.virt_config_hint"
+
+  [[category.packages]]
+  name = "iptables-nft"
+
+  [[category.packages]]
+  name = "dnsmasq"
+
+  [[category.packages]]
+  name = "openbsd-netcat"
+
+  [[category.packages]]
+  name = "dmidecode"
+
+  [[category.packages]]
+  name = "qemu-desktop"
+
+  [[category.packages]]
+  name = "virt-manager"
+
+  [[category.packages]]
+  name = "virt-viewer"
+
+  [[category.packages]]
+  name = "bridge-utils"
+
+  [[category.packages]]
+  name = "swtpm"

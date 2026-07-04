@@ -87,6 +87,16 @@ g14_missing = "No [g14] repository: asusctl/supergfxctl/rog-control-center will 
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured; smb, nmb and avahi services enabled."
 
+[virt]
+already = "{path} already configured."
+libvirt_missing = "libvirt is not installed; install it from Applications > Virtualization first."
+done = "libvirt configured. Log out and back in for group membership."
+
+[waydroid]
+missing = "waydroid is not installed; install it from Applications > Common Applications first."
+zen = "The linux-zen kernel ships the binder module; only the service was enabled."
+done = "Waydroid binder configured. Reboot before running it!"
+
 [menu.dm]
 title = "Display Manager"
 desc = "Install and enable a display/login manager"
@@ -157,6 +167,10 @@ asus_tools = "ASUS ROG/TUF Tools"
 asus_tools_desc = "asusctl, supergfxctl, rog-control-center + services (g14/AUR)"
 network_sharing = "Network Sharing (Samba/Avahi)"
 network_sharing_desc = "Samba configuration, sambashare group, mDNS and services"
+virt_config = "Virt-Manager Configuration"
+virt_config_desc = "libvirt socket/user settings, virtio modules, services"
+waydroid_setup = "Waydroid Binder Setup"
+waydroid_setup_desc = "binder_linux module (built into zen kernel) + service"
 
 [category]
 console = "Console Applications"
@@ -172,6 +186,12 @@ gnome = "GNOME"
 filemanagers = "File Managers"
 yazi_extras = "Yazi Extras"
 multimedia = "Multimedia"
+fonts = "Fonts (Nerd Fonts)"
+theme_engines = "Theme Engines"
+themes = "Themes (Qogir, TokyoNight, Mocu)"
+gaming = "Game Launchers"
+virtualization = "Virtualization (virt-manager)"
+openrazer = "OpenRazer (Razer Devices)"
 amd = "AMD/Radeon Drivers"
 nvidia = "NVIDIA Drivers"
 sound = "Audio System (PipeWire)"
@@ -200,6 +220,10 @@ hibernate_done = "Hibernation configured: {params}\nReboot for the changes to ta
 cancelled = "Operation cancelled."
 bat_missing = "bat is not installed."
 sddm_missing = "SDDM is not installed. Install sddm from the Display Manager menu first."
+plugdev_hint = "For OpenRazer, add your user to the plugdev group: sudo gpasswd -a $USER plugdev"
+virt_config_hint = "After installing, run 'Virt-Manager Configuration' in the Configuration menu."
+waydroid_hint = "For the binder module, run 'Waydroid Binder Setup' in the Configuration menu."
+file_missing = "File not found: {path}"
 aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
 detected = "detected"
 not_detected = "not detected"

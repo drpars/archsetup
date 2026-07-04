@@ -87,6 +87,16 @@ g14_missing = "[g14] deposu yok: asusctl/supergfxctl/rog-control-center AUR'dan 
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
 
+[virt]
+already = "{path} zaten yapılandırılmış."
+libvirt_missing = "libvirt kurulu değil; önce Uygulamalar > Sanallaştırma kategorisinden kurun."
+done = "libvirt yapılandırıldı. Grup üyeliği için oturumu kapatıp açın."
+
+[waydroid]
+missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
+zen = "linux-zen çekirdeği binder modülünü içerir; yalnızca servis etkinleştirildi."
+done = "Waydroid binder yapılandırıldı. Çalıştırmadan önce yeniden başlatın!"
+
 [menu.dm]
 title = "Giriş Yöneticisi"
 desc = "Görüntü/giriş yöneticisi kur ve etkinleştir"
@@ -157,6 +167,10 @@ asus_tools = "ASUS ROG/TUF Araçları"
 asus_tools_desc = "asusctl, supergfxctl, rog-control-center + servisler (g14/AUR)"
 network_sharing = "Ağ Paylaşımı (Samba/Avahi)"
 network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servisler"
+virt_config = "Virt-Manager Yapılandırması"
+virt_config_desc = "libvirt soket/kullanıcı ayarları, virtio modülleri, servisler"
+waydroid_setup = "Waydroid Binder Kurulumu"
+waydroid_setup_desc = "binder_linux modülü (zen çekirdekte yerleşik) + servis"
 
 [category]
 console = "Konsol Uygulamaları"
@@ -172,6 +186,12 @@ gnome = "GNOME"
 filemanagers = "Dosya Gezginleri"
 yazi_extras = "Yazi Eklentileri"
 multimedia = "Multimedya"
+fonts = "Yazı Tipleri (Nerd Fonts)"
+theme_engines = "Tema Motorları"
+themes = "Temalar (Qogir, TokyoNight, Mocu)"
+gaming = "Oyun Başlatıcıları"
+virtualization = "Sanallaştırma (virt-manager)"
+openrazer = "OpenRazer (Razer Aygıtları)"
 amd = "AMD/Radeon Sürücüleri"
 nvidia = "NVIDIA Sürücüleri"
 sound = "Ses Sistemi (PipeWire)"
@@ -200,6 +220,10 @@ hibernate_done = "Hazırda bekletme yapılandırıldı: {params}\nDeğişiklikle
 cancelled = "İşlem iptal edildi."
 bat_missing = "bat kurulu değil."
 sddm_missing = "SDDM kurulu değil. Önce Görüntü Yöneticisi menüsünden sddm kurun."
+plugdev_hint = "OpenRazer için kullanıcıyı plugdev grubuna ekleyin: sudo gpasswd -a $USER plugdev"
+virt_config_hint = "Kurulumdan sonra Yapılandırma menüsündeki 'Virt-Manager Yapılandırması' görevini çalıştırın."
+waydroid_hint = "Binder modülü için Yapılandırma menüsündeki 'Waydroid Binder Kurulumu' görevini çalıştırın."
+file_missing = "Dosya bulunamadı: {path}"
 aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
 detected = "algılandı"
 not_detected = "algılanmadı"

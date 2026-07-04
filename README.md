@@ -63,8 +63,9 @@ src/archsetup/
       dotfiles kur/kaldır, bat önbelleği
 - [x] SDDM temaları (Silent, Sugar Candy), duvar kağıtları, kmscon
 - [x] Ağ paylaşımı: Samba (usershare, sambashare grubu) + Avahi + firewalld
-- [ ] Kalan uygulama kategorileri (yazı tipleri, temalar, oyun başlatıcılar,
-      virt-manager yapılandırması)
+- [x] Kalan uygulama kategorileri: yazı tipleri, tema motorları, temalar,
+      oyun başlatıcılar, sanallaştırma (virt-config görevi), OpenRazer,
+      Waydroid binder kurulumu
 - [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
