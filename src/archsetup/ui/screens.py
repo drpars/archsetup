@@ -193,6 +193,29 @@ def make_update_menu() -> MenuScreen:
     return MenuScreen(t("menu.update.title"), items)
 
 
+def make_theme_menu() -> MenuScreen:
+    from .app import DARK_THEME, LIGHT_THEME
+
+    def apply(screen: MenuScreen, name: str) -> None:
+        screen.app.set_app_theme(name)
+
+    items = [
+        MenuItem(
+            "dark",
+            t("theme.dark"),
+            t("theme.dark_desc"),
+            lambda screen: apply(screen, DARK_THEME),
+        ),
+        MenuItem(
+            "light",
+            t("theme.light"),
+            t("theme.light_desc"),
+            lambda screen: apply(screen, LIGHT_THEME),
+        ),
+    ]
+    return MenuScreen(t("menu.theme.title"), items)
+
+
 def make_main_menu() -> MenuScreen:
     items = [
         MenuItem(
@@ -212,6 +235,12 @@ def make_main_menu() -> MenuScreen:
             t("menu.main.drivers"),
             t("menu.main.drivers_desc"),
             lambda screen: screen.app.push_screen(make_drivers_menu()),
+        ),
+        MenuItem(
+            "theme",
+            t("menu.main.theme"),
+            t("menu.main.theme_desc"),
+            lambda screen: screen.app.push_screen(make_theme_menu()),
         ),
         MenuItem(
             "language",

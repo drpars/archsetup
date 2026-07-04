@@ -23,6 +23,8 @@ apps = "Uygulamalar"
 apps_desc = "Kategorilere göre uygulama kurulumu"
 drivers = "Sürücüler"
 drivers_desc = "Grafik ve ses sürücüleri"
+theme = "Tema"
+theme_desc = "Açık / koyu tema seçimi"
 language = "Dil / Language"
 language_desc = "Arayüz dilini değiştir"
 quit = "Çıkış"
@@ -33,6 +35,15 @@ title = "Sistem Güncelleme"
 
 [menu.apps]
 title = "Uygulamalar"
+
+[menu.theme]
+title = "Tema"
+
+[theme]
+dark = "Koyu — Tokyo Night"
+dark_desc = "Varsayılan koyu tema"
+light = "Açık — Tokyo Night Day"
+light_desc = "Tokyo Night'ın gündüz paleti"
 
 [menu.drivers]
 title = "Sürücüler"

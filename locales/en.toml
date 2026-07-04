@@ -23,6 +23,8 @@ apps = "Applications"
 apps_desc = "Install applications by category"
 drivers = "Drivers"
 drivers_desc = "Graphics and audio drivers"
+theme = "Theme"
+theme_desc = "Light / dark theme selection"
 language = "Language / Dil"
 language_desc = "Change interface language"
 quit = "Quit"
@@ -33,6 +35,15 @@ title = "System Update"
 
 [menu.apps]
 title = "Applications"
+
+[menu.theme]
+title = "Theme"
+
+[theme]
+dark = "Dark — Tokyo Night"
+dark_desc = "Default dark theme"
+light = "Light — Tokyo Night Day"
+light_desc = "Tokyo Night's day palette"
 
 [menu.drivers]
 title = "Drivers"

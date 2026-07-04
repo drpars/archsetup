@@ -11,14 +11,35 @@ from __future__ import annotations
 from typing import Callable
 
 from textual.app import App
+from textual.theme import Theme
 
-from ..core import i18n, pacman
+from ..core import config, i18n, pacman
 from ..core.tasks import Task
 from . import screens
 
 t = i18n.t
 
 RESTART = "__restart__"
+
+DARK_THEME = "tokyo-night"  # built into Textual
+LIGHT_THEME = "tokyo-night-day"
+
+# Official Tokyo Night "day" palette (folke/tokyonight.nvim), registered as
+# the light counterpart of Textual's built-in tokyo-night theme.
+TOKYO_NIGHT_DAY = Theme(
+    name=LIGHT_THEME,
+    primary="#2e7de9",
+    secondary="#007197",
+    accent="#9854f1",
+    foreground="#3760bf",
+    background="#e1e2e7",
+    surface="#d0d5e3",
+    panel="#c4c8da",
+    success="#587539",
+    warning="#8c6c3e",
+    error="#f52a65",
+    dark=False,
+)
 
 
 class ArchSetupApp(App):
@@ -44,9 +65,17 @@ class ArchSetupApp(App):
 
     def on_mount(self) -> None:
         self.title = t("app.title")
+        self.register_theme(TOKYO_NIGHT_DAY)
+        self.theme = config.load().get("theme", DARK_THEME)
         self.push_screen(screens.make_main_menu())
         if self._ask_language:
             self.push_screen(screens.LanguageScreen())
+
+    def set_app_theme(self, name: str) -> None:
+        self.theme = name
+        conf = config.load()
+        conf["theme"] = name
+        config.save(conf)
 
     def run_in_terminal(self, fn: Callable[[], int]) -> None:
         """Suspend the TUI, run fn in the real terminal, report the result."""
