@@ -16,7 +16,7 @@ from textual.widgets import Footer, Header, OptionList, SelectionList, Static
 from textual.widgets.option_list import Option
 from textual.widgets.selection_list import Selection
 
-from ..core import data, hardware, i18n, tasks
+from ..core import data, hardware, i18n, pacman, services, tasks
 
 t = i18n.t
 
@@ -114,6 +114,9 @@ class PackageScreen(Screen):
         repo_pkgs = [pkg.name for pkg in chosen if not pkg.aur]
         aur_pkgs = [pkg.name for pkg in chosen if pkg.aur]
         self.app.install_packages(repo_pkgs, aur_pkgs)
+        for pkg in chosen:
+            if pkg.post_msg and pacman.is_installed(pkg.name):
+                self.app.notify(t(pkg.post_msg), severity="warning", timeout=12)
 
 
 class LanguageScreen(Screen):
@@ -193,6 +196,43 @@ def make_update_menu() -> MenuScreen:
     return MenuScreen(t("menu.update.title"), items)
 
 
+def make_dm_menu() -> MenuScreen:
+    def install_dm(screen: MenuScreen, dm: data.DisplayManager) -> None:
+        def fn() -> int:
+            repo = [] if dm.aur else [dm.package]
+            aur = [dm.package] if dm.aur else []
+            rc = pacman.install(repo, aur)
+            if rc == 0:
+                rc = services.enable(dm.service)
+            return rc
+
+        screen.app.run_in_terminal(fn)
+
+    items = [
+        MenuItem(
+            id=dm.id,
+            label=dm.package,
+            desc=t(f"dm.{dm.id}_desc"),
+            action=lambda screen, mgr=dm: install_dm(screen, mgr),
+        )
+        for dm in data.load_display_managers()
+    ]
+    return MenuScreen(t("menu.dm.title"), items)
+
+
+def make_desktops_menu() -> MenuScreen:
+    items = _category_items("desktops.toml", PackageScreen)
+    items.append(
+        MenuItem(
+            id="displaymanager",
+            label=t("menu.dm.title"),
+            desc=t("menu.dm.desc"),
+            action=lambda screen: screen.app.push_screen(make_dm_menu()),
+        )
+    )
+    return MenuScreen(t("menu.desktops.title"), items)
+
+
 def make_theme_menu() -> MenuScreen:
     from .app import DARK_THEME, LIGHT_THEME
 
@@ -235,6 +275,12 @@ def make_main_menu() -> MenuScreen:
             t("menu.main.drivers"),
             t("menu.main.drivers_desc"),
             lambda screen: screen.app.push_screen(make_drivers_menu()),
+        ),
+        MenuItem(
+            "desktops",
+            t("menu.main.desktops"),
+            t("menu.main.desktops_desc"),
+            lambda screen: screen.app.push_screen(make_desktops_menu()),
         ),
         MenuItem(
             "theme",

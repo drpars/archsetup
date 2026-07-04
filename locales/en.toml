@@ -23,6 +23,8 @@ apps = "Applications"
 apps_desc = "Install applications by category"
 drivers = "Drivers"
 drivers_desc = "Graphics and audio drivers"
+desktops = "Desktop Environments"
+desktops_desc = "Hyprland, Plasma, GNOME and display managers"
 theme = "Theme"
 theme_desc = "Light / dark theme selection"
 language = "Language / Dil"
@@ -35,6 +37,20 @@ title = "System Update"
 
 [menu.apps]
 title = "Applications"
+
+[menu.desktops]
+title = "Desktop Environments"
+
+[menu.dm]
+title = "Display Manager"
+desc = "Install and enable a display/login manager"
+
+[dm]
+gdm_desc = "GNOME display manager"
+sddm_desc = "Qt display manager (recommended for Plasma)"
+sddm-git_desc = "SDDM development version (AUR)"
+lxdm_desc = "LXDE display manager"
+lightdm_desc = "Lightweight display manager (with GTK greeter)"
 
 [menu.theme]
 title = "Theme"
@@ -78,6 +94,9 @@ filesystem = "File System Tools"
 system = "System Applications"
 internet = "Internet Applications"
 common = "Common Applications"
+hyprland = "Hyprland (Window Manager)"
+plasma = "KDE Plasma"
+gnome = "GNOME"
 filemanagers = "File Managers"
 yazi_extras = "Yazi Extras"
 multimedia = "Multimedia"
@@ -89,6 +108,7 @@ done = "Operation completed."
 failed = "Operation finished with errors!"
 no_orphans = "No orphan packages, nothing to clean."
 no_db_lock = "Pacman lock file does not exist."
+reboot_required = "You must reboot the system to complete the installation!"
 aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
 detected = "detected"
 not_detected = "not detected"

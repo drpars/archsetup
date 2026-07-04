@@ -1,0 +1,449 @@
+# Desktop environments / window managers. Notes may be a plain string or
+# a per-language table: note = { tr = "...", en = "..." }.
+# post_msg = locale key notified after that package installs successfully.
+
+[[category]]
+id = "hyprland"
+
+  [[category.packages]]
+  name = "hyprland"
+
+  [[category.packages]]
+  name = "hyprpaper"
+
+  [[category.packages]]
+  name = "hyprpicker"
+
+  [[category.packages]]
+  name = "hypridle"
+
+  [[category.packages]]
+  name = "hyprlock"
+
+  [[category.packages]]
+  name = "hyprcursor"
+
+  [[category.packages]]
+  name = "hyprpolkitagent"
+
+  [[category.packages]]
+  name = "hyprqt6engine"
+  aur = true
+
+  [[category.packages]]
+  name = "xdg-desktop-portal-hyprland"
+
+  [[category.packages]]
+  name = "qt5-wayland"
+
+  [[category.packages]]
+  name = "qt6-wayland"
+
+  [[category.packages]]
+  name = "kitty"
+
+  [[category.packages]]
+  name = "rofi"
+
+  [[category.packages]]
+  name = "walker"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "elephant"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "elephant-desktopapplications"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "elephant-archlinuxpkgs"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "waybar"
+
+  [[category.packages]]
+  name = "waybar-updates"
+  aur = true
+
+  [[category.packages]]
+  name = "wleave-git"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "wlogout"
+  aur = true
+
+  [[category.packages]]
+  name = "mako"
+
+  [[category.packages]]
+  name = "libnotify"
+
+  [[category.packages]]
+  name = "cliphist"
+
+  [[category.packages]]
+  name = "waypaper"
+  aur = true
+
+  [[category.packages]]
+  name = "swappy"
+
+  [[category.packages]]
+  name = "swww"
+
+  [[category.packages]]
+  name = "imv"
+
+  [[category.packages]]
+  name = "grim"
+
+  [[category.packages]]
+  name = "slurp"
+
+  [[category.packages]]
+  name = "swaybg"
+
+  [[category.packages]]
+  name = "playerctl"
+
+  [[category.packages]]
+  name = "pamixer"
+
+  [[category.packages]]
+  name = "pavucontrol"
+
+  [[category.packages]]
+  name = "bluetui"
+  note = { tr = "Bluetooth kontrol uygulaması (TUI)", en = "Bluetooth control app (TUI)" }
+
+  [[category.packages]]
+  name = "impala"
+  note = { tr = "iwd için uygulama (TUI)", en = "TUI frontend for iwd" }
+
+  [[category.packages]]
+  name = "brightnessctl"
+
+  [[category.packages]]
+  name = "ddcci-driver-linux-dkms-git"
+  aur = true
+  note = { tr = "Harici monitör parlaklığı (DDC/CI)", en = "External monitor brightness (DDC/CI)" }
+  post_msg = "msg.reboot_required"
+
+[[category]]
+id = "plasma"
+
+  [[category.packages]]
+  name = "plasma"
+  note = { tr = "Plasma Masaüstü Ortamı (Temel)", en = "Plasma desktop environment (base)" }
+
+  [[category.packages]]
+  name = "plasma-wayland-protocols"
+  note = { tr = "Wayland için gerekli protokoller", en = "Protocols required for Wayland" }
+
+  [[category.packages]]
+  name = "ark"
+  note = { tr = "Arşiv yöneticisi (zip, rar, 7z vb.)", en = "Archive manager (zip, rar, 7z etc.)" }
+
+  [[category.packages]]
+  name = "dolphin"
+  note = { tr = "Varsayılan dosya yöneticisi", en = "Default file manager" }
+
+  [[category.packages]]
+  name = "dolphin-plugins"
+  note = { tr = "Dolphin eklentileri", en = "Dolphin plugins" }
+
+  [[category.packages]]
+  name = "ffmpegthumbs"
+  note = { tr = "Video küçük resim önizlemeleri", en = "Video thumbnails" }
+
+  [[category.packages]]
+  name = "gwenview"
+  note = { tr = "Görüntüleyici", en = "Image viewer" }
+
+  [[category.packages]]
+  name = "kalzium"
+  note = { tr = "Periyodik tablo (Eğitim)", en = "Periodic table (education)" }
+  default = false
+
+  [[category.packages]]
+  name = "kate"
+  note = { tr = "Gelişmiş metin düzenleyici", en = "Advanced text editor" }
+
+  [[category.packages]]
+  name = "kcharselect"
+  note = { tr = "Özel karakter seçici", en = "Special character picker" }
+
+  [[category.packages]]
+  name = "kcolorchooser"
+  note = { tr = "Renk seçici", en = "Color picker" }
+
+  [[category.packages]]
+  name = "kdeconnect"
+  note = { tr = "Cihaz entegrasyonu (Telefon/PC)", en = "Device integration (phone/PC)" }
+
+  [[category.packages]]
+  name = "kdegraphics-thumbnailers"
+  note = { tr = "Grafik küçük resim önizlemeleri", en = "Graphics thumbnails" }
+
+  [[category.packages]]
+  name = "kdenetwork-filesharing"
+  note = { tr = "Ağda dosya paylaşımı", en = "Network file sharing" }
+
+  [[category.packages]]
+  name = "kdesdk-thumbnailers"
+  note = { tr = "SDK küçük resim önizlemeleri", en = "SDK thumbnails" }
+
+  [[category.packages]]
+  name = "kdialog"
+  note = { tr = "KDE/Plasma diyalog araçları", en = "KDE/Plasma dialog tools" }
+
+  [[category.packages]]
+  name = "kfind"
+  note = { tr = "Gelişmiş dosya arama aracı", en = "Advanced file search tool" }
+
+  [[category.packages]]
+  name = "kio-extras"
+  note = { tr = "Ek KIO eklentileri (ağ/uzak dosya sistemleri)", en = "Extra KIO plugins (network/remote filesystems)" }
+
+  [[category.packages]]
+  name = "kio-gdrive"
+  note = { tr = "Google Drive entegrasyonu", en = "Google Drive integration" }
+
+  [[category.packages]]
+  name = "kolourpaint"
+  note = { tr = "Basit boyama programı", en = "Simple paint program" }
+
+  [[category.packages]]
+  name = "konsole"
+  note = { tr = "Terminal emülatörü", en = "Terminal emulator" }
+
+  [[category.packages]]
+  name = "ksystemlog"
+  note = { tr = "Sistem kayıtlarını görüntüleyici", en = "System log viewer" }
+
+  [[category.packages]]
+  name = "ktouch"
+  note = { tr = "On parmak yazma eğitimi", en = "Touch typing tutor" }
+  default = false
+
+  [[category.packages]]
+  name = "lokalize"
+  note = { tr = "Çeviri / yerelleştirme aracı", en = "Translation / localization tool" }
+  default = false
+
+  [[category.packages]]
+  name = "okular"
+  note = { tr = "Belge görüntüleyici (PDF, EPUB vb.)", en = "Document viewer (PDF, EPUB etc.)" }
+
+  [[category.packages]]
+  name = "print-manager"
+  note = { tr = "Yazdırma yöneticisi", en = "Print manager" }
+
+  [[category.packages]]
+  name = "spectacle"
+  note = { tr = "Ekran görüntüsü aracı", en = "Screenshot tool" }
+
+  [[category.packages]]
+  name = "kdiskmark"
+  note = { tr = "Disk performans test aracı", en = "Disk benchmark tool" }
+
+  [[category.packages]]
+  name = "plasma-discover"
+  note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası)", en = "Graphical package manager (app store)" }
+
+  [[category.packages]]
+  name = "discover-notifier"
+  note = { tr = "Discover bildirim aracı", en = "Discover update notifier" }
+
+  [[category.packages]]
+  name = "plasma5-applets-virtual-desktop-bar-git"
+  aur = true
+  note = { tr = "Sanal masaüstü çubuğu", en = "Virtual desktop bar applet" }
+  default = false
+
+  [[category.packages]]
+  name = "plasma5-applets-window-appmenu-git"
+  aur = true
+  note = { tr = "Pencere uygulama menüsü", en = "Window app menu applet" }
+  default = false
+
+  [[category.packages]]
+  name = "sddm-conf-git"
+  aur = true
+  note = { tr = "SDDM yapılandırma aracı", en = "SDDM configuration tool" }
+  default = false
+
+[[category]]
+id = "gnome"
+
+  [[category.packages]]
+  name = "gnome-shell"
+  note = { tr = "GNOME masaüstü kabuğu", en = "GNOME desktop shell" }
+
+  [[category.packages]]
+  name = "mutter"
+  note = { tr = "Pencere yöneticisi ve dizgici", en = "Window manager and compositor" }
+
+  [[category.packages]]
+  name = "gnome-control-center"
+  note = { tr = "Ayarlar uygulaması", en = "Settings application" }
+
+  [[category.packages]]
+  name = "nautilus"
+  note = { tr = "Dosya yöneticisi", en = "File manager" }
+
+  [[category.packages]]
+  name = "gnome-terminal"
+  note = { tr = "Terminal emülatörü", en = "Terminal emulator" }
+
+  [[category.packages]]
+  name = "gnome-text-editor"
+  note = { tr = "Modern metin düzenleyici", en = "Modern text editor" }
+
+  [[category.packages]]
+  name = "gnome-software"
+  note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası)", en = "Graphical package manager (app store)" }
+
+  [[category.packages]]
+  name = "gnome-tweaks"
+  note = { tr = "Ek GNOME ayar aracı", en = "Extra GNOME tweak tool" }
+
+  [[category.packages]]
+  name = "gnome-shell-extensions"
+  note = { tr = "Kabuk uzantıları", en = "Shell extensions" }
+
+  [[category.packages]]
+  name = "gnome-keyring"
+  note = { tr = "Şifre ve anahtar yöneticisi", en = "Password and key manager" }
+
+  [[category.packages]]
+  name = "gnome-disk-utility"
+  note = { tr = "Disk ve bölümleme aracı", en = "Disk and partition tool" }
+
+  [[category.packages]]
+  name = "gnome-calculator"
+  note = { tr = "Hesap makinesi", en = "Calculator" }
+
+  [[category.packages]]
+  name = "evince"
+  note = { tr = "Belge görüntüleyici (PDF, EPUB vb.)", en = "Document viewer (PDF, EPUB etc.)" }
+
+  [[category.packages]]
+  name = "file-roller"
+  note = { tr = "Arşiv yöneticisi (zip, rar vb.)", en = "Archive manager (zip, rar etc.)" }
+
+  [[category.packages]]
+  name = "eog"
+  note = { tr = "Görüntüleyici (Eye of GNOME)", en = "Image viewer (Eye of GNOME)" }
+
+  [[category.packages]]
+  name = "sushi"
+  note = { tr = "Nautilus için dosya önizleme", en = "File previewer for Nautilus" }
+
+  [[category.packages]]
+  name = "xdg-user-dirs-gtk"
+  note = { tr = "Kullanıcı dizinlerini oluşturur (Masaüstü, İndirilenler vb.)", en = "Creates user directories (Desktop, Downloads etc.)" }
+
+  [[category.packages]]
+  name = "baobab"
+  note = { tr = "Disk kullanım analizörü", en = "Disk usage analyzer" }
+
+  [[category.packages]]
+  name = "gnome-calendar"
+  note = { tr = "Takvim", en = "Calendar" }
+
+  [[category.packages]]
+  name = "gnome-characters"
+  note = { tr = "Özel karakterler", en = "Special characters" }
+
+  [[category.packages]]
+  name = "gnome-color-manager"
+  note = { tr = "Renk yönetimi", en = "Color management" }
+
+  [[category.packages]]
+  name = "gnome-font-viewer"
+  note = { tr = "Yazı tipi görüntüleyici", en = "Font viewer" }
+
+  [[category.packages]]
+  name = "gnome-logs"
+  note = { tr = "Sistem kayıt görüntüleyicisi", en = "System log viewer" }
+
+  [[category.packages]]
+  name = "gnome-menus"
+  note = { tr = "Menü sistemi", en = "Menu system" }
+
+  [[category.packages]]
+  name = "gnome-photos"
+  note = { tr = "Fotoğraf görüntüleyici ve düzenleyici", en = "Photo viewer and editor" }
+
+  [[category.packages]]
+  name = "gnome-remote-desktop"
+  note = { tr = "Uzak masaüstü erişimi", en = "Remote desktop access" }
+
+  [[category.packages]]
+  name = "gnome-session"
+  note = { tr = "GNOME oturumu", en = "GNOME session" }
+
+  [[category.packages]]
+  name = "gnome-settings-daemon"
+  note = { tr = "Ayarlar arka plan hizmeti", en = "Settings background service" }
+
+  [[category.packages]]
+  name = "gnome-themes-extra"
+  note = { tr = "Ek GNOME temaları", en = "Extra GNOME themes" }
+
+  [[category.packages]]
+  name = "gnome-user-docs"
+  note = { tr = "Kullanıcı belgeleri", en = "User documentation" }
+
+  [[category.packages]]
+  name = "gnome-user-share"
+  note = { tr = "Kullanıcı paylaşımını etkinleştirir", en = "Enables user file sharing" }
+
+  [[category.packages]]
+  name = "grilo-plugins"
+  note = { tr = "Multimedya çerçeve eklentileri", en = "Multimedia framework plugins" }
+
+  [[category.packages]]
+  name = "gnome-sudoku"
+  note = { tr = "Sudoku oyunu", en = "Sudoku game" }
+  default = false
+
+  [[category.packages]]
+  name = "gnome-sound-recorder"
+  note = { tr = "Ses kayıt aracı", en = "Sound recorder" }
+  default = false
+
+  [[category.packages]]
+  name = "gnome-nettool"
+  note = { tr = "Ağ araçları (eski)", en = "Network tools (legacy)" }
+  default = false
+
+  [[category.packages]]
+  name = "gnome-mines"
+  note = { tr = "Mayın tarlası oyunu", en = "Minesweeper game" }
+  default = false
+
+  [[category.packages]]
+  name = "gnome-mahjongg"
+  note = { tr = "Mahjong oyunu", en = "Mahjong game" }
+  default = false
+
+  [[category.packages]]
+  name = "gnome-chess"
+  note = { tr = "Satranç oyunu", en = "Chess game" }
+  default = false
+
+  [[category.packages]]
+  name = "ghex"
+  note = { tr = "Hex düzenleyici", en = "Hex editor" }
+  default = false

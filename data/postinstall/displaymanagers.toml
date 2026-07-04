@@ -1,0 +1,28 @@
+# Display managers: single-choice install + systemctl enable.
+# Display names/descriptions come from locale keys dm.<id>_desc.
+
+[[dm]]
+id = "gdm"
+package = "gdm"
+service = "gdm"
+
+[[dm]]
+id = "sddm"
+package = "sddm"
+service = "sddm"
+
+[[dm]]
+id = "sddm-git"
+package = "sddm-git"
+service = "sddm"
+aur = true
+
+[[dm]]
+id = "lxdm"
+package = "lxdm"
+service = "lxdm"
+
+[[dm]]
+id = "lightdm"
+package = "lightdm-gtk-greeter"
+service = "lightdm"

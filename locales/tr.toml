@@ -23,6 +23,8 @@ apps = "Uygulamalar"
 apps_desc = "Kategorilere göre uygulama kurulumu"
 drivers = "Sürücüler"
 drivers_desc = "Grafik ve ses sürücüleri"
+desktops = "Masaüstü Ortamları"
+desktops_desc = "Hyprland, Plasma, GNOME ve giriş yöneticileri"
 theme = "Tema"
 theme_desc = "Açık / koyu tema seçimi"
 language = "Dil / Language"
@@ -35,6 +37,20 @@ title = "Sistem Güncelleme"
 
 [menu.apps]
 title = "Uygulamalar"
+
+[menu.desktops]
+title = "Masaüstü Ortamları"
+
+[menu.dm]
+title = "Giriş Yöneticisi"
+desc = "Görüntü/giriş yöneticisi kur ve etkinleştir"
+
+[dm]
+gdm_desc = "GNOME giriş yöneticisi"
+sddm_desc = "Qt giriş yöneticisi (Plasma önerilen)"
+sddm-git_desc = "SDDM geliştirme sürümü (AUR)"
+lxdm_desc = "LXDE giriş yöneticisi"
+lightdm_desc = "Hafif giriş yöneticisi (GTK karşılayıcı ile)"
 
 [menu.theme]
 title = "Tema"
@@ -78,6 +94,9 @@ filesystem = "Dosya Sistemi Araçları"
 system = "Sistem Uygulamaları"
 internet = "İnternet Uygulamaları"
 common = "Ortak Uygulamalar"
+hyprland = "Hyprland (Pencere Yöneticisi)"
+plasma = "KDE Plasma"
+gnome = "GNOME"
 filemanagers = "Dosya Gezginleri"
 yazi_extras = "Yazi Eklentileri"
 multimedia = "Multimedya"
@@ -89,6 +108,7 @@ done = "İşlem tamamlandı."
 failed = "İşlem hata ile bitti!"
 no_orphans = "Yetim paket yok, temizlenecek bir şey bulunamadı."
 no_db_lock = "Pacman kilit dosyası zaten yok."
+reboot_required = "Kurulumun tamamlanması için sistemi yeniden başlatmalısınız!"
 aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
 detected = "algılandı"
 not_detected = "algılanmadı"
