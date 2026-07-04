@@ -53,8 +53,13 @@ src/archsetup/
 - [x] Sistem güncelleme görevleri, uygulama ve sürücü kategorileri
 - [x] Masaüstü ortamları (Hyprland, Plasma, GNOME) ve giriş yöneticileri
 - [x] NVIDIA sürücüleri ve çekirdek modülü yapılandırması (mkinitcpio, modeset)
+- [x] Önyükleyici soyutlaması: çekirdek parametreleri düzene göre doğru yere
+      yazılır — UKI (`/etc/kernel/cmdline`), systemd-boot girdileri
+      (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
+      ve rEFInd (`refind_linux.conf`)
 - [ ] ASUS ROG/TUF araçları (g14 deposu, servis etkinleştirme)
 - [ ] Yapılandırma görevleri: dotfiles, swap/hibernation, SDDM teması
-- [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması
+- [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
+      önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

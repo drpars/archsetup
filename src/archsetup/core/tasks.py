@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import gpuconfig, i18n, pacman
+from . import bootloader, gpuconfig, i18n, pacman
 from .pacman import run
 
 t = i18n.t
@@ -114,6 +114,12 @@ TASKS: tuple[Task, ...] = (
         "task.amd_modules",
         gpuconfig.configure_amd_modules,
         group="drivers",
+    ),
+    Task(
+        "bootloader-info",
+        "task.bootloader_info",
+        bootloader.info,
+        group="config",
     ),
 )
 

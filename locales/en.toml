@@ -25,6 +25,8 @@ drivers = "Drivers"
 drivers_desc = "Graphics and audio drivers"
 desktops = "Desktop Environments"
 desktops_desc = "Hyprland, Plasma, GNOME and display managers"
+config = "Configuration"
+config_desc = "Bootloader, kernel parameters and system settings"
 theme = "Theme"
 theme_desc = "Light / dark theme selection"
 language = "Language / Dil"
@@ -40,6 +42,9 @@ title = "Applications"
 
 [menu.desktops]
 title = "Desktop Environments"
+
+[menu.config]
+title = "Configuration"
 
 [menu.dm]
 title = "Display Manager"
@@ -89,6 +94,8 @@ nvidia_modules = "NVIDIA Kernel Modules"
 nvidia_modules_desc = "Configure mkinitcpio, modprobe.d and nvidia_drm.modeset=1"
 amd_modules = "AMD Kernel Modules"
 amd_modules_desc = "Add amdgpu/radeon to mkinitcpio MODULES"
+bootloader_info = "Bootloader Info"
+bootloader_info_desc = "Detected boot setup and current kernel parameters"
 
 [category]
 console = "Console Applications"
@@ -119,6 +126,9 @@ modules_present = "{modules} — modules already present."
 param_present = "{param} already set."
 mkinitcpio_no_modules = "No MODULES=(...) line found in /etc/mkinitcpio.conf!"
 no_changes = "No changes were needed."
+bootloader = "Boot setup: {kind}"
+bootloader_unknown = "Could not detect the bootloader; add kernel parameters manually."
+grub_line_missing = "No GRUB_CMDLINE_LINUX_DEFAULT line found in: {path}"
 aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
 detected = "detected"
 not_detected = "not detected"

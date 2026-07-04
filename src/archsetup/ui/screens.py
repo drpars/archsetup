@@ -239,6 +239,10 @@ def make_desktops_menu() -> MenuScreen:
     return MenuScreen(t("menu.desktops.title"), items)
 
 
+def make_config_menu() -> MenuScreen:
+    return MenuScreen(t("menu.config.title"), _task_items("config"))
+
+
 def make_theme_menu() -> MenuScreen:
     from .app import DARK_THEME, LIGHT_THEME
 
@@ -287,6 +291,12 @@ def make_main_menu() -> MenuScreen:
             t("menu.main.desktops"),
             t("menu.main.desktops_desc"),
             lambda screen: screen.app.push_screen(make_desktops_menu()),
+        ),
+        MenuItem(
+            "config",
+            t("menu.main.config"),
+            t("menu.main.config_desc"),
+            lambda screen: screen.app.push_screen(make_config_menu()),
         ),
         MenuItem(
             "theme",

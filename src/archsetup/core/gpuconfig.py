@@ -7,40 +7,28 @@ Ported from installarchde's configure_{amd,nvidia}_modules with fixes:
   "modeset=1" had no effect and false-matched existing entries),
 - mkinitcpio -P runs once at the end and only when something changed.
 
-The cmdline step only applies to systemd-boot/UKI setups that use
-/etc/kernel/cmdline; GRUB users still configure kernel parameters manually.
+The kernel parameter goes through core.bootloader, so it lands in the
+right place for UKI, classic systemd-boot, GRUB or rEFInd setups.
 """
 
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 
-from . import i18n
+from . import bootloader, i18n
 from .pacman import run
+from .sysedit import sudo_write
 
 t = i18n.t
 
 MKINITCPIO = Path("/etc/mkinitcpio.conf")
-KERNEL_CMDLINE = Path("/etc/kernel/cmdline")
 NVIDIA_MODPROBE = Path("/etc/modprobe.d/nvidia.conf")
 
 NVIDIA_MODULES = ("nvidia", "nvidia_modeset", "nvidia_uvm", "nvidia_drm")
 AMD_MODULES = ("amdgpu", "radeon")
 NVIDIA_CMDLINE_PARAM = "nvidia_drm.modeset=1"
 NVIDIA_MODPROBE_CONTENT = "options nvidia_drm modeset=1 fbdev=1\n"
-
-
-def _sudo_write(path: Path, content: str) -> int:
-    print(f"\033[1;36m$ sudo tee {path}\033[0m")
-    proc = subprocess.run(
-        ["sudo", "tee", str(path)],
-        input=content,
-        text=True,
-        stdout=subprocess.DEVNULL,
-    )
-    return proc.returncode
 
 
 def _merge_modules(modules: tuple[str, ...]) -> bool:
@@ -59,31 +47,23 @@ def _merge_modules(modules: tuple[str, ...]) -> bool:
 
     merged = " ".join(present + missing)
     new_text = f"{text[:match.start(1)]}{merged}{text[match.end(1):]}"
-    return _sudo_write(MKINITCPIO, new_text) == 0
-
-
-def _ensure_cmdline_param(param: str) -> bool:
-    """Append a kernel parameter to /etc/kernel/cmdline (systemd-boot/UKI)."""
-    if not KERNEL_CMDLINE.is_file():
-        return False
-    cmdline = KERNEL_CMDLINE.read_text(encoding="utf-8").strip()
-    if not cmdline:
-        return False
-    if param in cmdline.split():
-        print(t("msg.param_present", param=param))
-        return False
-    return _sudo_write(KERNEL_CMDLINE, f"{cmdline} {param}\n") == 0
+    return sudo_write(MKINITCPIO, new_text) == 0
 
 
 def configure_nvidia_modules() -> int:
     changed = _merge_modules(NVIDIA_MODULES)
     if not NVIDIA_MODPROBE.is_file():
-        changed |= _sudo_write(NVIDIA_MODPROBE, NVIDIA_MODPROBE_CONTENT) == 0
-    changed |= _ensure_cmdline_param(NVIDIA_CMDLINE_PARAM)
-    if not changed:
+        changed |= sudo_write(NVIDIA_MODPROBE, NVIDIA_MODPROBE_CONTENT) == 0
+    result = bootloader.add_kernel_params([NVIDIA_CMDLINE_PARAM])
+
+    rc = 0
+    if changed or result.needs_mkinitcpio:
+        rc = run(["sudo", "mkinitcpio", "-P"])
+    if result.regen_cmd is not None:
+        rc |= run(list(result.regen_cmd))
+    if not changed and not result.changed:
         print(t("msg.no_changes"))
-        return 0
-    return run(["sudo", "mkinitcpio", "-P"])
+    return rc
 
 
 def configure_amd_modules() -> int:

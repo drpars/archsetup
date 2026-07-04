@@ -25,6 +25,8 @@ drivers = "Sürücüler"
 drivers_desc = "Grafik ve ses sürücüleri"
 desktops = "Masaüstü Ortamları"
 desktops_desc = "Hyprland, Plasma, GNOME ve giriş yöneticileri"
+config = "Yapılandırma"
+config_desc = "Önyükleyici, çekirdek parametreleri ve sistem ayarları"
 theme = "Tema"
 theme_desc = "Açık / koyu tema seçimi"
 language = "Dil / Language"
@@ -40,6 +42,9 @@ title = "Uygulamalar"
 
 [menu.desktops]
 title = "Masaüstü Ortamları"
+
+[menu.config]
+title = "Yapılandırma"
 
 [menu.dm]
 title = "Giriş Yöneticisi"
@@ -89,6 +94,8 @@ nvidia_modules = "NVIDIA Çekirdek Modülleri"
 nvidia_modules_desc = "mkinitcpio, modprobe.d ve nvidia_drm.modeset=1 yapılandırması"
 amd_modules = "AMD Çekirdek Modülleri"
 amd_modules_desc = "mkinitcpio MODULES içine amdgpu/radeon ekle"
+bootloader_info = "Önyükleyici Bilgisi"
+bootloader_info_desc = "Algılanan önyükleyici düzeni ve mevcut çekirdek parametreleri"
 
 [category]
 console = "Konsol Uygulamaları"
@@ -119,6 +126,9 @@ modules_present = "{modules} — ilgili modüller zaten mevcut."
 param_present = "{param} zaten ekli."
 mkinitcpio_no_modules = "/etc/mkinitcpio.conf içinde MODULES=(...) satırı bulunamadı!"
 no_changes = "Değişiklik gerekmedi."
+bootloader = "Önyükleyici düzeni: {kind}"
+bootloader_unknown = "Önyükleyici algılanamadı; çekirdek parametrelerini elle eklemeniz gerekir."
+grub_line_missing = "GRUB_CMDLINE_LINUX_DEFAULT satırı bulunamadı: {path}"
 aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
 detected = "algılandı"
 not_detected = "algılanmadı"
