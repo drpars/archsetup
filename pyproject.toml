@@ -1,0 +1,19 @@
+[project]
+name = "archsetup"
+version = "0.1.0"
+description = "Interactive Arch Linux install & post-install TUI"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "drpars" }]
+dependencies = ["textual>=1.0"]
+
+[project.scripts]
+archsetup = "archsetup.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,396 @@
+# Application categories. Category display names come from the locale
+# files (key: category.<id>). Fields per package:
+#   name      package name (required)
+#   aur       true if from the AUR (default: false)
+#   default   preselected in the checklist (default: true)
+#   note      short hint shown next to the name
+#   condition e.g. "gpu:amd" / "cpu:intel" — hidden when not met
+
+[[category]]
+id = "console"
+
+  [[category.packages]]
+  name = "cmatrix"
+  default = false
+
+  [[category.packages]]
+  name = "cmatrix-neo-git"
+  aur = true
+  default = false
+
+  [[category.packages]]
+  name = "wget"
+
+  [[category.packages]]
+  name = "fastfetch"
+
+  [[category.packages]]
+  name = "mpv"
+
+  [[category.packages]]
+  name = "mc"
+
+  [[category.packages]]
+  name = "mlocate"
+
+  [[category.packages]]
+  name = "fd"
+
+  [[category.packages]]
+  name = "ripgrep"
+
+  [[category.packages]]
+  name = "btop"
+
+  [[category.packages]]
+  name = "nvtop"
+
+  [[category.packages]]
+  name = "bat"
+
+  [[category.packages]]
+  name = "xsel"
+
+  [[category.packages]]
+  name = "xclip"
+  default = false
+
+  [[category.packages]]
+  name = "wl-clipboard"
+
+  [[category.packages]]
+  name = "zsh"
+
+  [[category.packages]]
+  name = "pkgfile"
+
+[[category]]
+id = "compression"
+
+  [[category.packages]]
+  name = "tar"
+
+  [[category.packages]]
+  name = "zip"
+
+  [[category.packages]]
+  name = "unzip"
+
+  [[category.packages]]
+  name = "unrar"
+
+  [[category.packages]]
+  name = "p7zip"
+
+  [[category.packages]]
+  name = "lzop"
+
+[[category]]
+id = "programming"
+
+  [[category.packages]]
+  name = "python"
+
+  [[category.packages]]
+  name = "python-psutil"
+
+  [[category.packages]]
+  name = "python-requests"
+
+  [[category.packages]]
+  name = "go"
+
+  [[category.packages]]
+  name = "go-tools"
+
+  [[category.packages]]
+  name = "shellcheck"
+
+  [[category.packages]]
+  name = "codespell"
+
+  [[category.packages]]
+  name = "npm"
+
+  [[category.packages]]
+  name = "yarn"
+
+  [[category.packages]]
+  name = "xmlstarlet"
+
+  [[category.packages]]
+  name = "luarocks"
+
+  [[category.packages]]
+  name = "ruby"
+
+  [[category.packages]]
+  name = "rubygems"
+
+  [[category.packages]]
+  name = "composer"
+
+  [[category.packages]]
+  name = "php"
+
+  [[category.packages]]
+  name = "julia"
+
+  [[category.packages]]
+  name = "jq"
+
+  [[category.packages]]
+  name = "cpanminus"
+
+[[category]]
+id = "filesystem"
+
+  [[category.packages]]
+  name = "gvfs"
+
+  [[category.packages]]
+  name = "gvfs-mtp"
+
+  [[category.packages]]
+  name = "gvfs-smb"
+
+  [[category.packages]]
+  name = "gvfs-nfs"
+
+  [[category.packages]]
+  name = "gvfs-afc"
+  default = false
+
+[[category]]
+id = "system"
+
+  [[category.packages]]
+  name = "gnome-disk-utility"
+
+  [[category.packages]]
+  name = "gparted"
+  note = "GTK disk bölümleme"
+  default = false
+
+  [[category.packages]]
+  name = "acpi"
+
+  [[category.packages]]
+  name = "acpi_call-dkms"
+
+  [[category.packages]]
+  name = "lm_sensors"
+
+  [[category.packages]]
+  name = "lib32-lm_sensors"
+
+  [[category.packages]]
+  name = "os-prober"
+  note = "grub çoklu önyükleme"
+  default = false
+
+[[category]]
+id = "internet"
+
+  [[category.packages]]
+  name = "firefox"
+
+  [[category.packages]]
+  name = "thunderbird"
+  default = false
+
+  [[category.packages]]
+  name = "zen-browser-bin"
+  aur = true
+
+  [[category.packages]]
+  name = "uget"
+  default = false
+
+  [[category.packages]]
+  name = "transmission-gtk"
+  default = false
+
+  [[category.packages]]
+  name = "transmission-qt"
+  default = false
+
+[[category]]
+id = "common"
+
+  [[category.packages]]
+  name = "libreoffice-fresh"
+  default = false
+
+  [[category.packages]]
+  name = "libreoffice-still"
+  default = false
+
+  [[category.packages]]
+  name = "openrgb"
+
+  [[category.packages]]
+  name = "solaar"
+  note = "Logitech"
+  default = false
+
+  [[category.packages]]
+  name = "waydroid"
+  aur = true
+
+  [[category.packages]]
+  name = "waydroid-helper"
+  aur = true
+
+  [[category.packages]]
+  name = "kate"
+
+  [[category.packages]]
+  name = "mousepad"
+  default = false
+
+  [[category.packages]]
+  name = "gnome-text-editor"
+  default = false
+
+  [[category.packages]]
+  name = "bleachbit"
+  default = false
+
+  [[category.packages]]
+  name = "webapp-manager"
+  aur = true
+
+  [[category.packages]]
+  name = "stacer-bin"
+  aur = true
+  default = false
+
+[[category]]
+id = "filemanagers"
+
+  [[category.packages]]
+  name = "archlinux-xdg-menu"
+
+  [[category.packages]]
+  name = "yazi"
+
+  [[category.packages]]
+  name = "dolphin"
+  note = "KDE"
+
+  [[category.packages]]
+  name = "dolphin-plugins"
+  note = "KDE"
+
+  [[category.packages]]
+  name = "kdenetwork-filesharing"
+  note = "KDE"
+
+  [[category.packages]]
+  name = "ffmpegthumbs"
+  note = "KDE"
+
+  [[category.packages]]
+  name = "ark"
+  note = "KDE"
+
+  [[category.packages]]
+  name = "thunar"
+  note = "XFCE"
+  default = false
+
+  [[category.packages]]
+  name = "thunar-volman"
+  note = "XFCE"
+  default = false
+
+  [[category.packages]]
+  name = "thunar-archive-plugin"
+  note = "XFCE"
+  default = false
+
+  [[category.packages]]
+  name = "thunar-shares-plugin"
+  default = false
+
+  [[category.packages]]
+  name = "file-roller"
+  default = false
+
+  [[category.packages]]
+  name = "tumbler"
+  default = false
+
+[[category]]
+id = "yazi_extras"
+
+  [[category.packages]]
+  name = "ffmpegthumbnailer"
+
+  [[category.packages]]
+  name = "p7zip"
+
+  [[category.packages]]
+  name = "jq"
+
+  [[category.packages]]
+  name = "poppler"
+
+  [[category.packages]]
+  name = "fd"
+
+  [[category.packages]]
+  name = "ripgrep"
+
+  [[category.packages]]
+  name = "fzf"
+
+  [[category.packages]]
+  name = "zoxide"
+
+  [[category.packages]]
+  name = "imagemagick"
+
+  [[category.packages]]
+  name = "perl-image-exiftool"
+
+[[category]]
+id = "multimedia"
+
+  [[category.packages]]
+  name = "smplayer"
+  default = false
+
+  [[category.packages]]
+  name = "smplayer-skins"
+  default = false
+
+  [[category.packages]]
+  name = "smplayer-themes"
+  default = false
+
+  [[category.packages]]
+  name = "elisa"
+  default = false
+
+  [[category.packages]]
+  name = "gst-plugins-base"
+
+  [[category.packages]]
+  name = "gst-plugins-good"
+
+  [[category.packages]]
+  name = "gst-plugins-ugly"
+
+  [[category.packages]]
+  name = "gst-plugins-bad"
+
+  [[category.packages]]
+  name = "gst-plugin-pipewire"
+
+  [[category.packages]]
+  name = "gst-libav"
+
+  [[category.packages]]
+  name = "libde265"

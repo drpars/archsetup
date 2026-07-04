@@ -1,0 +1,87 @@
+[meta]
+name = "English"
+
+[app]
+title = "Arch Linux Setup Tool"
+
+[ui]
+back = "Back"
+install = "Install"
+quit = "Quit"
+press_enter = "Press Enter to continue..."
+none_selected = "No packages selected."
+toggle = "Toggle"
+
+[lang]
+select_title = "Dil Seçimi / Language Selection"
+
+[menu.main]
+title = "Main Menu"
+update = "System Update"
+update_desc = "Update, cleanup and pacman maintenance tools"
+apps = "Applications"
+apps_desc = "Install applications by category"
+drivers = "Drivers"
+drivers_desc = "Graphics and audio drivers"
+language = "Language / Dil"
+language_desc = "Change interface language"
+quit = "Quit"
+quit_desc = "Exit the application"
+
+[menu.update]
+title = "System Update"
+
+[menu.apps]
+title = "Applications"
+
+[menu.drivers]
+title = "Drivers"
+
+[task]
+system_update = "Update System"
+system_update_desc = "pacman -Syu"
+clean_orphans = "Remove Orphan Packages"
+clean_orphans_desc = "Remove packages no longer required as dependencies"
+clean_cache = "Clean Package Cache"
+clean_cache_desc = "pacman -Sc"
+update_keyring = "Update Keyring"
+update_keyring_desc = "Install/update archlinux-keyring"
+refresh_keys = "Refresh Pacman Keys"
+refresh_keys_desc = "pacman-key --refresh-keys"
+edit_pacman_conf = "Edit Pacman Configuration"
+edit_pacman_conf_desc = "Open /etc/pacman.conf"
+edit_mirrorlist = "Edit Mirrorlist"
+edit_mirrorlist_desc = "Open /etc/pacman.d/mirrorlist"
+install_yay = "Install yay"
+install_yay_desc = "AUR helper yay-bin (via makepkg)"
+install_paru = "Install paru"
+install_paru_desc = "AUR helper paru-bin (via makepkg)"
+remove_db_lock = "Remove Pacman Lock"
+remove_db_lock_desc = "Delete /var/lib/pacman/db.lck"
+
+[category]
+console = "Console Applications"
+compression = "Compression Tools"
+programming = "Programming Languages & Tools"
+filesystem = "File System Tools"
+system = "System Applications"
+internet = "Internet Applications"
+common = "Common Applications"
+filemanagers = "File Managers"
+yazi_extras = "Yazi Extras"
+multimedia = "Multimedia"
+amd = "AMD/Radeon Drivers"
+sound = "Audio System (PipeWire)"
+
+[msg]
+done = "Operation completed."
+failed = "Operation finished with errors!"
+no_orphans = "No orphan packages, nothing to clean."
+no_db_lock = "Pacman lock file does not exist."
+aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
+detected = "detected"
+not_detected = "not detected"
+root_forbidden = "This tool must not be run as root (sudo is requested when needed)."
+installer_todo = "Live ISO (installer) mode is not ported yet; keep using the old installarch script for now."
+unknown_task = "Unknown task: {task}. List tasks with: archsetup --list"
+textual_missing = "Textual not found. Install it with: sudo pacman -S --needed python-textual"

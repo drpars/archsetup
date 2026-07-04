@@ -1,0 +1,87 @@
+[meta]
+name = "Türkçe"
+
+[app]
+title = "Arch Linux Kurulum Aracı"
+
+[ui]
+back = "Geri"
+install = "Kur"
+quit = "Çıkış"
+press_enter = "Devam etmek için Enter'a basın..."
+none_selected = "Hiç paket seçilmedi."
+toggle = "Seç/Bırak"
+
+[lang]
+select_title = "Dil Seçimi / Language Selection"
+
+[menu.main]
+title = "Ana Menü"
+update = "Sistem Güncelleme"
+update_desc = "Güncelleme, temizlik ve pacman bakım araçları"
+apps = "Uygulamalar"
+apps_desc = "Kategorilere göre uygulama kurulumu"
+drivers = "Sürücüler"
+drivers_desc = "Grafik ve ses sürücüleri"
+language = "Dil / Language"
+language_desc = "Arayüz dilini değiştir"
+quit = "Çıkış"
+quit_desc = "Uygulamadan çık"
+
+[menu.update]
+title = "Sistem Güncelleme"
+
+[menu.apps]
+title = "Uygulamalar"
+
+[menu.drivers]
+title = "Sürücüler"
+
+[task]
+system_update = "Sistemi Güncelle"
+system_update_desc = "pacman -Syu"
+clean_orphans = "Yetim Paketleri Temizle"
+clean_orphans_desc = "Bağımlılığı kalmamış paketleri kaldır"
+clean_cache = "Paket Önbelleğini Temizle"
+clean_cache_desc = "pacman -Sc"
+update_keyring = "Anahtar Halkasını Güncelle"
+update_keyring_desc = "archlinux-keyring paketini kur/güncelle"
+refresh_keys = "Pacman Anahtarlarını Yenile"
+refresh_keys_desc = "pacman-key --refresh-keys"
+edit_pacman_conf = "Pacman Yapılandırmasını Düzenle"
+edit_pacman_conf_desc = "/etc/pacman.conf dosyasını aç"
+edit_mirrorlist = "Yansı Listesini Düzenle"
+edit_mirrorlist_desc = "/etc/pacman.d/mirrorlist dosyasını aç"
+install_yay = "yay Kur"
+install_yay_desc = "AUR yardımcısı yay-bin (makepkg ile)"
+install_paru = "paru Kur"
+install_paru_desc = "AUR yardımcısı paru-bin (makepkg ile)"
+remove_db_lock = "Pacman Kilidini Kaldır"
+remove_db_lock_desc = "/var/lib/pacman/db.lck dosyasını sil"
+
+[category]
+console = "Konsol Uygulamaları"
+compression = "Sıkıştırma Araçları"
+programming = "Programlama Dilleri ve Araçları"
+filesystem = "Dosya Sistemi Araçları"
+system = "Sistem Uygulamaları"
+internet = "İnternet Uygulamaları"
+common = "Ortak Uygulamalar"
+filemanagers = "Dosya Gezginleri"
+yazi_extras = "Yazi Eklentileri"
+multimedia = "Multimedya"
+amd = "AMD/Radeon Sürücüleri"
+sound = "Ses Sistemi (PipeWire)"
+
+[msg]
+done = "İşlem tamamlandı."
+failed = "İşlem hata ile bitti!"
+no_orphans = "Yetim paket yok, temizlenecek bir şey bulunamadı."
+no_db_lock = "Pacman kilit dosyası zaten yok."
+aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
+detected = "algılandı"
+not_detected = "algılanmadı"
+root_forbidden = "Bu araç root olarak çalıştırılmamalıdır (sudo gerektiğinde sorulur)."
+installer_todo = "Canlı ISO (kurucu) modu henüz taşınmadı; şimdilik eski installarch betiğini kullanın."
+unknown_task = "Bilinmeyen görev: {task}. Görevleri listelemek için: archsetup --list"
+textual_missing = "Textual bulunamadı. Kurmak için: sudo pacman -S --needed python-textual"

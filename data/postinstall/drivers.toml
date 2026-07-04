@@ -1,0 +1,70 @@
+# Driver categories. NVIDIA and ASUS tooling involve extra configuration
+# steps (mkinitcpio modules, services) and will be ported as tasks.
+
+[[category]]
+id = "amd"
+condition = "gpu:amd"
+
+  [[category.packages]]
+  name = "mesa"
+
+  [[category.packages]]
+  name = "lib32-mesa"
+
+  [[category.packages]]
+  name = "xf86-video-amdgpu"
+
+  [[category.packages]]
+  name = "vulkan-radeon"
+
+  [[category.packages]]
+  name = "lib32-vulkan-radeon"
+
+  [[category.packages]]
+  name = "libva-mesa-driver"
+
+  [[category.packages]]
+  name = "lib32-libva-mesa-driver"
+
+  [[category.packages]]
+  name = "mesa-vdpau"
+
+  [[category.packages]]
+  name = "lib32-mesa-vdpau"
+
+[[category]]
+id = "sound"
+
+  [[category.packages]]
+  name = "wireplumber"
+
+  [[category.packages]]
+  name = "pipewire"
+
+  [[category.packages]]
+  name = "pipewire-alsa"
+
+  [[category.packages]]
+  name = "pipewire-pulse"
+
+  [[category.packages]]
+  name = "pipewire-jack"
+
+  [[category.packages]]
+  name = "pipewire-v4l2"
+
+  [[category.packages]]
+  name = "pipewire-zeroconf"
+
+  [[category.packages]]
+  name = "pipewire-x11-bell"
+  default = false
+
+  [[category.packages]]
+  name = "easyeffects"
+  default = false
+
+  [[category.packages]]
+  name = "jamesdsp-pipewire-bin"
+  aur = true
+  default = false
