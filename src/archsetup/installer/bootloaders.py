@@ -82,6 +82,7 @@ def install_systemd_boot() -> int:
     hooks_dir = MNT / "etc/pacman.d/hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
     (hooks_dir / "95-systemd-boot.hook").write_text(SDBOOT_HOOK, encoding="utf-8")
+    (MNT / "etc/kernel").mkdir(parents=True, exist_ok=True)
     (MNT / "etc/kernel/cmdline").write_text(cmdline + "\n", encoding="utf-8")
     print(f"/mnt/etc/kernel/cmdline <- {cmdline}")
 

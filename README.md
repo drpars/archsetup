@@ -61,6 +61,18 @@ src/archsetup/
   installer/ canlı ISO modu: disk, pacstrap, chroot, önyükleyiciler
 ```
 
+## Testler
+
+```bash
+python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest
+```
+
+56 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
+kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
+için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
+
 ## Yol haritası
 
 - [x] Çekirdek: i18n (TR/EN), veri güdümlü menüler, pacman/AUR kurulumu
@@ -83,6 +95,7 @@ src/archsetup/
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [ ] Kurucu modun QEMU'da uçtan uca doğrulanması
+- [x] pytest test paketi (56 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

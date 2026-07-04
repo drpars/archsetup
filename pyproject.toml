@@ -11,6 +11,13 @@ dependencies = ["textual>=1.0"]
 [project.scripts]
 archsetup = "archsetup.__main__:main"
 
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
