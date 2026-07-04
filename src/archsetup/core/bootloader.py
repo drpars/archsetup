@@ -55,12 +55,29 @@ class ParamResult:
     regen_cmd: tuple[str, ...] | None = None  # e.g. grub-mkconfig
 
 
-def _merge(existing: list[str], params: list[str]) -> list[str] | None:
-    """Existing + missing params, or None when nothing needs adding."""
-    missing = [p for p in params if p not in existing]
-    if not missing:
+def _merge(
+    existing: list[str],
+    params: list[str],
+    replace_prefixes: tuple[str, ...] = (),
+) -> list[str] | None:
+    """Existing + missing params, or None when nothing needs changing.
+
+    Tokens matching replace_prefixes are dropped first unless they are
+    exactly one of the new params — so resume=OLD gets replaced by
+    resume=NEW instead of accumulating.
+    """
+    kept = [
+        tok
+        for tok in existing
+        if not (
+            any(tok.startswith(pfx) for pfx in replace_prefixes)
+            and tok not in params
+        )
+    ]
+    missing = [p for p in params if p not in kept]
+    if not missing and kept == existing:
         return None
-    return existing + missing
+    return kept + missing
 
 
 def _sdboot_entry_files() -> list[Path]:
@@ -69,16 +86,16 @@ def _sdboot_entry_files() -> list[Path]:
     ]
 
 
-def _add_uki(params: list[str]) -> bool:
+def _add_uki(params: list[str], replace: tuple[str, ...]) -> bool:
     cmdline = CMDLINE.read_text(encoding="utf-8").strip()
-    merged = _merge(cmdline.split(), params)
+    merged = _merge(cmdline.split(), params, replace)
     if merged is None:
         print(t("msg.param_present", param=" ".join(params)))
         return False
     return sudo_write(CMDLINE, " ".join(merged) + "\n") == 0
 
 
-def _add_sdboot(params: list[str]) -> bool:
+def _add_sdboot(params: list[str], replace: tuple[str, ...]) -> bool:
     changed = False
     for entry in _sdboot_entry_files():
         text = entry.read_text(encoding="utf-8")
@@ -86,7 +103,7 @@ def _add_sdboot(params: list[str]) -> bool:
         if match is None:
             new_text = f"{text.rstrip()}\noptions {' '.join(params)}\n"
         else:
-            merged = _merge(match.group(1).split(), params)
+            merged = _merge(match.group(1).split(), params, replace)
             if merged is None:
                 continue
             new_text = f"{text[:match.start(1)]}{' '.join(merged)}{text[match.end(1):]}"
@@ -97,13 +114,13 @@ def _add_sdboot(params: list[str]) -> bool:
     return changed
 
 
-def _add_grub(params: list[str]) -> bool:
+def _add_grub(params: list[str], replace: tuple[str, ...]) -> bool:
     text = GRUB_DEFAULT.read_text(encoding="utf-8")
     match = re.search(r'^GRUB_CMDLINE_LINUX_DEFAULT="([^"]*)"', text, re.MULTILINE)
     if match is None:
         print(t("msg.grub_line_missing", path=GRUB_DEFAULT))
         return False
-    merged = _merge(match.group(1).split(), params)
+    merged = _merge(match.group(1).split(), params, replace)
     if merged is None:
         print(t("msg.param_present", param=" ".join(params)))
         return False
@@ -111,7 +128,7 @@ def _add_grub(params: list[str]) -> bool:
     return sudo_write(GRUB_DEFAULT, new_text) == 0
 
 
-def _add_refind(params: list[str]) -> bool:
+def _add_refind(params: list[str], replace: tuple[str, ...]) -> bool:
     changed = False
     out_lines = []
     for line in REFIND_CONF.read_text(encoding="utf-8").splitlines():
@@ -119,7 +136,7 @@ def _add_refind(params: list[str]) -> bool:
         if stripped and not stripped.startswith("#"):
             parts = re.findall(r'"([^"]*)"', line)
             if len(parts) >= 2:
-                merged = _merge(parts[1].split(), params)
+                merged = _merge(parts[1].split(), params, replace)
                 if merged is not None:
                     line = f'"{parts[0]}" "{" ".join(merged)}"'
                     changed = True
@@ -130,20 +147,22 @@ def _add_refind(params: list[str]) -> bool:
     return sudo_write(REFIND_CONF, "\n".join(out_lines) + "\n") == 0
 
 
-def add_kernel_params(params: list[str]) -> ParamResult:
+def add_kernel_params(
+    params: list[str], replace_prefixes: tuple[str, ...] = ()
+) -> ParamResult:
     kind = detect()
     print(t("msg.bootloader", kind=kind))
     if kind == UKI:
-        changed = _add_uki(params)
+        changed = _add_uki(params, replace_prefixes)
         return ParamResult(changed, needs_mkinitcpio=changed)
     if kind == SDBOOT:
-        return ParamResult(_add_sdboot(params))
+        return ParamResult(_add_sdboot(params, replace_prefixes))
     if kind == GRUB:
-        changed = _add_grub(params)
+        changed = _add_grub(params, replace_prefixes)
         regen = ("sudo", "grub-mkconfig", "-o", str(GRUB_CFG)) if changed else None
         return ParamResult(changed, regen_cmd=regen)
     if kind == REFIND:
-        return ParamResult(_add_refind(params))
+        return ParamResult(_add_refind(params, replace_prefixes))
     print(t("msg.bootloader_unknown"))
     return ParamResult(False)
 

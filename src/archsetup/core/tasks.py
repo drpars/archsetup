@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import bootloader, gpuconfig, i18n, pacman
+from . import bootloader, dotfiles, gpuconfig, hibernate, i18n, pacman
 from .pacman import run
 
 t = i18n.t
@@ -77,6 +77,13 @@ def install_paru() -> int:
     return _install_from_aur_git("https://aur.archlinux.org/paru-bin.git")
 
 
+def bat_cache() -> int:
+    if shutil.which("bat") is None:
+        print(t("msg.bat_missing"))
+        return 1
+    return run(["bat", "cache", "--build"])
+
+
 def remove_db_lock() -> int:
     if not PACMAN_LOCK.exists():
         print(t("msg.no_db_lock"))
@@ -115,6 +122,25 @@ TASKS: tuple[Task, ...] = (
         gpuconfig.configure_amd_modules,
         group="drivers",
     ),
+    Task(
+        "swap-hibernate",
+        "task.swap_hibernate",
+        hibernate.configure,
+        group="config",
+    ),
+    Task(
+        "nvim-dotfiles",
+        "task.nvim_dotfiles",
+        dotfiles.install_nvim,
+        group="config",
+    ),
+    Task(
+        "nvim-remove",
+        "task.nvim_remove",
+        dotfiles.remove_nvim,
+        group="config",
+    ),
+    Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",
         "task.bootloader_info",

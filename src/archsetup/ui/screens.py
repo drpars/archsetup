@@ -16,7 +16,7 @@ from textual.widgets import Footer, Header, OptionList, SelectionList, Static
 from textual.widgets.option_list import Option
 from textual.widgets.selection_list import Selection
 
-from ..core import data, hardware, i18n, pacman, services, tasks
+from ..core import data, dotfiles, hardware, i18n, pacman, services, tasks
 
 t = i18n.t
 
@@ -117,6 +117,89 @@ class PackageScreen(Screen):
         for pkg in chosen:
             if pkg.post_msg and pacman.is_installed(pkg.name):
                 self.app.notify(t(pkg.post_msg), severity="warning", timeout=12)
+
+
+class DotfilesScreen(Screen):
+    BINDINGS = [
+        Binding("escape", "go_back", t("ui.back")),
+        Binding("c", "copy", t("ui.copy")),
+        Binding("s", "symlink", t("ui.symlink")),
+        Binding("v", "validate", t("ui.validate")),
+    ]
+
+    def __init__(self, section: str) -> None:
+        super().__init__()
+        self._section = section
+        self._names = dotfiles.list_items(section)
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        yield Static(
+            f"{t(f'dotfiles.section_{self._section}')} → {dotfiles.section_target(self._section)}",
+            classes="screen-title",
+        )
+        yield SelectionList(
+            *[Selection(name, index, False) for index, name in enumerate(self._names)]
+        )
+        yield Footer()
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
+
+    def _chosen(self) -> list[str]:
+        selected = self.query_one(SelectionList).selected
+        names = [self._names[index] for index in selected]
+        if not names:
+            self.app.notify(t("ui.none_selected"), severity="warning")
+        return names
+
+    def action_copy(self) -> None:
+        if names := self._chosen():
+            self.app.run_in_terminal(
+                lambda: dotfiles.copy_items(self._section, names)
+            )
+
+    def action_symlink(self) -> None:
+        if names := self._chosen():
+            self.app.run_in_terminal(
+                lambda: dotfiles.symlink_items(self._section, names)
+            )
+
+    def action_validate(self) -> None:
+        if names := self._chosen():
+            self.app.run_in_terminal(
+                lambda: dotfiles.validate_items(self._section, names)
+            )
+
+
+def make_dotfiles_menu() -> MenuScreen:
+    def open_section(screen: MenuScreen, section: str) -> None:
+        if not dotfiles.DOTFILES_DIR.is_dir():
+            screen.app.run_in_terminal(dotfiles.ensure_dotfiles_repo)
+        if dotfiles.DOTFILES_DIR.is_dir():
+            screen.app.push_screen(DotfilesScreen(section))
+
+    items = [
+        MenuItem(
+            "update-repo",
+            t("dotfiles.update_repo"),
+            t("dotfiles.update_repo_desc"),
+            lambda screen: screen.app.run_in_terminal(dotfiles.ensure_dotfiles_repo),
+        ),
+        MenuItem(
+            "config",
+            t("dotfiles.section_config"),
+            str(dotfiles.section_target("config")),
+            lambda screen: open_section(screen, "config"),
+        ),
+        MenuItem(
+            "home",
+            t("dotfiles.section_home"),
+            str(dotfiles.section_target("home")),
+            lambda screen: open_section(screen, "home"),
+        ),
+    ]
+    return MenuScreen(t("menu.dotfiles.title"), items)
 
 
 class LanguageScreen(Screen):
@@ -240,7 +323,16 @@ def make_desktops_menu() -> MenuScreen:
 
 
 def make_config_menu() -> MenuScreen:
-    return MenuScreen(t("menu.config.title"), _task_items("config"))
+    items = [
+        MenuItem(
+            "dotfiles",
+            t("menu.dotfiles.title"),
+            t("dotfiles.menu_desc"),
+            lambda screen: screen.app.push_screen(make_dotfiles_menu()),
+        )
+    ]
+    items.extend(_task_items("config"))
+    return MenuScreen(t("menu.config.title"), items)
 
 
 def make_theme_menu() -> MenuScreen:

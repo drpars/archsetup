@@ -58,7 +58,10 @@ src/archsetup/
       (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
       ve rEFInd (`refind_linux.conf`)
 - [ ] ASUS ROG/TUF araçları (g14 deposu, servis etkinleştirme)
-- [ ] Yapılandırma görevleri: dotfiles, swap/hibernation, SDDM teması
+- [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
+      swap/hibernation (resume parametreleri her önyükleyicide), Neovim
+      dotfiles kur/kaldır, bat önbelleği
+- [ ] SDDM teması, duvar kağıtları, kmscon, ağ paylaşımı görevleri
 - [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
