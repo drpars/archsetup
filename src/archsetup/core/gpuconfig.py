@@ -14,6 +14,7 @@ right place for UKI, classic systemd-boot, GRUB or rEFInd setups.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 from . import bootloader, i18n
@@ -50,11 +51,29 @@ def _merge_modules(modules: tuple[str, ...]) -> bool:
     return sudo_write(MKINITCPIO, new_text) == 0
 
 
+def _nvidia_modeset_is_default() -> bool:
+    """Since nvidia-utils 560.35.03-5, modeset and fbdev default to on."""
+    out = subprocess.run(
+        ["pacman", "-Q", "nvidia-utils"], capture_output=True, text=True
+    )
+    if out.returncode != 0:
+        return False
+    version = out.stdout.split()[1]
+    match = re.match(r"(\d+)", version)
+    return match is not None and int(match.group(1)) >= 560
+
+
 def configure_nvidia_modules() -> int:
     changed = _merge_modules(NVIDIA_MODULES)
-    if not NVIDIA_MODPROBE.is_file():
-        changed |= sudo_write(NVIDIA_MODPROBE, NVIDIA_MODPROBE_CONTENT) == 0
-    result = bootloader.add_kernel_params([NVIDIA_CMDLINE_PARAM])
+
+    if _nvidia_modeset_is_default():
+        # No modprobe.d entry or kernel parameter needed on current drivers.
+        print(t("msg.modeset_default"))
+        result = bootloader.ParamResult(False)
+    else:
+        if not NVIDIA_MODPROBE.is_file():
+            changed |= sudo_write(NVIDIA_MODPROBE, NVIDIA_MODPROBE_CONTENT) == 0
+        result = bootloader.add_kernel_params([NVIDIA_CMDLINE_PARAM])
 
     rc = 0
     if changed or result.needs_mkinitcpio:

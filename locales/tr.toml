@@ -61,8 +61,8 @@ lightdm_desc = "Hafif giriş yöneticisi (GTK karşılayıcı ile)"
 title = "Tema"
 
 [theme]
-dark = "Koyu — Tokyo Night"
-dark_desc = "Varsayılan koyu tema"
+dark = "Koyu — TokyoNight Night"
+dark_desc = "kitty ve neovim paletinizle birebir (folke/tokyonight night)"
 light = "Açık — Tokyo Night Day"
 light_desc = "Tokyo Night'ın gündüz paleti"
 
@@ -129,6 +129,7 @@ no_changes = "Değişiklik gerekmedi."
 bootloader = "Önyükleyici düzeni: {kind}"
 bootloader_unknown = "Önyükleyici algılanamadı; çekirdek parametrelerini elle eklemeniz gerekir."
 grub_line_missing = "GRUB_CMDLINE_LINUX_DEFAULT satırı bulunamadı: {path}"
+modeset_default = "nvidia-utils >= 560: modeset ve fbdev zaten varsayılan olarak açık, parametre eklenmedi."
 aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
 detected = "algılandı"
 not_detected = "algılanmadı"

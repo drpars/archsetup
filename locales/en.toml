@@ -61,8 +61,8 @@ lightdm_desc = "Lightweight display manager (with GTK greeter)"
 title = "Theme"
 
 [theme]
-dark = "Dark — Tokyo Night"
-dark_desc = "Default dark theme"
+dark = "Dark — TokyoNight Night"
+dark_desc = "Matches your kitty and neovim palette (folke/tokyonight night)"
 light = "Light — Tokyo Night Day"
 light_desc = "Tokyo Night's day palette"
 
@@ -129,6 +129,7 @@ no_changes = "No changes were needed."
 bootloader = "Boot setup: {kind}"
 bootloader_unknown = "Could not detect the bootloader; add kernel parameters manually."
 grub_line_missing = "No GRUB_CMDLINE_LINUX_DEFAULT line found in: {path}"
+modeset_default = "nvidia-utils >= 560: modeset and fbdev are already on by default, no parameter added."
 aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
 detected = "detected"
 not_detected = "not detected"

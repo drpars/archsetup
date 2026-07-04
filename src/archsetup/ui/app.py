@@ -8,6 +8,9 @@ process with fresh strings.
 
 from __future__ import annotations
 
+import sys
+import termios
+import time
 from typing import Callable
 
 from textual.app import App
@@ -21,8 +24,25 @@ t = i18n.t
 
 RESTART = "__restart__"
 
-DARK_THEME = "tokyo-night"  # built into Textual
+DARK_THEME = "tokyonight-night"
 LIGHT_THEME = "tokyo-night-day"
+
+# folke/tokyonight.nvim "night" palette — matches the user-side kitty and
+# neovim configs; error is pure red to mirror the nvim on_colors override.
+TOKYONIGHT_NIGHT = Theme(
+    name=DARK_THEME,
+    primary="#7aa2f7",
+    secondary="#7dcfff",
+    accent="#0db9d7",
+    foreground="#c0caf5",
+    background="#1a1b26",
+    surface="#16161e",
+    panel="#292e42",
+    success="#9ece6a",
+    warning="#e0af68",
+    error="#ff0000",
+    dark=True,
+)
 
 # Official Tokyo Night "day" palette (folke/tokyonight.nvim), registered as
 # the light counterpart of Textual's built-in tokyo-night theme.
@@ -65,8 +85,12 @@ class ArchSetupApp(App):
 
     def on_mount(self) -> None:
         self.title = t("app.title")
+        self.register_theme(TOKYONIGHT_NIGHT)
         self.register_theme(TOKYO_NIGHT_DAY)
-        self.theme = config.load().get("theme", DARK_THEME)
+        saved = config.load().get("theme", DARK_THEME)
+        if saved == "tokyo-night":  # pre-custom-theme configs
+            saved = DARK_THEME
+        self.theme = saved
         self.push_screen(screens.make_main_menu())
         if self._ask_language:
             self.push_screen(screens.LanguageScreen())
@@ -77,9 +101,24 @@ class ArchSetupApp(App):
         conf["theme"] = name
         config.save(conf)
 
+    @staticmethod
+    def _drain_stdin() -> None:
+        """Discard pending terminal input after leaving application mode.
+
+        Kitty-protocol key-release events queued while the TUI was active
+        would otherwise be read by the next process — sudo password
+        prompts in particular receive them as garbage characters.
+        """
+        try:
+            time.sleep(0.1)
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        except (OSError, termios.error, ValueError):
+            pass
+
     def run_in_terminal(self, fn: Callable[[], int]) -> None:
         """Suspend the TUI, run fn in the real terminal, report the result."""
         with self.suspend():
+            self._drain_stdin()
             print()
             rc = fn()
             print()
