@@ -22,6 +22,7 @@ t = i18n.t
 
 REPO_BASE = "https://github.com/drpars"
 DOTFILES_DIR = Path.home() / ".dotfiles"
+WALLPAPER_REPO_DIR = Path.home() / ".cache" / "archsetup" / "Wallpaper"
 
 
 def section_target(section: str) -> Path:
@@ -48,12 +49,24 @@ def list_items(section: str) -> list[str]:
     return sorted(p.name for p in base.iterdir())
 
 
+def _xdg_dir(name: str, fallback: str) -> Path:
+    out = subprocess.run(["xdg-user-dir", name], capture_output=True, text=True)
+    if out.stdout.strip():
+        return Path(out.stdout.strip())
+    return Path.home() / fallback
+
+
 def _backup_dir() -> Path:
-    out = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True, text=True)
-    docs = Path(out.stdout.strip()) if out.stdout.strip() else Path.home() / "Documents"
+    docs = _xdg_dir("DOCUMENTS", "Documents")
     backup = docs / "dotfiles_yedek" / datetime.now().strftime("%Y%m%d-%H%M%S")
     backup.mkdir(parents=True, exist_ok=True)
     return backup
+
+
+def _ensure_rsync() -> int:
+    if shutil.which("rsync") is None:
+        return run(["sudo", "pacman", "-S", "--needed", "rsync"])
+    return 0
 
 
 def _rsync_cmd(source: Path, target: Path, backup: Path, dry: bool) -> list[str]:
@@ -65,9 +78,8 @@ def _rsync_cmd(source: Path, target: Path, backup: Path, dry: bool) -> list[str]
 
 
 def copy_items(section: str, items: list[str]) -> int:
-    if shutil.which("rsync") is None:
-        if run(["sudo", "pacman", "-S", "--needed", "rsync"]) != 0:
-            return 1
+    if _ensure_rsync() != 0:
+        return 1
 
     target_base = section_target(section)
     backup = _backup_dir()
@@ -131,6 +143,31 @@ def validate_items(section: str, items: list[str]) -> int:
     elif rc == 0:
         print(t("dotfiles.links_ok"))
     return rc
+
+
+def install_wallpapers() -> int:
+    """Mirror drpars/Wallpaper into Pictures/Wallpaper.
+
+    Unlike the old script this targets a subdirectory (so --delete can
+    never touch unrelated files in Pictures) and excludes .git.
+    """
+    if _ensure_rsync() != 0:
+        return 1
+    if ensure_repo("Wallpaper", WALLPAPER_REPO_DIR) != 0:
+        return 1
+
+    target = _xdg_dir("PICTURES", "Pictures") / "Wallpaper"
+    target.mkdir(parents=True, exist_ok=True)
+    base_cmd = [
+        "rsync", "-avh", "--delete", "--exclude=.git",
+        f"{WALLPAPER_REPO_DIR}/", str(target),
+    ]
+
+    run([*base_cmd[:1], "--dry-run", "--itemize-changes", *base_cmd[1:]])
+    if not ask_yes(t("dotfiles.wallpapers_q", target=target)):
+        print(t("msg.cancelled"))
+        return 0
+    return run(base_cmd)
 
 
 def install_nvim() -> int:

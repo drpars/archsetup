@@ -61,7 +61,8 @@ src/archsetup/
 - [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
       swap/hibernation (resume parametreleri her önyükleyicide), Neovim
       dotfiles kur/kaldır, bat önbelleği
-- [ ] SDDM teması, duvar kağıtları, kmscon, ağ paylaşımı görevleri
+- [x] SDDM temaları (Silent, Sugar Candy), duvar kağıtları, kmscon
+- [ ] Ağ paylaşımı (Samba/NFS) görevleri
 - [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin

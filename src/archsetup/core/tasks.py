@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import bootloader, dotfiles, gpuconfig, hibernate, i18n, pacman
+from . import bootloader, dotfiles, gpuconfig, hibernate, i18n, kmscon, pacman, sddm
 from .pacman import run
 
 t = i18n.t
@@ -140,6 +140,20 @@ TASKS: tuple[Task, ...] = (
         dotfiles.remove_nvim,
         group="config",
     ),
+    Task(
+        "wallpapers",
+        "task.wallpapers",
+        dotfiles.install_wallpapers,
+        group="config",
+    ),
+    Task("sddm-silent", "task.sddm_silent", sddm.install_silent, group="config"),
+    Task(
+        "sddm-sugarcandy",
+        "task.sddm_sugarcandy",
+        sddm.install_sugarcandy,
+        group="config",
+    ),
+    Task("kmscon", "task.kmscon", kmscon.install, group="config"),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",

@@ -67,6 +67,17 @@ links_ok = "All selected links are valid."
 nvim_root_q = "Also link for the root user?"
 nvim_remove_q = "nvim configuration, data and cache will be COMPLETELY removed. Are you sure?"
 removed = "Removed: {path}"
+wallpapers_q = "Apply the wallpaper changes? Target: {target}"
+
+[sddm]
+overwrite_q = "{path} already exists, overwrite it?"
+files_missing = "SDDM files not found in the repo: {path}"
+done = "SDDM theme installed. Visible on the next login screen."
+
+[kmscon]
+tty_q = "Which TTY should KMSCON be configured for?"
+tty_invalid = "Invalid TTY number (must be 3-6)."
+done = "KMSCON configured for tty{tty}."
 
 [menu.dm]
 title = "Display Manager"
@@ -126,6 +137,14 @@ nvim_remove = "Remove Neovim Dotfiles"
 nvim_remove_desc = "Delete nvim configuration, data and cache"
 bat_cache = "Build bat Cache"
 bat_cache_desc = "bat cache --build"
+wallpapers = "Wallpapers"
+wallpapers_desc = "Mirror drpars/Wallpaper into Pictures/Wallpaper"
+sddm_silent = "SDDM Silent Theme"
+sddm_silent_desc = "Install sddm-silent-theme (AUR) and write /etc/sddm.conf"
+sddm_sugarcandy = "SDDM Sugar Candy Theme"
+sddm_sugarcandy_desc = "Install from the theme archive in the dotfiles repo"
+kmscon = "Install KMSCON"
+kmscon_desc = "kmscon (AUR) + service swap for the chosen TTY"
 
 [category]
 console = "Console Applications"
@@ -168,6 +187,7 @@ resume_hook_present = "resume hook already present."
 hibernate_done = "Hibernation configured: {params}\nReboot for the changes to take effect."
 cancelled = "Operation cancelled."
 bat_missing = "bat is not installed."
+sddm_missing = "SDDM is not installed. Install sddm from the Display Manager menu first."
 aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
 detected = "detected"
 not_detected = "not detected"

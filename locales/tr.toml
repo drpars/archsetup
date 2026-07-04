@@ -67,6 +67,17 @@ links_ok = "Tüm seçili bağlar geçerli."
 nvim_root_q = "Root kullanıcısı için de bağlansın mı?"
 nvim_remove_q = "nvim yapılandırması, verisi ve önbelleği TAMAMEN silinecek. Emin misiniz?"
 removed = "Silindi: {path}"
+wallpapers_q = "Duvar kağıdı değişiklikleri uygulansın mı? Hedef: {target}"
+
+[sddm]
+overwrite_q = "{path} zaten var, üzerine yazılsın mı?"
+files_missing = "SDDM dosyaları depoda bulunamadı: {path}"
+done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında görünür."
+
+[kmscon]
+tty_q = "KMSCON hangi TTY için ayarlansın?"
+tty_invalid = "Geçersiz TTY numarası (3-6 arası olmalı)."
+done = "KMSCON tty{tty} için yapılandırıldı."
 
 [menu.dm]
 title = "Giriş Yöneticisi"
@@ -126,6 +137,14 @@ nvim_remove = "Neovim Dotfiles Kaldır"
 nvim_remove_desc = "nvim yapılandırma, veri ve önbelleğini sil"
 bat_cache = "bat Önbelleğini Oluştur"
 bat_cache_desc = "bat cache --build"
+wallpapers = "Duvar Kağıtları"
+wallpapers_desc = "drpars/Wallpaper deposunu Resimler/Wallpaper içine eşitle"
+sddm_silent = "SDDM Silent Teması"
+sddm_silent_desc = "sddm-silent-theme (AUR) kur ve /etc/sddm.conf yaz"
+sddm_sugarcandy = "SDDM Sugar Candy Teması"
+sddm_sugarcandy_desc = "dotfiles deposundaki tema arşivinden kur"
+kmscon = "KMSCON Kur"
+kmscon_desc = "kmscon (AUR) + seçilen TTY için hizmet değişimi"
 
 [category]
 console = "Konsol Uygulamaları"
@@ -168,6 +187,7 @@ resume_hook_present = "resume kancası zaten mevcut."
 hibernate_done = "Hazırda bekletme yapılandırıldı: {params}\nDeğişiklikler için yeniden başlatın."
 cancelled = "İşlem iptal edildi."
 bat_missing = "bat kurulu değil."
+sddm_missing = "SDDM kurulu değil. Önce Görüntü Yöneticisi menüsünden sddm kurun."
 aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
 detected = "algılandı"
 not_detected = "algılanmadı"
