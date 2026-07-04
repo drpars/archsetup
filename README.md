@@ -57,12 +57,14 @@ src/archsetup/
       yazılır — UKI (`/etc/kernel/cmdline`), systemd-boot girdileri
       (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
       ve rEFInd (`refind_linux.conf`)
-- [ ] ASUS ROG/TUF araçları (g14 deposu, servis etkinleştirme)
+- [x] ASUS ROG/TUF araçları (g14 deposu algılama, koşullu AUR, servisler)
 - [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
       swap/hibernation (resume parametreleri her önyükleyicide), Neovim
       dotfiles kur/kaldır, bat önbelleği
 - [x] SDDM temaları (Silent, Sugar Candy), duvar kağıtları, kmscon
-- [ ] Ağ paylaşımı (Samba/NFS) görevleri
+- [x] Ağ paylaşımı: Samba (usershare, sambashare grubu) + Avahi + firewalld
+- [ ] Kalan uygulama kategorileri (yazı tipleri, temalar, oyun başlatıcılar,
+      virt-manager yapılandırması)
 - [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin

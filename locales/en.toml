@@ -79,6 +79,14 @@ tty_q = "Which TTY should KMSCON be configured for?"
 tty_invalid = "Invalid TTY number (must be 3-6)."
 done = "KMSCON configured for tty{tty}."
 
+[asus]
+g14_found = "[g14] repository found: ASUS packages will be installed from it."
+g14_missing = "No [g14] repository: asusctl/supergfxctl/rog-control-center will come from the AUR."
+
+[network]
+smbpasswd = "Set a password for Samba user {user}:"
+done = "Network sharing configured; smb, nmb and avahi services enabled."
+
 [menu.dm]
 title = "Display Manager"
 desc = "Install and enable a display/login manager"
@@ -145,6 +153,10 @@ sddm_sugarcandy = "SDDM Sugar Candy Theme"
 sddm_sugarcandy_desc = "Install from the theme archive in the dotfiles repo"
 kmscon = "Install KMSCON"
 kmscon_desc = "kmscon (AUR) + service swap for the chosen TTY"
+asus_tools = "ASUS ROG/TUF Tools"
+asus_tools_desc = "asusctl, supergfxctl, rog-control-center + services (g14/AUR)"
+network_sharing = "Network Sharing (Samba/Avahi)"
+network_sharing_desc = "Samba configuration, sambashare group, mDNS and services"
 
 [category]
 console = "Console Applications"

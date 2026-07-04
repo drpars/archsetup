@@ -79,6 +79,14 @@ tty_q = "KMSCON hangi TTY için ayarlansın?"
 tty_invalid = "Geçersiz TTY numarası (3-6 arası olmalı)."
 done = "KMSCON tty{tty} için yapılandırıldı."
 
+[asus]
+g14_found = "[g14] deposu bulundu: ASUS paketleri resmi depodan kurulacak."
+g14_missing = "[g14] deposu yok: asusctl/supergfxctl/rog-control-center AUR'dan kurulacak."
+
+[network]
+smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
+done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
+
 [menu.dm]
 title = "Giriş Yöneticisi"
 desc = "Görüntü/giriş yöneticisi kur ve etkinleştir"
@@ -145,6 +153,10 @@ sddm_sugarcandy = "SDDM Sugar Candy Teması"
 sddm_sugarcandy_desc = "dotfiles deposundaki tema arşivinden kur"
 kmscon = "KMSCON Kur"
 kmscon_desc = "kmscon (AUR) + seçilen TTY için hizmet değişimi"
+asus_tools = "ASUS ROG/TUF Araçları"
+asus_tools_desc = "asusctl, supergfxctl, rog-control-center + servisler (g14/AUR)"
+network_sharing = "Ağ Paylaşımı (Samba/Avahi)"
+network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servisler"
 
 [category]
 console = "Konsol Uygulamaları"

@@ -13,7 +13,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import bootloader, dotfiles, gpuconfig, hibernate, i18n, kmscon, pacman, sddm
+from . import (
+    asus,
+    bootloader,
+    dotfiles,
+    gpuconfig,
+    hibernate,
+    i18n,
+    kmscon,
+    network,
+    pacman,
+    sddm,
+)
 from .pacman import run
 
 t = i18n.t
@@ -122,6 +133,7 @@ TASKS: tuple[Task, ...] = (
         gpuconfig.configure_amd_modules,
         group="drivers",
     ),
+    Task("asus-tools", "task.asus_tools", asus.install, group="drivers"),
     Task(
         "swap-hibernate",
         "task.swap_hibernate",
@@ -154,6 +166,12 @@ TASKS: tuple[Task, ...] = (
         group="config",
     ),
     Task("kmscon", "task.kmscon", kmscon.install, group="config"),
+    Task(
+        "network-sharing",
+        "task.network_sharing",
+        network.configure,
+        group="config",
+    ),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",
