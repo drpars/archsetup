@@ -52,7 +52,8 @@ src/archsetup/
 - [x] Çekirdek: i18n (TR/EN), veri güdümlü menüler, pacman/AUR kurulumu
 - [x] Sistem güncelleme görevleri, uygulama ve sürücü kategorileri
 - [x] Masaüstü ortamları (Hyprland, Plasma, GNOME) ve giriş yöneticileri
-- [ ] NVIDIA/ASUS sürücü yapılandırmaları (mkinitcpio, servisler)
+- [x] NVIDIA sürücüleri ve çekirdek modülü yapılandırması (mkinitcpio, modeset)
+- [ ] ASUS ROG/TUF araçları (g14 deposu, servis etkinleştirme)
 - [ ] Yapılandırma görevleri: dotfiles, swap/hibernation, SDDM teması
 - [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin

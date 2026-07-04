@@ -175,14 +175,16 @@ def make_apps_menu() -> MenuScreen:
 
 
 def make_drivers_menu() -> MenuScreen:
-    return MenuScreen(
-        t("menu.drivers.title"), _category_items("drivers.toml", PackageScreen)
-    )
+    items = _category_items("drivers.toml", PackageScreen)
+    items.extend(_task_items("drivers"))
+    return MenuScreen(t("menu.drivers.title"), items)
 
 
-def make_update_menu() -> MenuScreen:
+def _task_items(group: str) -> list[MenuItem]:
     items = []
     for task in tasks.TASKS:
+        if task.group != group:
+            continue
         if task.id == "remove-db-lock" and not tasks.PACMAN_LOCK.exists():
             continue
         items.append(
@@ -193,7 +195,11 @@ def make_update_menu() -> MenuScreen:
                 action=lambda screen, tsk=task: screen.app.run_task(tsk),
             )
         )
-    return MenuScreen(t("menu.update.title"), items)
+    return items
+
+
+def make_update_menu() -> MenuScreen:
+    return MenuScreen(t("menu.update.title"), _task_items("update"))
 
 
 def make_dm_menu() -> MenuScreen:

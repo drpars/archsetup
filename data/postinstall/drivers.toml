@@ -1,5 +1,6 @@
-# Driver categories. NVIDIA and ASUS tooling involve extra configuration
-# steps (mkinitcpio modules, services) and will be ported as tasks.
+# Driver categories. Kernel module configuration (mkinitcpio, modeset)
+# lives in the nvidia-modules / amd-modules tasks shown in the same menu.
+# ASUS ROG/TUF tooling (g14 repo, services) is still pending.
 
 [[category]]
 id = "amd"
@@ -7,6 +8,7 @@ condition = "gpu:amd"
 
   [[category.packages]]
   name = "mesa"
+  post_msg = "msg.gpu_modules_hint"
 
   [[category.packages]]
   name = "lib32-mesa"
@@ -31,6 +33,51 @@ condition = "gpu:amd"
 
   [[category.packages]]
   name = "lib32-mesa-vdpau"
+
+[[category]]
+id = "nvidia"
+condition = "gpu:nvidia"
+
+  [[category.packages]]
+  name = "nvidia"
+  note = { tr = "Kapalı kaynak, linux çekirdeği için", en = "Proprietary, for the linux kernel" }
+  default = false
+
+  [[category.packages]]
+  name = "nvidia-lts"
+  note = { tr = "Kapalı kaynak, linux-lts için", en = "Proprietary, for linux-lts" }
+  default = false
+
+  [[category.packages]]
+  name = "nvidia-dkms"
+  note = { tr = "Kapalı kaynak, tüm çekirdekler (DKMS)", en = "Proprietary, any kernel (DKMS)" }
+  default = false
+
+  [[category.packages]]
+  name = "nvidia-open"
+  note = { tr = "Açık çekirdek modülü, linux için", en = "Open kernel module, for linux" }
+  default = false
+
+  [[category.packages]]
+  name = "nvidia-open-dkms"
+  note = { tr = "Açık çekirdek modülü, tüm çekirdekler (DKMS)", en = "Open kernel module, any kernel (DKMS)" }
+
+  [[category.packages]]
+  name = "nvidia-utils"
+  post_msg = "msg.gpu_modules_hint"
+
+  [[category.packages]]
+  name = "lib32-nvidia-utils"
+
+  [[category.packages]]
+  name = "nvidia-settings"
+
+  [[category.packages]]
+  name = "egl-wayland"
+
+  [[category.packages]]
+  name = "libva-nvidia-driver"
+  note = { tr = "VA-API donanım hızlandırma", en = "VA-API hardware acceleration" }
 
 [[category]]
 id = "sound"

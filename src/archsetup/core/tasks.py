@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import i18n, pacman
+from . import gpuconfig, i18n, pacman
 from .pacman import run
 
 t = i18n.t
@@ -89,6 +89,7 @@ class Task:
     id: str
     key: str  # locale key for the title; "<key>_desc" is the description
     fn: Callable[[], int]
+    group: str = "update"  # which menu the task appears in
 
 
 TASKS: tuple[Task, ...] = (
@@ -102,6 +103,18 @@ TASKS: tuple[Task, ...] = (
     Task("install-yay", "task.install_yay", install_yay),
     Task("install-paru", "task.install_paru", install_paru),
     Task("remove-db-lock", "task.remove_db_lock", remove_db_lock),
+    Task(
+        "nvidia-modules",
+        "task.nvidia_modules",
+        gpuconfig.configure_nvidia_modules,
+        group="drivers",
+    ),
+    Task(
+        "amd-modules",
+        "task.amd_modules",
+        gpuconfig.configure_amd_modules,
+        group="drivers",
+    ),
 )
 
 
