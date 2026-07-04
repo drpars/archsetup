@@ -14,16 +14,30 @@ yazılmıştır. `installarch` (canlı ISO'dan kurulum) ve `installarchde`
   dosyalarından gelir. Dil değiştirmek hiçbir mantığı etkilemez.
 - **Veri güdümlü menüler:** Paket listeleri `data/` altındaki TOML
   dosyalarındadır. Yeni uygulama eklemek = birkaç satır TOML.
-- **İki mod:** Kurulu sistemde *kurulum sonrası* modu (hazır); canlı ISO'da
-  *kurucu* modu (yol haritasında).
+- **İki mod:** Canlı ISO'da *kurucu* modu (bölümleme, pacstrap, chroot
+  yapılandırması, önyükleyici); kurulu sistemde *kurulum sonrası* modu.
+  Ortam otomatik algılanır.
 
 ## Kullanım
+
+### Kurulu sistemde (kurulum sonrası)
 
 ```bash
 git clone https://github.com/drpars/archsetup
 cd archsetup
 ./archsetup
 ```
+
+### Canlı ISO'da (kurucu)
+
+```bash
+curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash
+```
+
+Kurucu akışı: klavye → yansılar → cfdisk → bölüm seçimi → biçimlendir →
+bağla → pacstrap → sistem yapılandırması (hostname, locale, kullanıcı,
+önyükleyici: systemd-boot/UKI, GRUB veya rEFInd, Secure Boot) → ek paketler
+→ yeniden başlat.
 
 Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 çalıştırmayın; sudo gerektiğinde sorulur.
@@ -42,9 +56,9 @@ Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 data/        paket tanımları (TOML) — betiğin "içeriği"
 locales/     tr.toml, en.toml — tüm arayüz metinleri
 src/archsetup/
-  core/      i18n, pacman, donanım tespiti, görevler
+  core/      i18n, pacman, donanım tespiti, önyükleyici, görevler
   ui/        Textual ekranları
-  installer/ canlı ISO modu (henüz taşınmadı)
+  installer/ canlı ISO modu: disk, pacstrap, chroot, önyükleyiciler
 ```
 
 ## Yol haritası
@@ -66,7 +80,9 @@ src/archsetup/
 - [x] Kalan uygulama kategorileri: yazı tipleri, tema motorları, temalar,
       oyun başlatıcılar, sanallaştırma (virt-config görevi), OpenRazer,
       Waydroid binder kurulumu
-- [ ] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması ve
-      önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd)
+- [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
+      önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
+      (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
+- [ ] Kurucu modun QEMU'da uçtan uca doğrulanması
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

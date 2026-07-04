@@ -79,9 +79,10 @@ class ArchSetupApp(App):
     }
     """
 
-    def __init__(self, ask_language: bool = False) -> None:
+    def __init__(self, ask_language: bool = False, installer: bool = False) -> None:
         super().__init__()
         self._ask_language = ask_language
+        self._installer = installer
 
     def on_mount(self) -> None:
         self.title = t("app.title")
@@ -91,7 +92,10 @@ class ArchSetupApp(App):
         if saved == "tokyo-night":  # pre-custom-theme configs
             saved = DARK_THEME
         self.theme = saved
-        self.push_screen(screens.make_main_menu())
+        if self._installer:
+            self.push_screen(screens.make_installer_menu())
+        else:
+            self.push_screen(screens.make_main_menu())
         if self._ask_language:
             self.push_screen(screens.LanguageScreen())
 

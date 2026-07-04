@@ -77,9 +77,10 @@ class PackageScreen(Screen):
         Binding("i", "install", t("ui.install")),
     ]
 
-    def __init__(self, category: data.Category) -> None:
+    def __init__(self, category: data.Category, install_fn=None) -> None:
         super().__init__()
         self._category = category
+        self._install_fn = install_fn  # None -> host pacman via the app
         self._visible = [
             pkg for pkg in category.packages if hardware.condition_ok(pkg.condition)
         ]
@@ -113,7 +114,14 @@ class PackageScreen(Screen):
         chosen = [self._visible[index] for index in selected]
         repo_pkgs = [pkg.name for pkg in chosen if not pkg.aur]
         aur_pkgs = [pkg.name for pkg in chosen if pkg.aur]
-        self.app.install_packages(repo_pkgs, aur_pkgs)
+        if self._install_fn is not None:
+            if not repo_pkgs and not aur_pkgs:
+                self.app.notify(t("ui.none_selected"), severity="warning")
+                return
+            fn = self._install_fn
+            self.app.run_in_terminal(lambda: fn(repo_pkgs, aur_pkgs))
+        else:
+            self.app.install_packages(repo_pkgs, aur_pkgs)
         for pkg in chosen:
             if pkg.post_msg and pacman.is_installed(pkg.name):
                 self.app.notify(t(pkg.post_msg), severity="warning", timeout=12)
@@ -356,6 +364,98 @@ def make_theme_menu() -> MenuScreen:
         ),
     ]
     return MenuScreen(t("menu.theme.title"), items)
+
+
+# ==========================================================
+# INSTALLER (LIVE ISO) MENUS
+# ==========================================================
+
+
+def _run_item(id_: str, label_key: str, desc: str, fn) -> MenuItem:
+    return MenuItem(
+        id_, t(label_key), desc,
+        lambda screen: screen.app.run_in_terminal(fn),
+    )
+
+
+def make_bootloader_install_menu() -> MenuScreen:
+    from ..installer import bootloaders
+
+    items = [
+        _run_item("systemd-boot", "inst.sdboot", "bootctl + UKI (/etc/kernel/cmdline)",
+                  bootloaders.install_systemd_boot),
+        _run_item("grub", "inst.grub", "grub-install + grub-mkconfig",
+                  bootloaders.install_grub),
+        _run_item("refind", "inst.refind", "refind-install + refind_linux.conf",
+                  bootloaders.install_refind),
+    ]
+    return MenuScreen(t("inst.bootloader_title"), items)
+
+
+def make_target_menu() -> MenuScreen:
+    from ..installer import base, chroot
+
+    items = [
+        _run_item("hostname", "inst.hostname", "/etc/hostname", chroot.set_hostname),
+        _run_item("vconsole", "inst.vconsole", "/etc/vconsole.conf", chroot.set_vconsole),
+        _run_item("locale", "inst.locale", "/etc/locale.conf + locale-gen", chroot.set_locale),
+        _run_item("timezone", "inst.timezone", "/etc/localtime + hwclock", chroot.set_timezone),
+        _run_item("rootpw", "inst.rootpw", "passwd root", chroot.set_root_password),
+        _run_item("adduser", "inst.adduser", "useradd + wheel", chroot.add_user),
+        _run_item("swapfile", "inst.swapfile", "/swapfile", chroot.create_swapfile),
+        _run_item("multilib", "inst.multilib", "pacman.conf [multilib]", base.enable_multilib),
+        _run_item("g14", "inst.g14", "asus-linux [g14]", base.add_g14_repo),
+        _run_item("fstab", "inst.fstab", "genfstab", base.genfstab),
+        MenuItem(
+            "bootloader", t("inst.bootloader_title"), "systemd-boot / GRUB / rEFInd",
+            lambda screen: screen.app.push_screen(make_bootloader_install_menu()),
+        ),
+        _run_item("uki", "inst.uki", "mkinitcpio preset -> UKI", chroot.gen_uki),
+        _run_item("secureboot", "inst.secureboot", "sbctl", chroot.setup_secure_boot),
+        _run_item("watchdog", "inst.watchdog", "nowatchdog / iTCO_wdt", chroot.disable_watchdog),
+        _run_item("edit-fstab", "inst.edit_fstab", "/mnt/etc/fstab",
+                  lambda: chroot.edit_file("/mnt/etc/fstab")),
+        _run_item("edit-mkinitcpio", "inst.edit_mkinitcpio", "/mnt/etc/mkinitcpio.conf",
+                  lambda: chroot.edit_file("/mnt/etc/mkinitcpio.conf")),
+        _run_item("edit-cmdline", "inst.edit_cmdline", "/mnt/etc/kernel/cmdline",
+                  lambda: chroot.edit_file("/mnt/etc/kernel/cmdline")),
+    ]
+    return MenuScreen(t("inst.target_title"), items)
+
+
+def make_installer_menu() -> MenuScreen:
+    from ..installer import base, chroot, disk
+
+    def extras_screen(screen: MenuScreen) -> None:
+        categories = data.load_categories("extras.toml", section="install")
+        screen.app.push_screen(
+            PackageScreen(categories[0], install_fn=chroot.chroot_install)
+        )
+
+    items = [
+        _run_item("keymap", "inst.keymap", "loadkeys", base.set_live_keymap),
+        _run_item("reflector", "inst.reflector", "mirrorlist", base.run_reflector),
+        _run_item("parallel", "inst.parallel", "pacman.conf", base.parallel_downloads),
+        _run_item("cfdisk", "inst.cfdisk", "", disk.run_cfdisk),
+        _run_item("select", "inst.select", "boot/swap/root/home", disk.select_partitions),
+        _run_item("format", "inst.format", "mkfs", disk.format_devices),
+        _run_item("mount", "inst.mount", "/mnt", disk.mount_all),
+        _run_item("pacstrap", "inst.pacstrap", "base + kernel", base.pacstrap_base),
+        MenuItem(
+            "target", t("inst.target_title"), "arch-chroot /mnt",
+            lambda screen: screen.app.push_screen(make_target_menu()),
+        ),
+        MenuItem(
+            "extras", t("inst.extras"), "arch-chroot pacman",
+            extras_screen,
+        ),
+        _run_item("unmount", "inst.unmount", "umount -R /mnt", disk.unmount_all),
+        _run_item("reboot", "inst.reboot", "systemctl reboot",
+                  lambda: pacman.run(["systemctl", "reboot"])),
+        _run_item("poweroff", "inst.poweroff", "systemctl poweroff",
+                  lambda: pacman.run(["systemctl", "poweroff"])),
+    ]
+    return MainMenuScreen(t("inst.title"), items)
 
 
 def make_main_menu() -> MenuScreen:

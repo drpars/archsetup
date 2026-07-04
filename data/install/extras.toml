@@ -1,0 +1,87 @@
+# Extra packages installed into the target with arch-chroot pacman.
+# Ported from installarch's archextrasmenu.
+
+[[category]]
+id = "extras"
+
+  [[category.packages]]
+  name = "intel-ucode"
+  condition = "cpu:intel"
+
+  [[category.packages]]
+  name = "amd-ucode"
+  condition = "cpu:amd"
+
+  [[category.packages]]
+  name = "sbctl"
+  note = { tr = "Secure Boot imzalama", en = "Secure Boot signing" }
+
+  [[category.packages]]
+  name = "edk2-shell"
+
+  [[category.packages]]
+  name = "efibootmgr"
+
+  [[category.packages]]
+  name = "iwd"
+  note = { tr = "Kablosuz ağ (impala ile)", en = "Wireless networking (with impala)" }
+
+  [[category.packages]]
+  name = "dhcpcd"
+  default = false
+
+  [[category.packages]]
+  name = "networkmanager"
+  default = false
+
+  [[category.packages]]
+  name = "openssh"
+
+  [[category.packages]]
+  name = "git"
+
+  [[category.packages]]
+  name = "neovim"
+
+  [[category.packages]]
+  name = "xdg-user-dirs"
+
+  [[category.packages]]
+  name = "xdg-utils"
+
+  [[category.packages]]
+  name = "util-linux"
+
+  [[category.packages]]
+  name = "coreutils"
+
+  [[category.packages]]
+  name = "usbutils"
+
+  [[category.packages]]
+  name = "procps-ng"
+
+  [[category.packages]]
+  name = "samba"
+  default = false
+
+  [[category.packages]]
+  name = "nfs-utils"
+
+  [[category.packages]]
+  name = "bind"
+
+  [[category.packages]]
+  name = "man-db"
+
+  [[category.packages]]
+  name = "man-pages"
+
+  [[category.packages]]
+  name = "eza"
+
+  [[category.packages]]
+  name = "bluez"
+
+  [[category.packages]]
+  name = "bluez-utils"

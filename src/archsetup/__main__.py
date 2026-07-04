@@ -24,7 +24,24 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--list", action="store_true", dest="list_tasks",
                         help="list available tasks")
     parser.add_argument("--lang", help="interface language (tr, en, ...)")
+    parser.add_argument("--installer", action="store_true",
+                        help="force installer (live ISO) mode")
     return parser.parse_args(argv)
+
+
+def _ensure_textual_live() -> bool:
+    """On the live ISO, install python-textual on first run."""
+    try:
+        import textual  # noqa: F401
+
+        return True
+    except ModuleNotFoundError:
+        pass
+    import subprocess
+
+    return subprocess.call(
+        ["pacman", "-Sy", "--needed", "--noconfirm", "python-textual"]
+    ) == 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,9 +59,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{task.id:18} {t(task.key)}")
         return 0
 
-    if env.is_archiso():
-        print(t("msg.installer_todo"))
-        return 1
+    if env.is_archiso() or args.installer:
+        if env.is_archiso():
+            if not env.is_root():
+                print(t("inst.need_root"), file=sys.stderr)
+                return 1
+            if not _ensure_textual_live():
+                print(t("msg.textual_missing"), file=sys.stderr)
+                return 1
+        from .ui.app import RESTART, ArchSetupApp
+
+        app = ArchSetupApp(ask_language="language" not in conf, installer=True)
+        if app.run() == RESTART:
+            os.execv(sys.executable, [sys.executable, sys.argv[0], *sys.argv[1:]])
+        return 0
 
     if env.is_root():
         print(t("msg.root_forbidden"), file=sys.stderr)
