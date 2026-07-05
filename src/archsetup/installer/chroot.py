@@ -253,6 +253,59 @@ def disable_watchdog() -> int:
     return 0
 
 
+WIRED_NETWORK_CONF = """[Match]
+Name=en*
+
+[Network]
+DHCP=yes
+"""
+
+SERVICE_OWNERS = (
+    ("openssh", "sshd"),
+    ("networkmanager", "NetworkManager"),
+    ("iwd", "iwd"),
+    ("dhcpcd", "dhcpcd"),
+    ("bluez", "bluetooth"),
+)
+
+
+def _target_has(pkg: str) -> bool:
+    return subprocess.run(
+        ["arch-chroot", str(MNT), "pacman", "-Qq", pkg], capture_output=True
+    ).returncode == 0
+
+
+def enable_services() -> int:
+    """Enable services for installed packages + wired DHCP via networkd.
+
+    iwd only manages wireless interfaces; without this step a wired
+    machine (or a QEMU guest with a virtio NIC) boots with no network.
+    systemd-networkd needs no extra package, so it is offered whenever
+    NetworkManager is absent.
+    """
+    if not target_ready():
+        return 1
+
+    rc = 0
+    for pkg, service in SERVICE_OWNERS:
+        if _target_has(pkg):
+            rc |= run(["systemctl", "--root", str(MNT), "enable", service])
+
+    if not _target_has("networkmanager") and ask_yes(t("inst.networkd_q")):
+        network_dir = MNT / "etc/systemd/network"
+        network_dir.mkdir(parents=True, exist_ok=True)
+        (network_dir / "20-wired.network").write_text(
+            WIRED_NETWORK_CONF, encoding="utf-8"
+        )
+        rc |= run(["systemctl", "--root", str(MNT), "enable",
+                   "systemd-networkd", "systemd-resolved"])
+        resolv = MNT / "etc/resolv.conf"
+        resolv.unlink(missing_ok=True)
+        resolv.symlink_to("../run/systemd/resolve/stub-resolv.conf")
+        print(f"{network_dir / '20-wired.network'} <- DHCP (en*)")
+    return rc
+
+
 def setup_secure_boot() -> int:
     """sbctl: create/enroll keys, sign systemd-boot and the UKI."""
     if not target_ready():

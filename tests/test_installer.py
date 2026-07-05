@@ -104,6 +104,33 @@ def test_watchdog_amd(tmp_path, monkeypatch):
     assert cmdline.read_text().count("nowatchdog") == 1
 
 
+def test_enable_services_networkd_fallback(tmp_path, monkeypatch, runlog):
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "usr").mkdir()
+    installed = {"openssh", "iwd"}  # networkmanager YOK
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "run", runlog)
+    monkeypatch.setattr(chroot, "_target_has", lambda p: p in installed)
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: True)
+
+    assert chroot.enable_services() == 0
+    assert ["systemctl", "--root", str(tmp_path), "enable", "sshd"] in runlog.calls
+    assert ["systemctl", "--root", str(tmp_path), "enable", "iwd"] in runlog.calls
+    # NetworkManager yok -> kablolu DHCP için networkd yapılandırıldı
+    network_conf = tmp_path / "etc/systemd/network/20-wired.network"
+    assert "DHCP=yes" in network_conf.read_text()
+    assert ["systemctl", "--root", str(tmp_path), "enable",
+            "systemd-networkd", "systemd-resolved"] in runlog.calls
+    assert (tmp_path / "etc/resolv.conf").is_symlink()
+
+    # NetworkManager varsa networkd sorusu hiç sorulmaz
+    runlog.calls.clear()
+    installed.add("networkmanager")
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: pytest.fail("sorulmamalı"))
+    assert chroot.enable_services() == 0
+    assert ["systemctl", "--root", str(tmp_path), "enable", "NetworkManager"] in runlog.calls
+
+
 USERNAME_RE = r"[a-z_][a-z0-9_-]{2,31}"
 
 
