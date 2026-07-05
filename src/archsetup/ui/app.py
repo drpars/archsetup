@@ -69,6 +69,10 @@ class ArchSetupApp(App):
         text-style: bold;
         color: $accent;
     }
+    .screen-subtitle {
+        padding: 0 2;
+        color: $text-muted;
+    }
     OptionList, SelectionList {
         margin: 1 2;
         height: 1fr;
@@ -76,6 +80,18 @@ class ArchSetupApp(App):
     }
     OptionList:focus, SelectionList:focus {
         border: round $accent;
+    }
+    /* Seçim kutucukları: seçili olan net şekilde ayrışsın */
+    SelectionList > .selection-list--button {
+        color: $panel;
+    }
+    SelectionList > .selection-list--button-highlighted {
+        color: $text-muted;
+    }
+    SelectionList > .selection-list--button-selected,
+    SelectionList > .selection-list--button-selected-highlighted {
+        color: $success;
+        text-style: bold;
     }
     """
 

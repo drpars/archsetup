@@ -1,7 +1,7 @@
 """Textual pilot tests: menu structure and theme handling."""
 
 import pytest
-from textual.widgets import OptionList, SelectionList
+from textual.widgets import OptionList, SelectionList, Static
 
 from archsetup.ui import screens
 from archsetup.ui.app import ArchSetupApp
@@ -34,7 +34,23 @@ async def test_navigation_and_package_screen():
         await pilot.press("enter")  # ilk kategori (console)
         await pilot.pause()
         assert isinstance(app.screen, screens.PackageScreen)
-        assert app.screen.query_one(SelectionList).option_count > 0
+        selection_list = app.screen.query_one(SelectionList)
+        assert selection_list.option_count > 0
+
+        # Sayaç ilk durumda varsayılan seçimleri göstermeli
+        counter = app.screen.query_one("#count", Static)
+        expected = f"{len(selection_list.selected)}/{selection_list.option_count} seçili"
+        assert str(counter.render()) == expected
+
+        # 'a' tümünü seçer, sayaç güncellenir; ikinci 'a' tümünü bırakır
+        await pilot.press("a")
+        await pilot.pause()
+        assert len(selection_list.selected) == selection_list.option_count
+        assert str(counter.render()).startswith(f"{selection_list.option_count}/")
+        await pilot.press("a")
+        await pilot.pause()
+        assert len(selection_list.selected) == 0
+
         await pilot.press("escape", "escape")
         await pilot.pause()
         assert isinstance(app.screen, screens.MainMenuScreen)

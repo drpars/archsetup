@@ -71,10 +71,38 @@ class MainMenuScreen(MenuScreen):
         self.app.exit()
 
 
-class PackageScreen(Screen):
+class SelectionCountMixin:
+    """Shared 'N/M selected' counter + select/deselect-all for SelectionList screens."""
+
+    def _update_count(self) -> None:
+        selection_list = self.query_one(SelectionList)
+        self.query_one("#count", Static).update(
+            t("ui.selected_count",
+              sel=len(selection_list.selected),
+              total=selection_list.option_count)
+        )
+
+    def on_mount(self) -> None:
+        self._update_count()
+
+    def on_selection_list_selected_changed(
+        self, event: SelectionList.SelectedChanged
+    ) -> None:
+        self._update_count()
+
+    def action_toggle_all(self) -> None:
+        selection_list = self.query_one(SelectionList)
+        if len(selection_list.selected) == selection_list.option_count:
+            selection_list.deselect_all()
+        else:
+            selection_list.select_all()
+
+
+class PackageScreen(SelectionCountMixin, Screen):
     BINDINGS = [
         Binding("escape", "go_back", t("ui.back")),
         Binding("i", "install", t("ui.install")),
+        Binding("a", "toggle_all", t("ui.toggle_all")),
     ]
 
     def __init__(self, category: data.Category, install_fn=None) -> None:
@@ -90,6 +118,7 @@ class PackageScreen(Screen):
         yield Static(
             t(f"category.{self._category.id}"), classes="screen-title"
         )
+        yield Static("", id="count", classes="screen-subtitle")
         selections = [
             Selection(self._prompt(pkg), index, pkg.default)
             for index, pkg in enumerate(self._visible)
@@ -127,12 +156,13 @@ class PackageScreen(Screen):
                 self.app.notify(t(pkg.post_msg), severity="warning", timeout=12)
 
 
-class DotfilesScreen(Screen):
+class DotfilesScreen(SelectionCountMixin, Screen):
     BINDINGS = [
         Binding("escape", "go_back", t("ui.back")),
         Binding("c", "copy", t("ui.copy")),
         Binding("s", "symlink", t("ui.symlink")),
         Binding("v", "validate", t("ui.validate")),
+        Binding("a", "toggle_all", t("ui.toggle_all")),
     ]
 
     def __init__(self, section: str) -> None:
@@ -146,6 +176,7 @@ class DotfilesScreen(Screen):
             f"{t(f'dotfiles.section_{self._section}')} → {dotfiles.section_target(self._section)}",
             classes="screen-title",
         )
+        yield Static("", id="count", classes="screen-subtitle")
         yield SelectionList(
             *[Selection(name, index, False) for index, name in enumerate(self._names)]
         )

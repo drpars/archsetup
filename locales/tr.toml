@@ -14,6 +14,8 @@ toggle = "Seç/Bırak"
 copy = "Kopyala"
 symlink = "Bağla"
 validate = "Doğrula"
+toggle_all = "Tümünü Seç/Bırak"
+selected_count = "{sel}/{total} seçili"
 
 [lang]
 select_title = "Dil Seçimi / Language Selection"
