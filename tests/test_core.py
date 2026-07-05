@@ -80,6 +80,31 @@ def test_display_managers():
     assert next(d for d in dms if d.id == "lightdm").package == "lightdm-gtk-greeter"
 
 
+def test_fix_terminal_env(monkeypatch):
+    from archsetup.__main__ import _fix_terminal_env
+
+    # kitty'den ssh: TERM iletilir, COLORTERM iletilmez -> truecolor bildir
+    monkeypatch.setenv("TERM", "xterm-kitty")
+    monkeypatch.delenv("COLORTERM", raising=False)
+    _fix_terminal_env()
+    import os
+
+    assert os.environ["COLORTERM"] == "truecolor"
+
+    # bilinmeyen TERM güvenli değere çekilir, truecolor-dışı terminal
+    # için COLORTERM uydurulmaz
+    monkeypatch.setenv("TERM", "acayip-terminal-999")
+    monkeypatch.delenv("COLORTERM", raising=False)
+    _fix_terminal_env()
+    assert os.environ["TERM"] == "xterm-256color"
+    assert "COLORTERM" not in os.environ
+
+    # bilinen TERM'e dokunulmaz
+    monkeypatch.setenv("TERM", "xterm-256color")
+    _fix_terminal_env()
+    assert os.environ["TERM"] == "xterm-256color"
+
+
 def test_condition_parsing(monkeypatch):
     monkeypatch.setattr(hardware, "gpu_matches", lambda q: q == "amd")
     monkeypatch.setattr(hardware, "cpu_matches", lambda q: q == "intel")

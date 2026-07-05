@@ -16,16 +16,28 @@ import sys
 from .core import config, env, i18n
 
 
+# Terminals that always support 24-bit color, recognized by TERM name.
+_TRUECOLOR_TERMS = ("xterm-kitty", "kitty", "alacritty", "wezterm", "foot", "ghostty")
+
+
 def _fix_terminal_env() -> None:
     """Repair TERM/COLORTERM before the TUI starts.
 
-    Over ssh the client's TERM (e.g. xterm-kitty) may be unknown to the
-    host: rich then sees neither truecolor nor "256" and drops to
-    16-color mode, which renders custom themes as an unreadable wash.
+    ssh forwards the client's TERM (e.g. xterm-kitty) but not COLORTERM.
+    Without it the renderer falls back to 256-color quantization, where
+    dark tones land on palette indexes 16-17 — which themed terminals
+    (kitty tokyonight, for one) remap to bright orange/red, washing out
+    the whole screen. Declare truecolor for terminals known to have it,
+    and swap TERMs missing from the host's terminfo for xterm-256color.
     """
     term = os.environ.get("TERM", "")
     if not term:
         return
+
+    if os.environ.get("COLORTERM", "").lower() not in ("truecolor", "24bit"):
+        if term.startswith(_TRUECOLOR_TERMS):
+            os.environ["COLORTERM"] = "truecolor"
+
     try:
         known = subprocess.run(
             ["infocmp", term], capture_output=True
