@@ -80,6 +80,11 @@ def test_uki_preset_conversion(tmp_path, monkeypatch, runlog):
     monkeypatch.setattr(chroot, "MNT", tmp_path)
     monkeypatch.setattr(chroot, "chroot_run", lambda a: chroot_calls.append(a) or 0)
 
+    # cmdline yoksa reddedilir (UKI root'u bulamaz)
+    assert chroot.gen_uki() == 1
+    (etc / "kernel").mkdir()
+    (etc / "kernel" / "cmdline").write_text("root=PARTUUID=x rw\n")
+
     assert chroot.gen_uki() == 0
     text = preset.read_text()
     assert 'default_uki="/efi/EFI/Linux/arch-linux-zen.efi"' in text
@@ -89,19 +94,45 @@ def test_uki_preset_conversion(tmp_path, monkeypatch, runlog):
     assert ["mkinitcpio", "-P"] in chroot_calls
 
 
-def test_watchdog_amd(tmp_path, monkeypatch):
+def test_watchdog_amd_uki_target(tmp_path, monkeypatch):
     etc = tmp_path / "etc"
     (etc / "kernel").mkdir(parents=True)
+    (tmp_path / "usr").mkdir()
     cmdline = etc / "kernel" / "cmdline"
     cmdline.write_text("root=PARTUUID=x rw quiet\n")
+    chroot_calls = []
     monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "chroot_run", lambda a: chroot_calls.append(a) or 0)
     monkeypatch.setattr(chroot.hardware, "cpu_matches", lambda q: q == "amd")
 
     assert chroot.disable_watchdog() == 0
     assert cmdline.read_text().strip().endswith("nowatchdog")
     assert "sp5100_tco" in (etc / "modprobe.d" / "blacklist-watchdog.conf").read_text()
+    assert ["mkinitcpio", "-P"] in chroot_calls  # UKI: cmdline imaja gömülü
+
+    chroot_calls.clear()
     chroot.disable_watchdog()
     assert cmdline.read_text().count("nowatchdog") == 1
+    assert chroot_calls == []  # değişiklik yok -> regen yok
+
+
+def test_watchdog_grub_target(tmp_path, monkeypatch):
+    """GRUB kurulu hedefte parametre /etc/default/grub'a gitmeli."""
+    etc = tmp_path / "etc"
+    (etc / "default").mkdir(parents=True)
+    (tmp_path / "usr").mkdir()
+    (tmp_path / "boot" / "grub").mkdir(parents=True)
+    (tmp_path / "boot" / "grub" / "grub.cfg").write_text("#\n")
+    grub_default = etc / "default" / "grub"
+    grub_default.write_text('GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"\n')
+    chroot_calls = []
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "chroot_run", lambda a: chroot_calls.append(a) or 0)
+    monkeypatch.setattr(chroot.hardware, "cpu_matches", lambda q: q == "intel")
+
+    assert chroot.disable_watchdog() == 0
+    assert "modprobe.blacklist=iTCO_wdt" in grub_default.read_text()
+    assert ["grub-mkconfig", "-o", "/boot/grub/grub.cfg"] in chroot_calls
 
 
 def test_enable_services_networkd_fallback(tmp_path, monkeypatch, runlog):

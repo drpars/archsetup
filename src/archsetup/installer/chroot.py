@@ -8,6 +8,7 @@ they never pass through shell pipes or variables.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
@@ -202,9 +203,45 @@ def default_uki_path(preset: Path) -> str | None:
     return match.group(1).strip() if match else None
 
 
+@contextlib.contextmanager
+def _target_bootloader():
+    """Point core.bootloader at the target's files under /mnt.
+
+    Installer runs as root, so writes are direct instead of sudo tee.
+    """
+    from ..core import bootloader
+
+    saved = (
+        bootloader.CMDLINE, bootloader.SDBOOT_ENTRIES, bootloader.GRUB_DEFAULT,
+        bootloader.GRUB_CFG, bootloader.REFIND_CONF, bootloader.sudo_write,
+    )
+
+    def direct_write(path, content) -> int:
+        Path(path).write_text(content, encoding="utf-8")
+        return 0
+
+    bootloader.CMDLINE = MNT / "etc/kernel/cmdline"
+    bootloader.SDBOOT_ENTRIES = MNT / "boot/loader/entries"
+    bootloader.GRUB_DEFAULT = MNT / "etc/default/grub"
+    bootloader.GRUB_CFG = MNT / "boot/grub/grub.cfg"
+    bootloader.REFIND_CONF = MNT / "boot/refind_linux.conf"
+    bootloader.sudo_write = direct_write
+    try:
+        yield bootloader
+    finally:
+        (
+            bootloader.CMDLINE, bootloader.SDBOOT_ENTRIES, bootloader.GRUB_DEFAULT,
+            bootloader.GRUB_CFG, bootloader.REFIND_CONF, bootloader.sudo_write,
+        ) = saved
+
+
 def gen_uki() -> int:
     """Switch the target to systemd initramfs + Unified Kernel Image output."""
     if not target_ready():
+        return 1
+    if not (MNT / "etc/kernel/cmdline").is_file():
+        # UKI embeds the cmdline; without it the image cannot find root.
+        print(t("inst.no_cmdline"))
         return 1
     preset = _choose_preset()
     if preset is None:
@@ -237,12 +274,13 @@ def gen_uki() -> int:
 
 
 def disable_watchdog() -> int:
-    """Blacklist watchdog modules and add the matching kernel parameter."""
-    cmdline = MNT / "etc/kernel/cmdline"
-    if not cmdline.is_file():
-        print(t("inst.no_cmdline"))
+    """Blacklist watchdog modules and add the matching kernel parameter.
+
+    The parameter goes through core.bootloader pointed at /mnt, so it
+    lands correctly for UKI, GRUB or rEFInd targets alike.
+    """
+    if not target_ready():
         return 1
-    tokens = cmdline.read_text(encoding="utf-8").split()
 
     if hardware.cpu_matches("intel"):
         param = "modprobe.blacklist=iTCO_wdt"
@@ -254,12 +292,12 @@ def disable_watchdog() -> int:
     else:
         return 0
 
-    if param in tokens:
-        print(t("msg.param_present", param=param))
-        return 0
-    tokens.append(param)
-    cmdline.write_text(" ".join(tokens) + "\n", encoding="utf-8")
-    print(f"/mnt/etc/kernel/cmdline <- {param}")
+    with _target_bootloader() as bootloader:
+        result = bootloader.add_kernel_params([param])
+    if result.needs_mkinitcpio:
+        return chroot_run(["mkinitcpio", "-P"])
+    if result.regen_cmd is not None:  # GRUB: regen inside the chroot
+        return chroot_run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
     return 0
 
 
