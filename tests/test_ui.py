@@ -100,6 +100,28 @@ async def test_installer_menu_structure():
         assert list(app.screen._items) == ["systemd-boot", "grub", "refind"]
 
 
+async def test_pick_screen_filters_and_picks():
+    picked = []
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.push_screen(
+            screens.PickScreen("Test", ["trq", "trf", "us", "de"], picked.append)
+        )
+        await pilot.pause()
+        option_list = app.screen.query_one(OptionList)
+        assert option_list.option_count == 4
+
+        # 'tr' yaz -> 2 sonuç; 'trq' yaz -> tek sonuç, Enter seçer
+        await pilot.press("t", "r")
+        await pilot.pause()
+        assert option_list.option_count == 2
+        await pilot.press("q", "enter")
+        await pilot.pause()
+        assert picked == ["trq"]
+        assert not isinstance(app.screen, screens.PickScreen)  # ekran kapandı
+
+
 async def test_extras_screen_uses_chroot_installer():
     app = ArchSetupApp(ask_language=False, installer=True)
     async with app.run_test(size=(110, 45)) as pilot:

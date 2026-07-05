@@ -61,10 +61,14 @@ def set_hostname() -> int:
     return 0
 
 
-def set_vconsole() -> int:
+def set_vconsole(keymap: str | None = None) -> int:
     if not target_ready():
         return 1
-    keymap = input(f"{t('inst.keymap_q')} [{DEFAULT_KEYMAP}]: ").strip() or DEFAULT_KEYMAP
+    if keymap is None:
+        keymap = (
+            input(f"{t('inst.keymap_q')} [{DEFAULT_KEYMAP}]: ").strip()
+            or DEFAULT_KEYMAP
+        )
     lines = [f"KEYMAP={keymap}"]
     if ask_yes(t("inst.terminus_q")):
         lines.append("FONT=ter-v16b")
@@ -73,10 +77,14 @@ def set_vconsole() -> int:
     return 0
 
 
-def set_locale() -> int:
+def set_locale(locale: str | None = None) -> int:
     if not target_ready():
         return 1
-    locale = input(f"{t('inst.locale_q')} [{DEFAULT_LOCALE}]: ").strip() or DEFAULT_LOCALE
+    if locale is None:
+        locale = (
+            input(f"{t('inst.locale_q')} [{DEFAULT_LOCALE}]: ").strip()
+            or DEFAULT_LOCALE
+        )
     (MNT / "etc/locale.conf").write_text(
         f"LANG={locale}.UTF-8\nLC_COLLATE=C\n", encoding="utf-8"
     )
@@ -92,12 +100,14 @@ def set_locale() -> int:
     return chroot_run(["locale-gen"])
 
 
-def set_timezone() -> int:
+def set_timezone(timezone: str | None = None) -> int:
     if not target_ready():
         return 1
-    timezone = (
-        input(f"{t('inst.tz_q')} [{DEFAULT_TIMEZONE}]: ").strip() or DEFAULT_TIMEZONE
-    )
+    if timezone is None:
+        timezone = (
+            input(f"{t('inst.tz_q')} [{DEFAULT_TIMEZONE}]: ").strip()
+            or DEFAULT_TIMEZONE
+        )
     if not (MNT / "usr/share/zoneinfo" / timezone).is_file():
         print(t("inst.tz_invalid", tz=timezone))
         return 1

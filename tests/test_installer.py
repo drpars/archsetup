@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from archsetup.installer import base, bootloaders, chroot, disk
+from archsetup.installer import base, bootloaders, chroot, disk, pickers
 from archsetup.installer.state import state
 
 
@@ -129,6 +129,45 @@ def test_enable_services_networkd_fallback(tmp_path, monkeypatch, runlog):
     monkeypatch.setattr(chroot, "ask_yes", lambda prompt: pytest.fail("sorulmamalı"))
     assert chroot.enable_services() == 0
     assert ["systemctl", "--root", str(tmp_path), "enable", "NetworkManager"] in runlog.calls
+
+
+def test_pickers_sources(tmp_path, monkeypatch):
+    monkeypatch.setattr(pickers, "MNT", tmp_path)
+    # keymaps
+    kb = tmp_path / "usr/share/kbd/keymaps/i386/qwerty"
+    kb.mkdir(parents=True)
+    (kb / "trq.map.gz").write_bytes(b"")
+    (kb / "us.map.gz").write_bytes(b"")
+    assert pickers.keymaps() == ["trq", "us"]
+    # locales (locale.gen'den)
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "etc/locale.gen").write_text(
+        "# yorum satırı\n#tr_TR.UTF-8 UTF-8\n#en_US.UTF-8 UTF-8\n#tr_TR ISO-8859-9\n"
+    )
+    assert pickers.locales() == ["en_US", "tr_TR"]
+    # saat dilimleri (posix/right hariç, iç içe şehirler dahil)
+    zi = tmp_path / "usr/share/zoneinfo"
+    (zi / "Europe").mkdir(parents=True)
+    (zi / "Europe" / "Istanbul").write_bytes(b"")
+    (zi / "America" / "Argentina").mkdir(parents=True)
+    (zi / "America" / "Argentina" / "Ushuaia").write_bytes(b"")
+    (zi / "posix").mkdir()
+    assert pickers.timezone_regions() == ["America", "Europe"]
+    assert pickers.timezone_cities("Europe") == ["Istanbul"]
+    assert pickers.timezone_cities("America") == ["Argentina/Ushuaia"]
+
+
+def test_setters_accept_picked_values(tmp_path, monkeypatch):
+    (tmp_path / "etc").mkdir()
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: False)
+    # input() çağrılmamalı — değer listeden geldi
+    monkeypatch.setattr(
+        chroot, "input", lambda *a: pytest.fail("prompt açılmamalı"), raising=False
+    )
+    assert chroot.set_vconsole("trf") == 0
+    assert "KEYMAP=trf" in (tmp_path / "etc/vconsole.conf").read_text()
 
 
 USERNAME_RE = r"[a-z_][a-z0-9_-]{2,31}"

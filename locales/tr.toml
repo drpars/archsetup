@@ -15,6 +15,7 @@ copy = "Kopyala"
 symlink = "Bağla"
 validate = "Doğrula"
 toggle_all = "Tümünü Seç/Bırak"
+filter = "Filtrelemek için yazın..."
 selected_count = "{sel}/{total} seçili"
 
 [lang]

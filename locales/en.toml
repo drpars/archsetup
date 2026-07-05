@@ -15,6 +15,7 @@ copy = "Copy"
 symlink = "Symlink"
 validate = "Validate"
 toggle_all = "Select/Clear All"
+filter = "Type to filter..."
 selected_count = "{sel}/{total} selected"
 
 [lang]

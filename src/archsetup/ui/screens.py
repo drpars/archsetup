@@ -9,10 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from typing import Callable
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.widgets import Footer, Header, OptionList, SelectionList, Static
+from textual.widgets import Footer, Header, Input, OptionList, SelectionList, Static
 from textual.widgets.option_list import Option
 from textual.widgets.selection_list import Selection
 
@@ -397,9 +399,81 @@ def make_theme_menu() -> MenuScreen:
     return MenuScreen(t("menu.theme.title"), items)
 
 
+class PickScreen(Screen):
+    """Filterable single-choice list (keymaps, locales, timezones...).
+
+    Type to narrow the list; Enter jumps to the list (or picks the only
+    match); selecting an item pops the screen and calls on_pick(value).
+    """
+
+    BINDINGS = [Binding("escape", "go_back", t("ui.back"))]
+
+    def __init__(
+        self, title: str, items: list[str], on_pick: Callable[[str], None]
+    ) -> None:
+        super().__init__()
+        self._title = title
+        self._items = items
+        self._on_pick = on_pick
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        yield Static(self._title, classes="screen-title")
+        yield Input(placeholder=t("ui.filter"))
+        yield OptionList(*[Option(item, id=item) for item in self._items])
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one(Input).focus()
+
+    def action_go_back(self) -> None:
+        self.app.pop_screen()
+
+    def _filtered(self) -> list[str]:
+        query = self.query_one(Input).value.strip().lower()
+        if not query:
+            return self._items
+        return [item for item in self._items if query in item.lower()]
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        option_list = self.query_one(OptionList)
+        option_list.clear_options()
+        option_list.add_options(
+            [Option(item, id=item) for item in self._filtered()]
+        )
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        matches = self._filtered()
+        if len(matches) == 1:
+            self._pick(matches[0])
+        else:
+            self.query_one(OptionList).focus()
+
+    def on_option_list_option_selected(
+        self, event: OptionList.OptionSelected
+    ) -> None:
+        if event.option.id is not None:
+            self._pick(event.option.id)
+
+    def _pick(self, value: str) -> None:
+        self.app.pop_screen()
+        self._on_pick(value)
+
+
 # ==========================================================
 # INSTALLER (LIVE ISO) MENUS
 # ==========================================================
+
+
+def _push_picker(screen, title: str, items: list[str], apply_fn) -> None:
+    """Open a PickScreen; fall back to the terminal prompt when empty."""
+    app = screen.app
+    if not items:
+        app.run_in_terminal(lambda: apply_fn(None))
+        return
+    app.push_screen(
+        PickScreen(title, items, lambda value: app.run_in_terminal(lambda: apply_fn(value)))
+    )
 
 
 def _run_item(id_: str, label_key: str, desc: str, fn) -> MenuItem:
@@ -423,14 +497,51 @@ def make_bootloader_install_menu() -> MenuScreen:
     return MenuScreen(t("inst.bootloader_title"), items)
 
 
+def _pick_timezone(screen) -> None:
+    from ..installer import chroot, pickers
+
+    app = screen.app
+    regions = pickers.timezone_regions()
+    if not regions:
+        app.run_in_terminal(chroot.set_timezone)
+        return
+
+    def on_region(region: str) -> None:
+        cities = pickers.timezone_cities(region)
+        app.push_screen(
+            PickScreen(
+                f"{t('inst.tz_q')}: {region}/...",
+                cities,
+                lambda city: app.run_in_terminal(
+                    lambda: chroot.set_timezone(f"{region}/{city}")
+                ),
+            )
+        )
+
+    app.push_screen(PickScreen(t("inst.tz_q"), regions, on_region))
+
+
 def make_target_menu() -> MenuScreen:
-    from ..installer import base, chroot
+    from ..installer import base, chroot, pickers
 
     items = [
         _run_item("hostname", "inst.hostname", "/etc/hostname", chroot.set_hostname),
-        _run_item("vconsole", "inst.vconsole", "/etc/vconsole.conf", chroot.set_vconsole),
-        _run_item("locale", "inst.locale", "/etc/locale.conf + locale-gen", chroot.set_locale),
-        _run_item("timezone", "inst.timezone", "/etc/localtime + hwclock", chroot.set_timezone),
+        MenuItem(
+            "vconsole", t("inst.vconsole"), "/etc/vconsole.conf",
+            lambda screen: _push_picker(
+                screen, t("inst.keymap_q"), pickers.keymaps(), chroot.set_vconsole
+            ),
+        ),
+        MenuItem(
+            "locale", t("inst.locale"), "/etc/locale.conf + locale-gen",
+            lambda screen: _push_picker(
+                screen, t("inst.locale_q"), pickers.locales(), chroot.set_locale
+            ),
+        ),
+        MenuItem(
+            "timezone", t("inst.timezone"), "/etc/localtime + hwclock",
+            _pick_timezone,
+        ),
         _run_item("rootpw", "inst.rootpw", "passwd root", chroot.set_root_password),
         _run_item("adduser", "inst.adduser", "useradd + wheel", chroot.add_user),
         _run_item("swapfile", "inst.swapfile", "/swapfile", chroot.create_swapfile),
@@ -457,7 +568,7 @@ def make_target_menu() -> MenuScreen:
 
 
 def make_installer_menu() -> MenuScreen:
-    from ..installer import base, chroot, disk
+    from ..installer import base, chroot, disk, pickers
 
     def extras_screen(screen: MenuScreen) -> None:
         categories = data.load_categories("extras.toml", section="install")
@@ -466,7 +577,12 @@ def make_installer_menu() -> MenuScreen:
         )
 
     items = [
-        _run_item("keymap", "inst.keymap", "loadkeys", base.set_live_keymap),
+        MenuItem(
+            "keymap", t("inst.keymap"), "loadkeys",
+            lambda screen: _push_picker(
+                screen, t("inst.keymap_q"), pickers.keymaps(), base.set_live_keymap
+            ),
+        ),
         _run_item("reflector", "inst.reflector", "mirrorlist", base.run_reflector),
         _run_item("parallel", "inst.parallel", "pacman.conf", base.parallel_downloads),
         _run_item("cfdisk", "inst.cfdisk", "", disk.run_cfdisk),

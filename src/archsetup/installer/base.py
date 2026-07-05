@@ -20,8 +20,12 @@ KERNELS = ("linux-zen", "linux", "linux-lts", "linux-hardened", "linux-g14")
 DEFAULT_KEYMAP = "trq"
 
 
-def set_live_keymap() -> int:
-    keymap = input(f"{t('inst.keymap_q')} [{DEFAULT_KEYMAP}]: ").strip() or DEFAULT_KEYMAP
+def set_live_keymap(keymap: str | None = None) -> int:
+    if keymap is None:
+        keymap = (
+            input(f"{t('inst.keymap_q')} [{DEFAULT_KEYMAP}]: ").strip()
+            or DEFAULT_KEYMAP
+        )
     return run(["loadkeys", keymap])
 
 
