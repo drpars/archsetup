@@ -100,6 +100,31 @@ async def test_installer_menu_structure():
         assert list(app.screen._items) == ["systemd-boot", "grub", "refind"]
 
 
+async def test_low_color_terminal_falls_back_to_ansi_theme(monkeypatch):
+    """TERM=linux (QEMU sanal konsolu) 16 renk: özel tema okunmaz olur."""
+    monkeypatch.setenv("TERM", "linux")
+    monkeypatch.delenv("COLORTERM", raising=False)
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        assert app.theme == "ansi-dark"
+        # Tema değişimi ANSI eşleniğine gider ama tercih gerçek adla saklanır
+        app.set_app_theme("tokyo-night-day")
+        assert app.theme == "ansi-light"
+        from archsetup.core import config
+
+        assert config.load()["theme"] == "tokyo-night-day"
+
+
+async def test_truecolor_terminal_keeps_custom_theme(monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-kitty")
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        assert app.theme == "tokyonight-night"
+
+
 async def test_pick_screen_filters_and_picks():
     picked = []
     app = ArchSetupApp(ask_language=False)

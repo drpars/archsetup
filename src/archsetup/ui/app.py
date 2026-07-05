@@ -8,6 +8,7 @@ process with fresh strings.
 
 from __future__ import annotations
 
+import os
 import sys
 import termios
 import time
@@ -99,6 +100,24 @@ class ArchSetupApp(App):
         super().__init__()
         self._ask_language = ask_language
         self._installer = installer
+        self._low_color = self._low_color_terminal()
+
+    @staticmethod
+    def _low_color_terminal() -> bool:
+        """True on 8/16-color terminals like the Linux VT (TERM=linux).
+
+        Custom truecolor themes quantize unreadably there; the built-in
+        ansi-* themes use the terminal's own palette instead.
+        """
+        if os.environ.get("COLORTERM", "").lower() in ("truecolor", "24bit"):
+            return False
+        term = os.environ.get("TERM", "")
+        return term in ("linux", "vt100", "vt220") or term.endswith("16color")
+
+    def _effective_theme(self, name: str) -> str:
+        if not self._low_color:
+            return name
+        return "ansi-light" if name == LIGHT_THEME else "ansi-dark"
 
     def on_mount(self) -> None:
         self.title = t("app.title")
@@ -107,7 +126,7 @@ class ArchSetupApp(App):
         saved = config.load().get("theme", DARK_THEME)
         if saved == "tokyo-night":  # pre-custom-theme configs
             saved = DARK_THEME
-        self.theme = saved
+        self.theme = self._effective_theme(saved)
         if self._installer:
             self.push_screen(screens.make_installer_menu())
         else:
@@ -116,7 +135,8 @@ class ArchSetupApp(App):
             self.push_screen(screens.LanguageScreen())
 
     def set_app_theme(self, name: str) -> None:
-        self.theme = name
+        # Preference is saved as-is; the low-color mapping stays display-only.
+        self.theme = self._effective_theme(name)
         conf = config.load()
         conf["theme"] = name
         config.save(conf)
