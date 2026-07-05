@@ -10,9 +10,30 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 
 from .core import config, env, i18n
+
+
+def _fix_terminal_env() -> None:
+    """Repair TERM/COLORTERM before the TUI starts.
+
+    Over ssh the client's TERM (e.g. xterm-kitty) may be unknown to the
+    host: rich then sees neither truecolor nor "256" and drops to
+    16-color mode, which renders custom themes as an unreadable wash.
+    """
+    term = os.environ.get("TERM", "")
+    if not term:
+        return
+    try:
+        known = subprocess.run(
+            ["infocmp", term], capture_output=True
+        ).returncode == 0
+    except OSError:
+        known = True
+    if not known:
+        os.environ["TERM"] = "xterm-256color"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -46,6 +67,7 @@ def _ensure_textual_live() -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    _fix_terminal_env()
 
     conf = config.load()
     lang = args.lang or conf.get("language")

@@ -147,6 +147,32 @@ async def test_pick_screen_filters_and_picks():
         assert not isinstance(app.screen, screens.PickScreen)  # ekran kapandı
 
 
+async def test_pick_screen_arrows_work_while_filtering():
+    """Odak filtre kutusundayken ok tuşları listeyi gezdirmeli."""
+    picked = []
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.push_screen(
+            screens.PickScreen("Test", ["alpha", "bravo", "charlie"], picked.append)
+        )
+        await pilot.pause()
+        from textual.widgets import Input
+
+        assert app.screen.query_one(Input).has_focus
+        option_list = app.screen.query_one(OptionList)
+
+        await pilot.press("down", "down")
+        await pilot.pause()
+        assert app.screen.query_one(Input).has_focus  # odak kutuda kaldı
+        assert option_list.highlighted == 2
+
+        # Enter, çok eşleşme varken vurgulanan öğeyi seçer
+        await pilot.press("enter")
+        await pilot.pause()
+        assert picked == ["charlie"]
+
+
 async def test_extras_screen_uses_chroot_installer():
     app = ArchSetupApp(ask_language=False, installer=True)
     async with app.run_test(size=(110, 45)) as pilot:

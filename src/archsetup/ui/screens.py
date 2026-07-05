@@ -11,6 +11,7 @@ from typing import Callable
 
 from typing import Callable
 
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
@@ -442,12 +443,33 @@ class PickScreen(Screen):
             [Option(item, id=item) for item in self._filtered()]
         )
 
+    def on_key(self, event: events.Key) -> None:
+        """Let arrow/page keys drive the list while typing in the filter."""
+        if not self.query_one(Input).has_focus:
+            return
+        actions = {
+            "up": "action_cursor_up",
+            "down": "action_cursor_down",
+            "pageup": "action_page_up",
+            "pagedown": "action_page_down",
+        }
+        if event.key in actions:
+            event.stop()
+            event.prevent_default()
+            getattr(self.query_one(OptionList), actions[event.key])()
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         matches = self._filtered()
         if len(matches) == 1:
             self._pick(matches[0])
-        else:
-            self.query_one(OptionList).focus()
+            return
+        option_list = self.query_one(OptionList)
+        if option_list.highlighted is not None and option_list.option_count:
+            option = option_list.get_option_at_index(option_list.highlighted)
+            if option.id is not None:
+                self._pick(option.id)
+                return
+        option_list.focus()
 
     def on_option_list_option_selected(
         self, event: OptionList.OptionSelected
