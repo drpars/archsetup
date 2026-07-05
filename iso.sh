@@ -9,6 +9,18 @@ if [[ ! -d /run/archiso ]]; then
 fi
 
 pacman -Sy --needed --noconfirm git python python-textual
-git clone --depth 1 https://github.com/drpars/archsetup /root/archsetup
+if [[ -d /root/archsetup/.git ]]; then
+  git -C /root/archsetup pull --ff-only
+else
+  git clone --depth 1 https://github.com/drpars/archsetup /root/archsetup
+fi
 cd /root/archsetup
-exec ./archsetup
+
+# kitty gibi terminallerden ssh ile gelindiğinde terminfo eksik olabilir
+if ! infocmp "$TERM" >/dev/null 2>&1; then
+  export TERM=xterm-256color
+fi
+
+# Bu betik 'curl | bash' ile çalıştığında stdin bir borudur; TUI'nin
+# klavyeyi alabilmesi için stdin'i gerçek terminale bağla.
+exec ./archsetup </dev/tty
