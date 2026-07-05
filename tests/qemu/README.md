@@ -8,9 +8,34 @@ cd tests/qemu
 ./run-vm.sh          # ISO'yu indirir (~1.2 GB), 25G sanal disk oluşturur, UEFI VM açar
 ```
 
+## SSH ile bağlanma (isteğe bağlı ama önerilir)
+
+QEMU **kullanıcı modu ağ** kullanır: guest NAT arkasında izole bir ağdadır
+(10.0.2.15), host'unuzdan doğrudan erişilemez — bu yüzden 192.168.x.x'ten
+SSH tutmaz. `run-vm.sh` bunun için host'un **2222** portunu guest'in 22'sine
+yönlendirir. QEMU penceresinde (canlı ortam) sadece root parolası belirleyin:
+
+```bash
+passwd            # canlı ISO'da sshd zaten açık; sadece parola gerekir
+```
+
+Sonra kendi terminalinizden bağlanın (kopyala-yapıştır ve rahat çalışma için):
+
+```bash
+ssh -p 2222 root@localhost
+curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash
+```
+
+Farklı port için: `SSH_PORT=2200 ./run-vm.sh`. Guest'i her sıfırladığınızda
+host anahtarı değişir; gerekirse `ssh-keygen -R "[localhost]:2222"` ile
+eski anahtarı silin.
+
+> Not: SSH şart değil — QEMU'nun GTK penceresinde de her şey çalışır.
+> SSH yalnızca kopyala-yapıştır ve daha konforlu bir terminal için.
+
 ## Test akışı (kontrol listesi)
 
-VM'de canlı ortam açıldıktan sonra:
+VM'de canlı ortam açıldıktan sonra (QEMU penceresinde veya SSH ile):
 
 ```bash
 curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash

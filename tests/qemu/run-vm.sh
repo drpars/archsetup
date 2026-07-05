@@ -21,6 +21,7 @@ DISK="$DIR/disk.qcow2"
 VARS="$DIR/OVMF_VARS.fd"
 DISK_SIZE="25G"
 RAM="4096"
+SSH_PORT="${SSH_PORT:-2222}"   # host portu -> guest 22 (SSH yönlendirmesi)
 
 mkdir -p "$DIR"
 
@@ -60,7 +61,7 @@ fi
 ARGS=(
   -enable-kvm -cpu host -smp 4 -m "$RAM"
   -drive "file=$DISK,if=virtio,format=qcow2"
-  -nic user,model=virtio-net-pci
+  -nic "user,model=virtio-net-pci,hostfwd=tcp::$SSH_PORT-:22"
   -device virtio-vga
   -display gtk,zoom-to-fit=on
 )
@@ -86,4 +87,6 @@ if [[ "$MODE" == "uefi" || "$MODE" == "bios" ]]; then
 fi
 
 echo ">> QEMU başlatılıyor ($MODE)..."
+echo ">> SSH: guest'te 'passwd' ile parola belirleyip host'tan:"
+echo ">>      ssh -p $SSH_PORT root@localhost"
 exec qemu-system-x86_64 "${ARGS[@]}"
