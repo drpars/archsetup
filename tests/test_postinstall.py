@@ -4,7 +4,17 @@ import shutil
 
 import pytest
 
-from archsetup.core import asus, dotfiles, gpuconfig, kmscon, network, sddm, virt, waydroid
+from archsetup.core import (
+    asus,
+    dotfiles,
+    gpuconfig,
+    kmscon,
+    network,
+    nvidia_laptop,
+    sddm,
+    virt,
+    waydroid,
+)
 
 
 @pytest.fixture
@@ -147,6 +157,7 @@ def test_asus_g14_routing(tmp_path, monkeypatch):
     monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
     monkeypatch.setattr(asus.pacman, "is_installed", lambda p: p == "power-profiles-daemon")
     monkeypatch.setattr(asus.services, "enable", lambda n: enables.append(n) or 0)
+    monkeypatch.setattr(asus.prompt, "ask_yes", lambda q: False)
 
     conf = tmp_path / "pacman.conf"
     conf.write_text("[options]\n[g14]\nServer = x\n")
@@ -156,8 +167,98 @@ def test_asus_g14_routing(tmp_path, monkeypatch):
 
     conf.write_text("[options]\n")
     asus.install()
-    assert "asusctl" in installs[1][1]  # AUR'dan
+    assert "asusctl" in installs[1][1]  # depo reddedildi -> AUR'dan
     assert enables == ["power-profiles-daemon"] * 2  # yalnız kurulu paketin servisi
+    # supergfxctl artık varsayılan kümede değil (upstream aşamalı olarak kaldırıyor)
+    assert all("supergfxctl" not in repo + aur for repo, aur in installs)
+
+
+def test_asus_g14_setup_appends_stanza(tmp_path, monkeypatch, fake_write, runlog):
+    conf = tmp_path / "pacman.conf"
+    conf.write_text("[options]\n[core]\nInclude = /etc/pacman.d/mirrorlist\n")
+    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+    monkeypatch.setattr(asus, "run", runlog)
+    monkeypatch.setattr(asus, "sudo_write", fake_write)
+
+    assert asus.setup_g14_repo() is True
+    text = conf.read_text()
+    assert "[g14]" in text
+    # [core] önce gelmeli: resmi depolar [g14] karşısında önceliğini korur
+    assert text.index("[core]") < text.index("[g14]")
+    assert ["sudo", "pacman-key", "--lsign-key", asus.G14_KEY] in runlog.calls
+
+
+def test_asus_g14_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
+    conf = tmp_path / "pacman.conf"
+    conf.write_text("[options]\n")
+    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+    monkeypatch.setattr(asus, "run", lambda cmd, **kw: 1)
+
+    assert asus.setup_g14_repo() is False
+    assert "[g14]" not in conf.read_text()
+
+
+def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):
+    enabled = []
+    modprobe = tmp_path / "nvidia.conf"
+    rules = tmp_path / "80-nvidia-pm.rules"
+    monkeypatch.setattr(nvidia_laptop, "MODPROBE_CONF", modprobe)
+    monkeypatch.setattr(nvidia_laptop, "UDEV_RULES", rules)
+    monkeypatch.setattr(nvidia_laptop, "run", runlog)
+    monkeypatch.setattr(nvidia_laptop, "sudo_write", fake_write)
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: True)
+    monkeypatch.setattr(nvidia_laptop.services, "unit_exists", lambda n: True)
+    monkeypatch.setattr(nvidia_laptop.services, "enable", lambda n: enabled.append(n) or 0)
+    monkeypatch.setattr(nvidia_laptop.services, "enable_now", lambda n: enabled.append(n) or 0)
+    monkeypatch.setattr(
+        nvidia_laptop.hardware,
+        "nvidia_gpu_lines",
+        lambda: ["01:00.0 VGA compatible controller: NVIDIA Corporation GA106M [RTX 3060]"],
+    )
+
+    assert nvidia_laptop.configure() == 0
+    conf = modprobe.read_text()
+    assert "NVreg_EnableS0ixPowerManagement=1" in conf
+    assert "NVreg_DynamicPowerManagement=0x02" in conf
+    # Ampere: hibrit dizüstüde fbdev dGPU'yu uyandırdığı için kapalı olmalı
+    assert "fbdev=0" in conf
+    assert "NVreg_EnableGpuFirmware" not in conf
+    assert 'ATTR{power/control}="auto"' in rules.read_text()
+    assert enabled == [*nvidia_laptop.SERVICES, nvidia_laptop.POWERD_SERVICE]
+    assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in runlog.calls
+
+
+def test_nvidia_laptop_turing_adds_firmware_option(monkeypatch):
+    monkeypatch.setattr(
+        nvidia_laptop.hardware,
+        "nvidia_gpu_lines",
+        lambda: ["01:00.0 VGA compatible controller: NVIDIA Corporation TU106M [RTX 2060]"],
+    )
+    assert "NVreg_EnableGpuFirmware=0" in nvidia_laptop.modprobe_content()
+
+
+def test_nvidia_laptop_backs_up_differing_file(tmp_path, monkeypatch, fake_write, runlog):
+    modprobe = tmp_path / "nvidia.conf"
+    modprobe.write_text("options nvidia_drm modeset=1 fbdev=1\n")
+    monkeypatch.setattr(nvidia_laptop, "run", runlog)
+    monkeypatch.setattr(nvidia_laptop, "sudo_write", fake_write)
+
+    rc, changed = nvidia_laptop._write(modprobe, "new content\n")
+    assert (rc, changed) == (0, True)
+    assert ["sudo", "cp", str(modprobe), f"{modprobe}.bak"] in runlog.calls
+
+    # İkinci çağrı: içerik aynı, yazma da yedekleme de yok
+    runlog.calls.clear()
+    assert nvidia_laptop._write(modprobe, "new content\n") == (0, False)
+    assert runlog.calls == []
+
+
+def test_nvidia_laptop_requires_driver(monkeypatch):
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: False)
+    assert nvidia_laptop.configure() == 1
 
 
 def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):

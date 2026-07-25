@@ -22,6 +22,7 @@ from . import (
     i18n,
     kmscon,
     network,
+    nvidia_laptop,
     pacman,
     sddm,
     virt,
@@ -136,6 +137,18 @@ TASKS: tuple[Task, ...] = (
         group="drivers",
     ),
     Task("asus-tools", "task.asus_tools", asus.install, group="drivers"),
+    Task(
+        "nvidia-laptop-power",
+        "task.nvidia_laptop_power",
+        nvidia_laptop.configure,
+        group="drivers",
+    ),
+    Task(
+        "asus-supergfx",
+        "task.asus_supergfx",
+        asus.install_supergfx,
+        group="drivers",
+    ),
     Task(
         "swap-hibernate",
         "task.swap_hibernate",

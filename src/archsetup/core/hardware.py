@@ -26,12 +26,21 @@ def _cpuinfo() -> str:
         return ""
 
 
+def _gpu_lines() -> list[str]:
+    return [
+        line
+        for line in _lspci().splitlines()
+        if any(tag in line for tag in ("VGA", "3D", "Display"))
+    ]
+
+
 def gpu_matches(query: str) -> bool:
-    for line in _lspci().splitlines():
-        if any(tag in line for tag in ("VGA", "3D", "Display")):
-            if query.lower() in line.lower():
-                return True
-    return False
+    return any(query.lower() in line.lower() for line in _gpu_lines())
+
+
+def nvidia_gpu_lines() -> list[str]:
+    """GPU lspci lines belonging to NVIDIA, e.g. for reading the codename."""
+    return [line for line in _gpu_lines() if "nvidia" in line.lower()]
 
 
 def cpu_matches(query: str) -> bool:

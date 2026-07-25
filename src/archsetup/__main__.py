@@ -89,8 +89,9 @@ def main(argv: list[str] | None = None) -> int:
     from .core import tasks
 
     if args.list_tasks:
+        width = max(len(task.id) for task in tasks.TASKS)
         for task in tasks.TASKS:
-            print(f"{task.id:18} {t(task.key)}")
+            print(f"{task.id:{width}} {t(task.key)}")
         return 0
 
     if env.is_archiso() or args.installer:

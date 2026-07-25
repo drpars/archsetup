@@ -68,7 +68,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-56 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+71 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -83,7 +83,12 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       yazılır — UKI (`/etc/kernel/cmdline`), systemd-boot girdileri
       (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
       ve rEFInd (`refind_linux.conf`)
-- [x] ASUS ROG/TUF araçları (g14 deposu algılama, koşullu AUR, servisler)
+- [x] ASUS ROG/TUF araçları: [g14] deposunu kurma (anahtar + pacman.conf),
+      asusctl/rog-control-center, servisler; supergfxctl ayrı bir isteğe
+      bağlı görev (upstream aşamalı olarak kaldırıyor)
+- [x] NVIDIA hibrit dizüstü güç yönetimi ([asus-linux.org rehberi](https://asus-linux.org/guides/arch-guide/)): S0ix + runtime PM için
+      `modprobe.d`/`udev` kuralları, Turing/Ampere ayrımı, nvidia-suspend/
+      resume/hibernate/powerd servisleri
 - [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
       swap/hibernation (resume parametreleri her önyükleyicide), Neovim
       dotfiles kur/kaldır, bat önbelleği
@@ -95,7 +100,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (56 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (71 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

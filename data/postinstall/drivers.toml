@@ -1,6 +1,7 @@
 # Driver categories. Kernel module configuration (mkinitcpio, modeset)
-# lives in the nvidia-modules / amd-modules tasks shown in the same menu.
-# ASUS ROG/TUF tooling (g14 repo, services) is still pending.
+# lives in the nvidia-modules / amd-modules tasks shown in the same menu,
+# ASUS ROG/TUF tooling in asus-tools, and hybrid-laptop NVIDIA power
+# management (S0ix, runtime PM, suspend services) in nvidia-laptop-power.
 
 [[category]]
 id = "amd"
