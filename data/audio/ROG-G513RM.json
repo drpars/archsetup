@@ -80,7 +80,7 @@
                 },
                 "band3": {
                     "frequency": 500.0,
-                    "gain": -1.43,
+                    "gain": -3.0,
                     "mode": "RLC (BT)",
                     "mute": false,
                     "q": 1.4,
@@ -192,7 +192,7 @@
                 },
                 "band3": {
                     "frequency": 500.0,
-                    "gain": -1.43,
+                    "gain": -3.0,
                     "mode": "RLC (BT)",
                     "mute": false,
                     "q": 1.4,
