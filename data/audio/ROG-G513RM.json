@@ -10,7 +10,7 @@
             "limiter#0"
         ],
         "bass_enhancer#0": {
-            "amount": 12.0,
+            "amount": 15.0,
             "blend": 0.0,
             "bypass": false,
             "floor": 20.0,
@@ -80,7 +80,7 @@
                 },
                 "band3": {
                     "frequency": 500.0,
-                    "gain": -3.0,
+                    "gain": -1.43,
                     "mode": "RLC (BT)",
                     "mute": false,
                     "q": 1.4,
@@ -192,7 +192,7 @@
                 },
                 "band3": {
                     "frequency": 500.0,
-                    "gain": -3.0,
+                    "gain": -1.43,
                     "mode": "RLC (BT)",
                     "mute": false,
                     "q": 1.4,
