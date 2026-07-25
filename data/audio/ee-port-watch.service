@@ -1,0 +1,13 @@
+[Unit]
+Description=EasyEffects preset'ini aktif cikis portuna gore degistirir
+After=pipewire-pulse.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/ee-port-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

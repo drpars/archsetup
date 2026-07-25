@@ -6,6 +6,8 @@ import subprocess
 from functools import cache
 from pathlib import Path
 
+BOARD_NAME = Path("/sys/class/dmi/id/board_name")
+
 
 @cache
 def _lspci() -> str:
@@ -47,6 +49,15 @@ def cpu_matches(query: str) -> bool:
     return query.lower() in _cpuinfo().lower()
 
 
+def board_matches(query: str) -> bool:
+    """Match against the DMI board name, e.g. "G513RM"."""
+    try:
+        name = BOARD_NAME.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return query.lower() in name.strip().lower()
+
+
 def condition_ok(condition: str | None) -> bool:
     """Evaluate a data-file condition. Unknown kinds are treated as met."""
     if not condition:
@@ -56,4 +67,6 @@ def condition_ok(condition: str | None) -> bool:
         return gpu_matches(value)
     if kind == "cpu":
         return cpu_matches(value)
+    if kind == "board":
+        return board_matches(value)
     return True

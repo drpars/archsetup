@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=EasyEffects (ses servisi)
+Comment=ROG G513RM hoparlör DSP zinciri
+Exec=easyeffects --hide-window
+Icon=com.github.wwmm.easyeffects
+Terminal=false
+X-GNOME-Autostart-enabled=true

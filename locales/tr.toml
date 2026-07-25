@@ -102,6 +102,13 @@ unit_missing = "{unit} bulunamadı; atlanıyor."
 done = "NVIDIA güç yönetimi yapılandırıldı. Değişikliklerin geçerli olması için yeniden başlatın."
 done_nochange = "NVIDIA güç yönetimi zaten yapılandırılmış; servisler kontrol edildi."
 
+[audio]
+other_board = "Bu preset ASUS ROG Strix {board} hoparlörlerine göre ayarlandı; başka bir makinede yalnızca başlangıç noktasıdır."
+continue_q = "Yine de kurulsun mu?"
+missing = "easyeffects kurulamadı; DSP zinciri kurulmadı."
+copy_failed = "Dosya kopyalanamadı: {path} ({error})"
+done = "Ses DSP'si kuruldu. Kulaklık takınca preset otomatik olarak Flat'e geçer. EasyEffects bu oturumda çalışmıyorsa bir kez oturumu kapatıp açın."
+
 [network]
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
@@ -172,6 +179,8 @@ nvim_dotfiles = "Neovim Dotfiles Kur"
 nvim_dotfiles_desc = "drpars/nvim deposunu ~/.config/nvim'e kur/güncelle"
 nvim_remove = "Neovim Dotfiles Kaldır"
 nvim_remove_desc = "nvim yapılandırma, veri ve önbelleğini sil"
+audio_dsp = "Hoparlör Ses DSP'si"
+audio_dsp_desc = "EasyEffects + ROG G513RM preseti; kulaklıkta otomatik devre dışı"
 bat_cache = "bat Önbelleğini Oluştur"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Duvar Kağıtları"

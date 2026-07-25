@@ -102,6 +102,13 @@ unit_missing = "{unit} not found; skipping."
 done = "NVIDIA power management configured. Reboot for the changes to take effect."
 done_nochange = "NVIDIA power management was already configured; services verified."
 
+[audio]
+other_board = "This preset is voiced for the ASUS ROG Strix {board} speakers; on another machine it is only a starting point."
+continue_q = "Install it anyway?"
+missing = "easyeffects could not be installed; the DSP chain was not set up."
+copy_failed = "Could not copy file: {path} ({error})"
+done = "Audio DSP installed. The preset switches to Flat when headphones are plugged in. If EasyEffects is not running in this session, log out and back in once."
+
 [network]
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured; smb, nmb and avahi services enabled."
@@ -172,6 +179,8 @@ nvim_dotfiles = "Install Neovim Dotfiles"
 nvim_dotfiles_desc = "Install/update drpars/nvim into ~/.config/nvim"
 nvim_remove = "Remove Neovim Dotfiles"
 nvim_remove_desc = "Delete nvim configuration, data and cache"
+audio_dsp = "Speaker Audio DSP"
+audio_dsp_desc = "EasyEffects + ROG G513RM preset; bypassed on headphones"
 bat_cache = "Build bat Cache"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Wallpapers"

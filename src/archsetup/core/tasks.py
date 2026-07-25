@@ -15,6 +15,7 @@ from typing import Callable
 
 from . import (
     asus,
+    audio_dsp,
     bootloader,
     dotfiles,
     gpuconfig,
@@ -194,6 +195,7 @@ TASKS: tuple[Task, ...] = (
         waydroid.setup,
         group="config",
     ),
+    Task("audio-dsp", "task.audio_dsp", audio_dsp.configure, group="config"),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",

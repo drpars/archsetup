@@ -1,12 +1,15 @@
 """Post-install tasks: dotfiles, sddm, kmscon, network, asus, virt, waydroid."""
 
+import json
 import shutil
 
 import pytest
 
 from archsetup.core import (
     asus,
+    audio_dsp,
     dotfiles,
+    hardware,
     gpuconfig,
     kmscon,
     network,
@@ -259,6 +262,72 @@ def test_nvidia_laptop_requires_driver(monkeypatch):
     monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
     monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: False)
     assert nvidia_laptop.configure() == 1
+
+
+@pytest.fixture
+def audio_home(tmp_path, monkeypatch):
+    """Redirect every install target of audio_dsp into tmp_path."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(audio_dsp, "PRESET_DIR", home / "presets")
+    monkeypatch.setattr(audio_dsp, "BIN_DIR", home / "bin")
+    monkeypatch.setattr(audio_dsp, "UNIT_DIR", home / "units")
+    monkeypatch.setattr(audio_dsp, "AUTOSTART_DIR", home / "autostart")
+    return home
+
+
+def test_audio_dsp_installs_assets_and_user_service(audio_home, monkeypatch, runlog):
+    monkeypatch.setattr(audio_dsp.hardware, "board_matches", lambda q: True)
+    monkeypatch.setattr(audio_dsp.pacman, "install", lambda r, a: 0)
+    monkeypatch.setattr(audio_dsp.pacman, "is_installed", lambda p: True)
+    monkeypatch.setattr(audio_dsp.services, "run", runlog)
+
+    assert audio_dsp.configure() == 0
+
+    preset = audio_home / "presets" / "ROG-G513RM.json"
+    assert json.loads(preset.read_text())["output"]["plugins_order"][0] == "bass_enhancer#0"
+    assert json.loads((audio_home / "presets" / "Flat.json").read_text()) == {
+        "output": {"blocklist": [], "plugins_order": []}
+    }
+
+    watcher = audio_home / "bin" / "ee-port-watch"
+    assert watcher.stat().st_mode & 0o111  # çalıştırılabilir olmalı
+    assert (audio_home / "units" / "ee-port-watch.service").exists()
+    assert (audio_home / "autostart" / "easyeffects-service.desktop").exists()
+
+    # kullanıcı servisi: sudo yok, önce daemon-reload
+    assert runlog.calls == [
+        ["systemctl", "--user", "daemon-reload"],
+        ["systemctl", "--user", "enable", "--now", "ee-port-watch.service"],
+    ]
+
+
+def test_audio_dsp_asks_before_installing_on_another_board(audio_home, monkeypatch):
+    installs = []
+    monkeypatch.setattr(audio_dsp.hardware, "board_matches", lambda q: False)
+    monkeypatch.setattr(audio_dsp.prompt, "ask_yes", lambda q: False)
+    monkeypatch.setattr(audio_dsp.pacman, "install", lambda r, a: installs.append(r) or 0)
+
+    assert audio_dsp.configure() == 0
+    assert installs == []
+    assert not (audio_home / "presets").exists()
+
+
+def test_audio_dsp_stops_when_easyeffects_missing(audio_home, monkeypatch):
+    monkeypatch.setattr(audio_dsp.hardware, "board_matches", lambda q: True)
+    monkeypatch.setattr(audio_dsp.pacman, "install", lambda r, a: 1)
+    monkeypatch.setattr(audio_dsp.pacman, "is_installed", lambda p: False)
+
+    assert audio_dsp.configure() == 1
+    assert not (audio_home / "presets").exists()
+
+
+def test_board_condition(tmp_path, monkeypatch):
+    board = tmp_path / "board_name"
+    board.write_text("G513RM\n")
+    monkeypatch.setattr(hardware, "BOARD_NAME", board)
+
+    assert hardware.condition_ok("board:g513rm") is True
+    assert hardware.condition_ok("board:X13") is False
 
 
 def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):

@@ -53,7 +53,8 @@ Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 ## Dizin yapısı
 
 ```
-data/        paket tanımları (TOML) — betiğin "içeriği"
+data/        paket tanımları (TOML) — betiğin "içeriği"; `audio/` altında
+             EasyEffects presetleri ve port izleyici servisi
 locales/     tr.toml, en.toml — tüm arayüz metinleri
 src/archsetup/
   core/      i18n, pacman, donanım tespiti, önyükleyici, görevler
@@ -68,7 +69,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-71 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+75 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -89,6 +90,9 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] NVIDIA hibrit dizüstü güç yönetimi ([asus-linux.org rehberi](https://asus-linux.org/guides/arch-guide/)): S0ix + runtime PM için
       `modprobe.d`/`udev` kuralları, Turing/Ampere ayrımı, nvidia-suspend/
       resume/hibernate/powerd servisleri
+- [x] Hoparlör ses DSP'si: EasyEffects + ROG G513RM preseti (EQ, psikoakustik
+      bas, DRC, limiter) ve aktif çıkış portunu izleyip kulaklıkta preseti
+      devre dışı bırakan kullanıcı servisi
 - [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
       swap/hibernation (resume parametreleri her önyükleyicide), Neovim
       dotfiles kur/kaldır, bat önbelleği
@@ -100,7 +104,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (71 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (75 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# EasyEffects preset'ini aktif çıkış portuna göre değiştirir.
+#
+# EasyEffects'in kendi autoload'u cihaz + profil ikilisine bakar. Bu dizüstünde
+# hoparlör ve kulaklık aynı sink ve aynı profildir (analog-stereo), yalnızca
+# port farklıdır -- dolayısıyla autoload bu ikisini ayırt edemez. Bu betik
+# doğrudan portu izleyerek o boşluğu kapatır.
+
+set -uo pipefail
+
+# Sink adı makineye göre değişir (burada
+# alsa_output.pci-0000_05_00.6.analog-stereo), o yüzden sabitlenmez: EE_SINK
+# verilmezse o anki öntanımlı sink her seferinde yeniden okunur.
+SINK="${EE_SINK:-}"
+PRESET_SPEAKER="${EE_PRESET_SPEAKER:-ROG-G513RM}"
+PRESET_HEADPHONES="${EE_PRESET_HEADPHONES:-Flat}"
+
+target_sink() {
+    if [ -n "$SINK" ]; then
+        printf '%s' "$SINK"
+    else
+        pactl get-default-sink 2>/dev/null
+    fi
+}
+
+active_port() {
+    local sink
+    sink="$(target_sink)"
+    [ -n "$sink" ] || return 0
+    pactl list sinks 2>/dev/null |
+        awk -v s="Name: $sink" '$0 ~ s {f=1} f && /Active Port:/ {print $3; exit}'
+}
+
+preset_for() {
+    case "$1" in
+        *headphone*) printf '%s' "$PRESET_HEADPHONES" ;;
+        *)           printf '%s' "$PRESET_SPEAKER" ;;
+    esac
+}
+
+last_preset=""
+
+apply() {
+    local port preset
+    port="$(active_port)"
+    [ -n "$port" ] || return 0
+    preset="$(preset_for "$port")"
+    [ "$preset" = "$last_preset" ] && return 0
+    if easyeffects -l "$preset" >/dev/null 2>&1; then
+        last_preset="$preset"
+        printf 'port=%s -> preset=%s\n' "$port" "$preset"
+    else
+        printf 'UYARI: preset yuklenemedi: %s\n' "$preset" >&2
+    fi
+}
+
+# EasyEffects hazır olana kadar bekle (servis sırası garanti değil).
+for _ in $(seq 1 30); do
+    easyeffects -a output >/dev/null 2>&1 && break
+    sleep 1
+done
+
+apply
+
+# Sink olaylarında portu yeniden değerlendir.
+pactl subscribe 2>/dev/null | while read -r line; do
+    case "$line" in
+        *"on sink"*|*"on card"*|*"'change'"*) apply ;;
+    esac
+done

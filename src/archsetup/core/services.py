@@ -26,3 +26,9 @@ def unit_exists(name: str) -> bool:
 
 def disable(name: str) -> int:
     return run(["sudo", "systemctl", "disable", name])
+
+
+def enable_user_now(name: str) -> int:
+    """Enable a --user unit. No sudo: user units are not managed as root."""
+    rc = run(["systemctl", "--user", "daemon-reload"])
+    return rc | run(["systemctl", "--user", "enable", "--now", name])
