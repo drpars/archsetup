@@ -112,6 +112,12 @@ done = "Ses DSP'si kuruldu. Kulaklık takınca preset otomatik olarak Flat'e ge�
 [coredump]
 done = "Çekirdek dökümü tavanı 1 GB olarak ayarlandı: {path}"
 
+[iwd]
+no_manager = "Çalışan bir ağ yöneticisi yok ({managers}). iwd'nin ağ yapılandırmasını kapatmak makineyi adressiz bırakabilir."
+continue_q = "Yine de kapatılsın mı?"
+already = "iwd zaten ağ yapılandırmasını yapmıyor; değişiklik gerekmedi."
+done = "Ağ yapılandırması {managers} servisine bırakıldı. Etkili olması için: sudo systemctl restart iwd (kablosuz bağlantı kısa süre kopar)."
+
 [network]
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
@@ -186,6 +192,8 @@ audio_dsp = "Hoparlör Ses DSP'si"
 audio_dsp_desc = "EasyEffects + ROG G513RM preseti; kulaklıkta otomatik devre dışı"
 coredump_cap = "Çekirdek Dökümü Tavanı"
 coredump_cap_desc = "systemd-coredump 1 GB ile sınırlanır (varsayılan: 4 GiB)"
+iwd_netconfig = "iwd Ağ Yapılandırması"
+iwd_netconfig_desc = "Adres/DNS işini networkd'ye bırakır; resolved çakışmasını giderir"
 bat_cache = "bat Önbelleğini Oluştur"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Duvar Kağıtları"

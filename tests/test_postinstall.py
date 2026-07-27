@@ -10,6 +10,7 @@ from archsetup.core import (
     audio_dsp,
     coredump,
     dotfiles,
+    iwd,
     hardware,
     gpuconfig,
     kmscon,
@@ -350,6 +351,81 @@ def test_coredump_cap_does_not_write_when_mkdir_fails(coredump_conf, monkeypatch
 
     assert coredump.configure() == 1
     assert written == []
+
+
+def test_iwd_set_option_replaces_existing_key():
+    text = (
+        "[General]\n"
+        "EnableNetworkConfiguration=true\n"
+        "\n"
+        "[Network]\n"
+        "NameResolvingService=systemd\n"
+    )
+    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+
+    assert "EnableNetworkConfiguration = false" in out
+    assert "true" not in out
+    # dokunulmayan her şey yerinde kalmalı
+    assert "NameResolvingService=systemd" in out
+
+
+def test_iwd_set_option_inserts_under_existing_section():
+    text = "# elle yazilmis\n[General]\nUseDefaultInterface=true\n"
+    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+
+    lines = out.splitlines()
+    assert lines[0] == "# elle yazilmis"  # yorum korunur
+    assert lines[1] == "[General]"
+    assert lines[2] == "EnableNetworkConfiguration = false"
+    assert "UseDefaultInterface=true" in out
+
+
+def test_iwd_set_option_appends_missing_section():
+    out = iwd._set_option("", "General", "EnableNetworkConfiguration", "false")
+    assert out == "[General]\nEnableNetworkConfiguration = false\n"
+
+
+@pytest.fixture
+def iwd_conf(tmp_path, monkeypatch):
+    conf = tmp_path / "main.conf"
+    monkeypatch.setattr(iwd, "MAIN_CONF", conf)
+    return conf
+
+
+def test_iwd_netconfig_backs_up_and_rewrites(iwd_conf, monkeypatch, fake_write, runlog):
+    iwd_conf.write_text("[General]\nEnableNetworkConfiguration=true\n", encoding="utf-8")
+    monkeypatch.setattr(iwd.services, "is_active", lambda n: n == "systemd-networkd")
+    monkeypatch.setattr(iwd, "sudo_write", fake_write)
+    monkeypatch.setattr(iwd, "run", runlog)
+
+    assert iwd.configure() == 0
+
+    assert ["sudo", "cp", str(iwd_conf), f"{iwd_conf}.bak"] in runlog.calls
+    assert "EnableNetworkConfiguration = false" in iwd_conf.read_text()
+
+
+def test_iwd_netconfig_is_a_noop_when_already_disabled(iwd_conf, monkeypatch):
+    iwd_conf.write_text(
+        "[General]\nEnableNetworkConfiguration = false\n", encoding="utf-8"
+    )
+    written = []
+    monkeypatch.setattr(iwd.services, "is_active", lambda n: True)
+    monkeypatch.setattr(iwd, "sudo_write", lambda p, c: written.append(p) or 0)
+
+    assert iwd.configure() == 0
+    assert written == []
+
+
+def test_iwd_netconfig_asks_when_no_manager_runs(iwd_conf, monkeypatch):
+    iwd_conf.write_text("[General]\nEnableNetworkConfiguration=true\n", encoding="utf-8")
+    written = []
+    monkeypatch.setattr(iwd.services, "is_active", lambda n: False)
+    monkeypatch.setattr(iwd.prompt, "ask_yes", lambda q: False)
+    monkeypatch.setattr(iwd, "sudo_write", lambda p, c: written.append(p) or 0)
+
+    assert iwd.configure() == 0
+    assert written == []
+    assert "true" in iwd_conf.read_text()  # dosyaya dokunulmadi
 
 
 def test_board_condition(tmp_path, monkeypatch):

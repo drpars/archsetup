@@ -112,6 +112,12 @@ done = "Audio DSP installed. The preset switches to Flat when headphones are plu
 [coredump]
 done = "Core dump storage capped at 1 GB: {path}"
 
+[iwd]
+no_manager = "No network manager is running ({managers}). Turning off iwd's network configuration may leave the machine without an address."
+continue_q = "Turn it off anyway?"
+already = "iwd already leaves network configuration alone; nothing to change."
+done = "Network configuration left to {managers}. To apply: sudo systemctl restart iwd (briefly drops the wireless link)."
+
 [network]
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured; smb, nmb and avahi services enabled."
@@ -186,6 +192,8 @@ audio_dsp = "Speaker Audio DSP"
 audio_dsp_desc = "EasyEffects + ROG G513RM preset; bypassed on headphones"
 coredump_cap = "Core Dump Cap"
 coredump_cap_desc = "Limit systemd-coredump to 1 GB (default: 4 GiB)"
+iwd_netconfig = "iwd Network Configuration"
+iwd_netconfig_desc = "Leave addressing/DNS to networkd; clears the resolved conflict"
 bat_cache = "Build bat Cache"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Wallpapers"

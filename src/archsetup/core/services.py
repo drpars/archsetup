@@ -24,6 +24,10 @@ def unit_exists(name: str) -> bool:
     return bool(out.stdout.strip())
 
 
+def is_active(name: str) -> bool:
+    return subprocess.run(["systemctl", "is-active", "--quiet", name]).returncode == 0
+
+
 def disable(name: str) -> int:
     return run(["sudo", "systemctl", "disable", name])
 
