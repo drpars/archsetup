@@ -50,18 +50,29 @@ def _set_option(text: str, section: str, key: str, value: str) -> str:
     line = f"{key} = {value}"
     key_re = re.compile(rf"^\s*{re.escape(key)}\s*=", re.IGNORECASE)
     section_re = re.compile(rf"^\s*\[{re.escape(section)}\]\s*$", re.IGNORECASE)
+    any_section_re = re.compile(r"^\s*\[[^\]]+\]\s*$")
 
     lines = text.splitlines()
 
+    # Eslesme yalnizca hedef bolumun ICINDE aranir. Bolumden bagimsiz arama,
+    # ayni isimli bir anahtar baska bir bolumde duruyorsa onu degistirir;
+    # iwd bu secenegi [General] altindan okudugu icin degisiklik hicbir sey
+    # yapmaz ama basarili gorunur.
+    in_target = False
+    target_header = None
     for i, existing in enumerate(lines):
-        if key_re.match(existing):
+        if any_section_re.match(existing):
+            in_target = bool(section_re.match(existing))
+            if in_target:
+                target_header = i
+            continue
+        if in_target and key_re.match(existing):
             lines[i] = line
             return "\n".join(lines) + "\n"
 
-    for i, existing in enumerate(lines):
-        if section_re.match(existing):
-            lines.insert(i + 1, line)
-            return "\n".join(lines) + "\n"
+    if target_header is not None:
+        lines.insert(target_header + 1, line)
+        return "\n".join(lines) + "\n"
 
     if lines and lines[-1].strip():
         lines.append("")

@@ -47,6 +47,29 @@ def test_machine_id_slugifies(monkeypatch, tmp_path):
     assert ssh.machine_id() == "panthera-arch"
 
 
+def test_pub_path_survives_a_dotted_hostname(ssh_env):
+    """FQDN hostname'de .pub yolu bozulmamali.
+
+    with_suffix(".pub") "github_host.example.com" icin ".com"u uzanti sayip
+    "github_host.example.pub" uretir; anahtar uretildikten hemen sonra acik
+    anahtari okumaya calisirken FileNotFoundError ile cokerdi.
+    """
+    key = ssh_env / "github_host.example.com"
+    assert ssh._pub(key).name == "github_host.example.com.pub"
+    assert ssh._priv(ssh._pub(key)) == key
+
+
+def test_generated_key_is_printed_for_a_dotted_hostname(ssh_env, monkeypatch, capsys):
+    monkeypatch.setattr(ssh, "machine_id", lambda: "host.example.com")
+    monkeypatch.setattr(ssh, "_interactive", lambda: False)
+
+    assert ssh._ensure_github_key() == 0
+
+    out = capsys.readouterr().out
+    assert "ssh-ed25519" in out  # acik anahtar gercekten yazdirildi
+    assert (ssh_env / "github_host.example.com.pub").is_file()
+
+
 def test_missing_inventory_is_not_an_error(ssh_env):
     assert ssh.read_inventory() is None
 
@@ -98,6 +121,21 @@ def test_authorized_entries_parses_options_and_comment(ssh_env):
         ("", "kisitsiz"),
         ('from="192.168.1.0/24"', "kisitli"),
     ]
+
+
+def test_key_without_a_comment_does_not_report_the_blob(ssh_env):
+    """Yorumsuz anahtarda son alan base64 govdesidir, yorum degil."""
+    (ssh_env / "authorized_keys").write_text(
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBUZUNBASE64GOVDE\n", encoding="utf-8"
+    )
+    assert ssh.authorized_entries() == [("", "")]
+
+
+def test_comment_with_spaces_is_kept_whole(ssh_env):
+    (ssh_env / "authorized_keys").write_text(
+        "ssh-ed25519 AAAAC3Nza github testmakine (desktop/BOARD)\n", encoding="utf-8"
+    )
+    assert ssh.authorized_entries() == [("", "github testmakine (desktop/BOARD)")]
 
 
 def test_audit_reports_missing_from_without_touching_the_file(ssh_env, capsys):
@@ -205,6 +243,24 @@ def test_include_is_prepended_so_host_star_stays_last(ssh_env, capsys):
     capsys.readouterr()
 
 
+def test_include_is_added_even_when_a_comment_mentions_config_local(ssh_env, capsys):
+    """Duz alt dizgi aramasi yorum satirina takilirdi.
+
+    Bizim yazdigimiz baslik yorumu "config.local" kelimesini iceriyor;
+    Include satiri silinmis olsa bile geri eklenmezdi ve github.com
+    yapilandirmasi sessizce devre disi kalirdi.
+    """
+    (ssh_env / "config").write_text(
+        "# Makineye ozel kimlikler config.local icinde; onu archsetup uretir.\n"
+        "Host *\n    ForwardAgent no\n",
+        encoding="utf-8",
+    )
+    ssh._ensure_include()
+    lines = (ssh_env / "config").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == ssh.INCLUDE_LINE
+    capsys.readouterr()
+
+
 def test_include_is_not_duplicated(ssh_env, capsys):
     (ssh_env / "config").write_text(f"{ssh.INCLUDE_LINE}\n", encoding="utf-8")
     ssh._ensure_include()
@@ -233,6 +289,14 @@ def _prepare_harden(ssh_env, monkeypatch, fake_write, runner):
     monkeypatch.setattr(ssh, "sudo_write", fake_write)
     monkeypatch.setattr(ssh, "run", runner)
     monkeypatch.setattr(ssh, "_unit_state", lambda unit, user=False: "active")
+
+
+def test_harden_refuses_to_run_as_root(ssh_env, monkeypatch, capsys):
+    """root altinda AllowUsers root + PermitRootLogin no = kimse giremez."""
+    monkeypatch.setattr(ssh.os, "geteuid", lambda: 0)
+    assert ssh.harden() == 1
+    assert not ssh.DROPIN.exists()
+    capsys.readouterr()
 
 
 def test_harden_writes_dropin_and_neutralises_conflicts(

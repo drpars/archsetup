@@ -380,6 +380,28 @@ def test_iwd_set_option_inserts_under_existing_section():
     assert "UseDefaultInterface=true" in out
 
 
+def test_iwd_set_option_ignores_the_key_in_another_section():
+    """iwd bu seçeneği [General] altından okur.
+
+    Bölümden bağımsız arama, [Network] içindeki aynı isimli satırı
+    değiştirir ve [General]'a hiç eklemez: ayar hiçbir şey yapmaz ama
+    görev başarılı raporlar.
+    """
+    text = (
+        "[Network]\n"
+        "EnableNetworkConfiguration=true\n"
+        "\n"
+        "[General]\n"
+        "AddressRandomization=once\n"
+    )
+    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+
+    lines = out.splitlines()
+    assert lines[1] == "EnableNetworkConfiguration=true"  # [Network] dokunulmaz
+    assert lines[3] == "[General]"
+    assert lines[4] == "EnableNetworkConfiguration = false"
+
+
 def test_iwd_set_option_appends_missing_section():
     out = iwd._set_option("", "General", "EnableNetworkConfiguration", "false")
     assert out == "[General]\nEnableNetworkConfiguration = false\n"

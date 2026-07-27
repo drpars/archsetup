@@ -115,3 +115,11 @@ while read -r line; do
         *"on sink "*|*"on card "*) apply ;;
     esac
 done < <(pactl subscribe 2>/dev/null)
+
+# Buraya düşmek, pactl subscribe'ın sonlandığı anlamına gelir -- tipik olarak
+# PipeWire yeniden başlatıldığında. Döngü, besleyen komut hata verse bile 0
+# döndürür; sıfırla çıkmak Restart=on-failure altında "iş bitti" demektir ve
+# izleyici sessizce ölür, preset geçişi bir daha çalışmaz. Hatayla çık ki
+# systemd yeniden başlatsın; ardışık başarısızlığı StartLimitBurst sınırlar.
+printf 'HATA: pactl subscribe sonlandi; servis yeniden baslatilacak.\n' >&2
+exit 1

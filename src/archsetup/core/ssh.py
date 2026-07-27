@@ -65,6 +65,14 @@ _CONFLICT_RE = re.compile(
 # kilitlenme demektir.
 _CIDR_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$")
 
+# Gercek bir Include YONERGESI aranir. Duz "config.local" alt dizgi aramasi,
+# dosyadaki bir YORUM satirinda gectiginde de eslesir -- bizim yazdigimiz
+# baslik yorumu tam olarak o kelimeyi iceriyor -- ve Include satiri
+# kaybolmus olsa bile geri eklenmez.
+_INCLUDE_RE = re.compile(
+    r"^[ \t]*Include\b.*config\.local", re.IGNORECASE | re.MULTILINE
+)
+
 
 # --------------------------------------------------------------------------
 # Makine kimliği
@@ -103,6 +111,21 @@ def board() -> str:
 
 def github_key() -> Path:
     return SSH_DIR / f"github_{machine_id()}"
+
+
+def _pub(key: Path) -> Path:
+    """Özel anahtarın yanındaki ``.pub`` dosyası.
+
+    ``with_suffix(".pub")`` kullanılamaz: /etc/hostname bir FQDN ise
+    (``host.example.com``) makine adı nokta içerir, Path bunu uzantı sayar
+    ve ``github_host.example.com`` için ``github_host.example.pub`` üretir —
+    var olmayan bir dosya.
+    """
+    return key.with_name(key.name + ".pub")
+
+
+def _priv(pub: Path) -> Path:
+    return pub.with_name(pub.name[: -len(".pub")])
 
 
 # --------------------------------------------------------------------------
@@ -186,7 +209,12 @@ def authorized_entries() -> list[tuple[str, str]]:
         fields = line.split()
         for index, field in enumerate(fields):
             if field.startswith(("ssh-", "ecdsa-", "sk-")):
-                entries.append((" ".join(fields[:index]), fields[-1]))
+                # Yorum alani opsiyoneldir. fields[-1] almak, yorumsuz bir
+                # anahtarda base64 govdesini "yorum" diye raporlar ve ciktiyi
+                # okunmaz hale getirir. Yorum, tip ve govdeden sonrasidir ve
+                # bosluk icerebilir.
+                comment = " ".join(fields[index + 2 :])
+                entries.append((" ".join(fields[:index]), comment))
                 break
     return entries
 
@@ -231,7 +259,7 @@ def status() -> int:
 
     print(t("ssh.status_keys"))
     for pub in sorted(SSH_DIR.glob("*.pub")):
-        priv = pub.with_suffix("")
+        priv = _priv(pub)
         if not priv.is_file():
             continue
         state = t("ssh.with_pass") if has_passphrase(priv) else t("ssh.no_pass")
@@ -242,7 +270,7 @@ def status() -> int:
     print(t("ssh.status_authorized", count=len(entries)))
     for options, comment in entries:
         note = options or t("ssh.no_restriction")
-        print(f"    {comment:<24} {note}")
+        print(f"    {comment or '-':<24} {note}")
 
     print(
         t(
@@ -317,7 +345,7 @@ def _ensure_github_key(allow_new: bool = False) -> int:
 
     # Başka makinelerin anahtarı varken sessizce yenisini üretmek, GitHub'a
     # eklenmemiş bir anahtarla çalışmaya başlamak demektir (hostname değiştiyse).
-    others = [p.with_suffix("").name for p in SSH_DIR.glob("github_*.pub")]
+    others = [_priv(p).name for p in SSH_DIR.glob("github_*.pub")]
     if others and not allow_new:
         print(t("ssh.identity_conflict", machine=machine_id(), others=", ".join(others)))
         if not ask_yes(t("ssh.identity_conflict_q", name=key.name)):
@@ -337,7 +365,7 @@ def _ensure_github_key(allow_new: bool = False) -> int:
     if rc != 0:
         return rc
     print(t("ssh.key_add_to_github"))
-    print(f"    {key.with_suffix('.pub').read_text(encoding='utf-8').strip()}")
+    print(f"    {_pub(key).read_text(encoding='utf-8').strip()}")
     return 0
 
 
@@ -404,7 +432,7 @@ def _ensure_include() -> None:
         print(t("ssh.include_added", path=CONFIG))
         return
     text = CONFIG.read_text(encoding="utf-8")
-    if "config.local" in text:
+    if _INCLUDE_RE.search(text):
         return
     CONFIG.write_text(f"{INCLUDE_LINE}\n\n{text}", encoding="utf-8")
     print(t("ssh.include_added", path=CONFIG))
@@ -471,6 +499,13 @@ ClientAliveCountMax 2
 
 
 def harden() -> int:
+    # __main__ root'u zaten reddediyor, ama bu fonksiyon dogrudan da
+    # cagrilabilir ve root altinda AllowUsers root + PermitRootLogin no
+    # yazmak makineye hicbir kullanicinin giremedigi bir sshd birakir.
+    if os.geteuid() == 0:
+        print(t("msg.root_forbidden"))
+        return 1
+
     user = getpass.getuser()
     entries = authorized_entries()
 
@@ -556,7 +591,7 @@ def rotate() -> int:
         print(t("ssh.rotate_nothing", name=key.name))
         return _ensure_github_key(allow_new=True)
 
-    pub = key.with_suffix(".pub")
+    pub = _pub(key)
     old_fp = fingerprint(pub) if pub.is_file() else "?"
     if not ask_yes(t("ssh.rotate_q", name=key.name, fp=old_fp)):
         print(t("msg.cancelled"))
