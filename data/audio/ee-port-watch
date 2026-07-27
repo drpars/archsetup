@@ -15,12 +15,35 @@ SINK="${EE_SINK:-}"
 PRESET_SPEAKER="${EE_PRESET_SPEAKER:-ROG-G513RM}"
 PRESET_HEADPHONES="${EE_PRESET_HEADPHONES:-Flat}"
 
+# EasyEffects bir Qt uygulamasıdır: -l gibi salt-CLI çağrılarda bile
+# QApplication kurar ve ekran bulamazsa SIGABRT ile çöker. Bu servis, oturum
+# değişkenleri systemd kullanıcı yöneticisine aktarılmadan önce başlayabildiği
+# için WAYLAND_DISPLAY garanti değildir; offscreen bu bağımlılığı kaldırır.
+export QT_QPA_PLATFORM=offscreen
+
+# CLI çağrısı IPC'den cevap alamazsa süresiz asılabilir; her zaman sınırla.
+ee() { timeout 15 easyeffects "$@" >/dev/null 2>&1; }
+
+running() { pgrep -x easyeffects >/dev/null 2>&1; }
+
 target_sink() {
     if [ -n "$SINK" ]; then
         printf '%s' "$SINK"
-    else
-        pactl get-default-sink 2>/dev/null
+        return 0
     fi
+    local def
+    def="$(pactl get-default-sink 2>/dev/null)"
+    # EasyEffects'in sanal sink'i öntanımlı olursa port sorgusu boş döner ve
+    # geçiş sessizce çalışmaz hale gelir; bu durumda donanım sink'ine düş.
+    case "$def" in
+        easyeffects*|"")
+            pactl list sinks short 2>/dev/null |
+                awk '$2 ~ /^alsa_output\./ {print $2; exit}'
+            ;;
+        *)
+            printf '%s' "$def"
+            ;;
+    esac
 }
 
 active_port() {
@@ -39,32 +62,56 @@ preset_for() {
 }
 
 last_preset=""
+fail_count=0
 
 apply() {
     local port preset
+
+    # Ana örnek yoksa CLI çağrısı IPC'ye devretmek yerine kendisi örnek olur
+    # ve asılır; önce ayakta olduğunu doğrula.
+    running || return 0
+
     port="$(active_port)"
     [ -n "$port" ] || return 0
     preset="$(preset_for "$port")"
     [ "$preset" = "$last_preset" ] && return 0
-    if easyeffects -l "$preset" >/dev/null 2>&1; then
+
+    if ee -l "$preset"; then
         last_preset="$preset"
+        fail_count=0
         printf 'port=%s -> preset=%s\n' "$port" "$preset"
-    else
-        printf 'UYARI: preset yuklenemedi: %s\n' "$preset" >&2
+        return 0
     fi
+
+    # Başarısızlıkta geri çekil. Aksi halde last_preset güncellenmediği için
+    # tekrar koruması hiç devreye girmez ve her olay anında yeniden dener;
+    # EasyEffects çökerek başarısız olursa bu, saniyede birkaç core dump
+    # üreten ve CPU'yu ısıtan bir döngüye dönüşür.
+    fail_count=$((fail_count + 1))
+    printf 'UYARI: preset yuklenemedi (%s), ardisik hata: %d\n' "$preset" "$fail_count" >&2
+    if [ "$fail_count" -ge 3 ]; then
+        printf 'HATA: 3 kez ust uste basarisiz, cikiliyor.\n' >&2
+        exit 1
+    fi
+    sleep 5
 }
 
-# EasyEffects hazır olana kadar bekle (servis sırası garanti değil).
-for _ in $(seq 1 30); do
-    easyeffects -a output >/dev/null 2>&1 && break
-    sleep 1
+# Ana EasyEffects örneği ayağa kalkana kadar bekle (servis sırası garanti
+# değil). Yoklama pgrep ile yapılır; burada easyeffects çağırmak, örnek
+# yokken yeni bir örnek başlatıp asılacağı için kullanılamaz.
+for _ in $(seq 1 60); do
+    running && break
+    sleep 2
 done
+sleep 2
 
 apply
 
-# Sink olaylarında portu yeniden değerlendir.
-pactl subscribe 2>/dev/null | while read -r line; do
+# Yalnızca sink ve card olaylarını dinle. "on sink " sondaki boşlukla
+# yazılmalıdır; boşluksuz desen "on sink-input" ile de eşleşir ve her ses
+# akışı gereksiz bir preset değerlendirmesi tetikler.
+while read -r line; do
     case "$line" in
-        *"on sink"*|*"on card"*|*"'change'"*) apply ;;
+        *"on sink "*|*"on card "*) apply ;;
     esac
-done
+done < <(pactl subscribe 2>/dev/null)

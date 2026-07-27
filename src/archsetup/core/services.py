@@ -29,6 +29,13 @@ def disable(name: str) -> int:
 
 
 def enable_user_now(name: str) -> int:
-    """Enable a --user unit. No sudo: user units are not managed as root."""
+    """Enable a --user unit. No sudo: user units are not managed as root.
+
+    ``enable --now`` starts a unit only when it is not already running, so on a
+    re-run that ships a changed unit file the old process would stay in place.
+    ``try-restart`` picks the new definition up and, unlike ``restart``, leaves
+    a deliberately stopped unit alone.
+    """
     rc = run(["systemctl", "--user", "daemon-reload"])
-    return rc | run(["systemctl", "--user", "enable", "--now", name])
+    rc |= run(["systemctl", "--user", "enable", "--now", name])
+    return rc | run(["systemctl", "--user", "try-restart", name])

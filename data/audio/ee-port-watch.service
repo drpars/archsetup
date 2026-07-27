@@ -1,13 +1,19 @@
 [Unit]
 Description=EasyEffects preset'ini aktif cikis portuna gore degistirir
 After=pipewire-pulse.service
-PartOf=graphical-session.target
+# Surekli basarisizlikta systemd tamamen vazgecsin; yeniden baslatma dongusu
+# kendi basina bir CPU/isinma sorununa donusmemeli.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
+# Oturum degiskenleri systemd kullanici yoneticisine bu servis basladiktan
+# sonra aktarilabilir; Qt'nin ekran aramasini bastirmak sart.
+Environment=QT_QPA_PLATFORM=offscreen
 ExecStart=%h/.local/bin/ee-port-watch
 Restart=on-failure
-RestartSec=5
+RestartSec=30
 
 [Install]
 WantedBy=default.target

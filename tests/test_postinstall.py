@@ -294,10 +294,12 @@ def test_audio_dsp_installs_assets_and_user_service(audio_home, monkeypatch, run
     assert (audio_home / "units" / "ee-port-watch.service").exists()
     assert (audio_home / "autostart" / "easyeffects-service.desktop").exists()
 
-    # kullanıcı servisi: sudo yok, önce daemon-reload
+    # kullanıcı servisi: sudo yok, önce daemon-reload; try-restart ise unit
+    # dosyası değiştiyse çalışan eski süreci yenisiyle değiştirir
     assert runlog.calls == [
         ["systemctl", "--user", "daemon-reload"],
         ["systemctl", "--user", "enable", "--now", "ee-port-watch.service"],
+        ["systemctl", "--user", "try-restart", "ee-port-watch.service"],
     ]
 
 
