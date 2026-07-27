@@ -28,6 +28,7 @@ from . import (
     nvidia_laptop,
     pacman,
     sddm,
+    ssh,
     virt,
     waydroid,
 )
@@ -210,6 +211,10 @@ TASKS: tuple[Task, ...] = (
         iwd.configure,
         group="config",
     ),
+    Task("ssh-status", "task.ssh_status", ssh.status, group="ssh"),
+    Task("ssh-harden", "task.ssh_harden", ssh.harden, group="ssh"),
+    Task("ssh-identity", "task.ssh_identity", ssh.identity, group="ssh"),
+    Task("ssh-rotate", "task.ssh_rotate", ssh.rotate, group="ssh"),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",

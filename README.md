@@ -50,6 +50,59 @@ Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 ./archsetup --lang en       # arayüz dili
 ```
 
+### SSH yönetimi
+
+`Yapılandırma → SSH Yönetimi` altında dört görev var:
+
+| Görev | Ne yapar |
+|---|---|
+| `ssh-status` | Salt okunur rapor: anahtarlar, yetkiler, sunucu, agent |
+| `ssh-harden` | Yalnızca anahtarla giriş, root kapalı; drop-in yaz ve doğrula |
+| `ssh-identity` | Makineye özel GitHub anahtarı, `config.local`, ssh-agent |
+| `ssh-rotate` | Anahtar kaybı/sızıntısı: eskisini arşivle, yenisini üret |
+
+**Yeni makine kurulumu.** `~/.ssh` klasörünüzü kopyalayın, sonra:
+
+```bash
+./archsetup ssh-identity    # makineye ozel anahtar + agent
+./archsetup ssh-harden      # sunucu sertlestirme
+```
+
+`ssh-identity` bu makine için `~/.ssh/github_<hostname>` anahtarı yoksa üretir
+(terminal varsa parolayı sorar) ve GitHub'a eklenecek satırı yazdırır. Klasörde
+başka makinelerin `github_*` anahtarı varken yenisini sessizce üretmez —
+hostname değiştiyse fark etmeden GitHub'a eklenmemiş bir anahtarla çalışmaya
+başlamayasınız diye önce sorar.
+
+**Kişisel envanter.** LAN alt ağınız ve host kısayollarınız bu depoya girmez;
+`~/.ssh/archsetup.toml` dosyasından okunur. Dosya yoksa iskeleti oluşturulur ve
+yalnızca genel ayarlar uygulanır. Varlığı aynı zamanda "bu klasör archsetup
+tarafından yönetiliyor" işaretidir; taşıdığı `format` numarası ileride düzen
+değişirse göç etmeyi mümkün kılar.
+
+```toml
+format = 1
+
+[lan]
+subnet = "10.0.0.0/24"        # authorized_keys from="..." denetimi icin
+
+[hosts.sunucu]
+hostname = "10.0.0.5"
+user = "kullanici"
+key = "sunucu_ed25519"
+```
+
+Buradan `~/.ssh/config.local` üretilir; sizin `~/.ssh/config` dosyanız yalnızca
+`Include` satırını ve `Host *` varsayılanlarını tutar. `Include` en üste yazılır,
+çünkü `ssh` ilk eşleşen değeri kullanır ve `Host *` en sonda kalmalıdır.
+
+**`authorized_keys` yeniden yazılmaz.** İki dosyanın hata maliyeti eşit değil:
+`config.local` yanlış üretilirse dışarı bağlanamazsınız, makinenin başındasınız
+ve düzeltirsiniz. `authorized_keys` bozulursa içeri bağlanılamaz ve fiziksel
+erişim gerekebilir — bozuk bir `from=` değeri anahtarın hiçbir zaman
+eşleşmemesine yol açar. Bu yüzden `ssh-harden` yalnızca denetler ve eksik
+`from=` kısıtlarını raporlar; düzeltmeyi siz bilerek yaparsınız.
+
 ## Dizin yapısı
 
 ```

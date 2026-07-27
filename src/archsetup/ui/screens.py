@@ -364,6 +364,10 @@ def make_desktops_menu() -> MenuScreen:
     return MenuScreen(t("menu.desktops.title"), items)
 
 
+def make_ssh_menu() -> MenuScreen:
+    return MenuScreen(t("menu.ssh.title"), _task_items("ssh"))
+
+
 def make_config_menu() -> MenuScreen:
     items = [
         MenuItem(
@@ -371,7 +375,13 @@ def make_config_menu() -> MenuScreen:
             t("menu.dotfiles.title"),
             t("dotfiles.menu_desc"),
             lambda screen: screen.app.push_screen(make_dotfiles_menu()),
-        )
+        ),
+        MenuItem(
+            "ssh",
+            t("menu.ssh.title"),
+            t("menu.ssh.desc"),
+            lambda screen: screen.app.push_screen(make_ssh_menu()),
+        ),
     ]
     items.extend(_task_items("config"))
     return MenuScreen(t("menu.config.title"), items)

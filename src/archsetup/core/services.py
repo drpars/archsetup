@@ -24,6 +24,20 @@ def unit_exists(name: str) -> bool:
     return bool(out.stdout.strip())
 
 
+def user_unit_exists(name: str) -> bool:
+    """Kullanici unit'i var mi.
+
+    unit_exists() yalnizca SISTEM unit'lerine bakar; ssh-agent.socket gibi
+    --user unit'leri orada gorunmez ve sessizce "yok" sanilir.
+    """
+    out = subprocess.run(
+        ["systemctl", "--user", "list-unit-files", "--no-legend", name],
+        capture_output=True,
+        text=True,
+    )
+    return bool(out.stdout.strip())
+
+
 def is_active(name: str) -> bool:
     return subprocess.run(["systemctl", "is-active", "--quiet", name]).returncode == 0
 
