@@ -241,6 +241,9 @@ def make_dotfiles_menu() -> MenuScreen:
             lambda screen: open_section(screen, "home"),
         ),
     ]
+    # nvim ve duvar kağıdı görevleri de core/dotfiles.py'den gelir; onları
+    # üst menüde bırakmak aynı alanı iki seviyeye bölüyordu.
+    items.extend(_task_items("dotfiles"))
     return MenuScreen(t("menu.dotfiles.title"), items)
 
 
@@ -368,7 +371,29 @@ def make_ssh_menu() -> MenuScreen:
     return MenuScreen(t("menu.ssh.title"), _task_items("ssh"))
 
 
+# Yapılandırma altındaki alt menüler: (görev grubu, yerel anahtar öneki).
+# Dördü de aynı şeyi yapar -- bir görev grubunu kendi başlığıyla göstermek --
+# bu yüzden dört ayrı fonksiyon yerine tek üretici kullanılıyor.
+CONFIG_SUBMENUS = (
+    ("network", "menu.network"),
+    ("appearance", "menu.appearance"),
+    ("virt", "menu.virt"),
+    ("system", "menu.system"),
+)
+
+
+def make_group_menu(group: str, key: str) -> MenuScreen:
+    return MenuScreen(t(f"{key}.title"), _task_items(group))
+
+
 def make_config_menu() -> MenuScreen:
+    """Yalnızca alt menüler ve gerçekten hiçbir yere ait olmayan görevler.
+
+    Önceden 17 giriş vardı: iki alt menü ve arkasından on beş düz görev.
+    Daha kötüsü, "Dotfile Yönetimi" alt menüsü dururken core/dotfiles.py'nin
+    üç görevi onun dışında listeleniyordu -- duvar kağıtlarını arayan biri
+    önce o alt menüye bakıp bulamıyordu.
+    """
     items = [
         MenuItem(
             "dotfiles",
@@ -382,6 +407,17 @@ def make_config_menu() -> MenuScreen:
             t("menu.ssh.desc"),
             lambda screen: screen.app.push_screen(make_ssh_menu()),
         ),
+    ]
+    items += [
+        MenuItem(
+            group,
+            t(f"{key}.title"),
+            t(f"{key}.desc"),
+            lambda screen, g=group, k=key: screen.app.push_screen(
+                make_group_menu(g, k)
+            ),
+        )
+        for group, key in CONFIG_SUBMENUS
     ]
     items.extend(_task_items("config"))
     return MenuScreen(t("menu.config.title"), items)

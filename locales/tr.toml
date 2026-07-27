@@ -59,6 +59,22 @@ title = "Dotfile Yönetimi"
 title = "SSH Yönetimi"
 desc = "Sunucu sertleştirme, makineye özel anahtar ve agent"
 
+[menu.network]
+title = "Ağ"
+desc = "Dosya paylaşımı ve kablosuz adresleme"
+
+[menu.appearance]
+title = "Görünüm ve Konsol"
+desc = "Giriş ekranı temaları ve TTY"
+
+[menu.virt]
+title = "Sanallaştırma"
+desc = "libvirt/QEMU ve Waydroid"
+
+[menu.system]
+title = "Sistem"
+desc = "Swap, çekirdek dökümü ve önyükleyici"
+
 [dotfiles]
 menu_desc = "Kopyala, sembolik bağla veya doğrula (drpars/dotfiles)"
 update_repo = "Depoyu Güncelle"

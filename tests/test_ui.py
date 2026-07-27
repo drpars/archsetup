@@ -56,7 +56,8 @@ async def test_navigation_and_package_screen():
         assert isinstance(app.screen, screens.MainMenuScreen)
 
 
-async def test_config_menu_tasks():
+async def test_config_menu_is_submenus_not_a_flat_list():
+    """Yapılandırma alt menülerden oluşur; düz görev listesi değil."""
     app = ArchSetupApp(ask_language=False)
     async with app.run_test(size=(100, 40)) as pilot:
         await pilot.pause()
@@ -64,8 +65,47 @@ async def test_config_menu_tasks():
         await pilot.press("enter")
         await pilot.pause()
         ids = list(app.screen._items)
-        assert ids[0] == "dotfiles" and "swap-hibernate" in ids
-        assert "virt-config" in ids and "waydroid-setup" in ids
+        assert ids[:6] == [
+            "dotfiles", "ssh", "network", "appearance", "virt", "system",
+        ]
+        # Alt menülere taşınan görevler üst seviyede kalmamalı.
+        for moved in ("swap-hibernate", "virt-config", "wallpapers", "kmscon"):
+            assert moved not in ids
+
+
+async def test_dotfiles_menu_holds_every_dotfiles_task():
+    """core/dotfiles.py görevleri kendi alt menüsünde toplanır.
+
+    Duvar kağıtları ve nvim görevleri bir zamanlar Yapılandırma'nın
+    kökünde dururken alt menü de mevcuttu; aynı alan iki seviyeye
+    bölündüğü için aranan şey bulunamıyordu.
+    """
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 4
+        await pilot.press("enter")
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 0  # Dotfile Yönetimi
+        await pilot.press("enter")
+        await pilot.pause()
+        ids = list(app.screen._items)
+        for task_id in ("nvim-dotfiles", "nvim-remove", "wallpapers"):
+            assert task_id in ids
+
+
+def test_every_task_group_is_reachable():
+    """Hiçbir görev grubu menüsüz kalmamalı.
+
+    Gruplar serbest metin; bir yazım hatası (group="netwrok") görevi
+    arayüzden sessizce yok eder, hiçbir yerde hata vermez.
+    """
+    from archsetup.core import tasks
+
+    reachable = {"update", "drivers", "dotfiles", "ssh", "config"}
+    reachable |= {group for group, _ in screens.CONFIG_SUBMENUS}
+    orphans = {task.group for task in tasks.TASKS} - reachable
+    assert not orphans, f"menüye bağlanmamış grup(lar): {orphans}"
 
 
 async def test_theme_default_and_switch():

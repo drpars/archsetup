@@ -14,6 +14,9 @@ yazılmıştır. `installarch` (canlı ISO'dan kurulum) ve `installarchde`
   dosyalarından gelir. Dil değiştirmek hiçbir mantığı etkilemez.
 - **Veri güdümlü menüler:** Paket listeleri `data/` altındaki TOML
   dosyalarındadır. Yeni uygulama eklemek = birkaç satır TOML.
+- **Alt menülerle gruplama:** Görevler `group` alanına göre menülere düşer.
+  Yapılandırma yalnızca alt menüleri barındırır; aynı alanın görevleri
+  (dotfiles, ağ, sanallaştırma, sistem) tek yerde toplanır.
 - **İki mod:** Canlı ISO'da *kurucu* modu (bölümleme, pacstrap, chroot
   yapılandırması, önyükleyici); kurulu sistemde *kurulum sonrası* modu.
   Ortam otomatik algılanır.
@@ -122,7 +125,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-75 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+115 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -157,7 +160,10 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (75 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (115 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] SSH yönetimi: sunucu sertleştirme (drop-in + `sshd -t` doğrulaması ve
+      geri alma), makine başına GitHub kimliği, `ssh-agent`, anahtar
+      yenileme; kişisel envanter depo dışında (`~/.ssh/archsetup.toml`)
 - [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).

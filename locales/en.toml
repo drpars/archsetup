@@ -59,6 +59,22 @@ title = "Dotfiles Management"
 title = "SSH Management"
 desc = "Server hardening, per-machine key and agent"
 
+[menu.network]
+title = "Network"
+desc = "File sharing and wireless addressing"
+
+[menu.appearance]
+title = "Appearance & Console"
+desc = "Login screen themes and TTY"
+
+[menu.virt]
+title = "Virtualization"
+desc = "libvirt/QEMU and Waydroid"
+
+[menu.system]
+title = "System"
+desc = "Swap, core dumps and bootloader"
+
 [dotfiles]
 menu_desc = "Copy, symlink or validate (drpars/dotfiles)"
 update_repo = "Update Repository"
