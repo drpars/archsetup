@@ -109,6 +109,9 @@ missing = "easyeffects kurulamadı; DSP zinciri kurulmadı."
 copy_failed = "Dosya kopyalanamadı: {path} ({error})"
 done = "Ses DSP'si kuruldu. Kulaklık takınca preset otomatik olarak Flat'e geçer. EasyEffects bu oturumda çalışmıyorsa bir kez oturumu kapatıp açın."
 
+[coredump]
+done = "Çekirdek dökümü tavanı 1 GB olarak ayarlandı: {path}"
+
 [network]
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
@@ -181,6 +184,8 @@ nvim_remove = "Neovim Dotfiles Kaldır"
 nvim_remove_desc = "nvim yapılandırma, veri ve önbelleğini sil"
 audio_dsp = "Hoparlör Ses DSP'si"
 audio_dsp_desc = "EasyEffects + ROG G513RM preseti; kulaklıkta otomatik devre dışı"
+coredump_cap = "Çekirdek Dökümü Tavanı"
+coredump_cap_desc = "systemd-coredump 1 GB ile sınırlanır (varsayılan: diskin %10'u)"
 bat_cache = "bat Önbelleğini Oluştur"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Duvar Kağıtları"

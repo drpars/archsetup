@@ -8,6 +8,7 @@ import pytest
 from archsetup.core import (
     asus,
     audio_dsp,
+    coredump,
     dotfiles,
     hardware,
     gpuconfig,
@@ -321,6 +322,34 @@ def test_audio_dsp_stops_when_easyeffects_missing(audio_home, monkeypatch):
 
     assert audio_dsp.configure() == 1
     assert not (audio_home / "presets").exists()
+
+
+@pytest.fixture
+def coredump_conf(tmp_path, monkeypatch):
+    conf_dir = tmp_path / "coredump.conf.d"
+    monkeypatch.setattr(coredump, "CONF_DIR", conf_dir)
+    monkeypatch.setattr(coredump, "CONF", conf_dir / "99-maxuse.conf")
+    return conf_dir
+
+
+def test_coredump_cap_writes_dropin(coredump_conf, monkeypatch, fake_write, runlog):
+    monkeypatch.setattr(coredump, "sudo_write", fake_write)
+    monkeypatch.setattr(coredump, "run", runlog)
+
+    assert coredump.configure() == 0
+
+    # sudo tee dizin yaratmaz, önce mkdir -p gerekir
+    assert runlog.calls == [["sudo", "mkdir", "-p", str(coredump_conf)]]
+    assert (coredump_conf / "99-maxuse.conf").read_text() == "[Coredump]\nMaxUse=1G\n"
+
+
+def test_coredump_cap_does_not_write_when_mkdir_fails(coredump_conf, monkeypatch):
+    written = []
+    monkeypatch.setattr(coredump, "sudo_write", lambda p, c: written.append(p) or 0)
+    monkeypatch.setattr(coredump, "run", lambda cmd, **kwargs: 1)
+
+    assert coredump.configure() == 1
+    assert written == []
 
 
 def test_board_condition(tmp_path, monkeypatch):

@@ -17,6 +17,7 @@ from . import (
     asus,
     audio_dsp,
     bootloader,
+    coredump,
     dotfiles,
     gpuconfig,
     hibernate,
@@ -196,6 +197,12 @@ TASKS: tuple[Task, ...] = (
         group="config",
     ),
     Task("audio-dsp", "task.audio_dsp", audio_dsp.configure, group="config"),
+    Task(
+        "coredump-cap",
+        "task.coredump_cap",
+        coredump.configure,
+        group="config",
+    ),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",

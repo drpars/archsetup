@@ -109,6 +109,9 @@ missing = "easyeffects could not be installed; the DSP chain was not set up."
 copy_failed = "Could not copy file: {path} ({error})"
 done = "Audio DSP installed. The preset switches to Flat when headphones are plugged in. If EasyEffects is not running in this session, log out and back in once."
 
+[coredump]
+done = "Core dump storage capped at 1 GB: {path}"
+
 [network]
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured; smb, nmb and avahi services enabled."
@@ -181,6 +184,8 @@ nvim_remove = "Remove Neovim Dotfiles"
 nvim_remove_desc = "Delete nvim configuration, data and cache"
 audio_dsp = "Speaker Audio DSP"
 audio_dsp_desc = "EasyEffects + ROG G513RM preset; bypassed on headphones"
+coredump_cap = "Core Dump Cap"
+coredump_cap_desc = "Limit systemd-coredump to 1 GB (default: 10% of the disk)"
 bat_cache = "Build bat Cache"
 bat_cache_desc = "bat cache --build"
 wallpapers = "Wallpapers"
