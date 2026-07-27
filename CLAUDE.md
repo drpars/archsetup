@@ -55,6 +55,15 @@ Hazır yardımcılar; yenisini yazmadan önce bunlara bakın:
 
 ## Tuzaklar (hepsi gerçek hatalardan)
 
+**`data/` altındaki varlıklar `git pull` ile devreye girmez.** Betikler ve
+unit dosyaları görev çalıştırıldığında `~/.local/bin`, `~/.config/systemd/user`
+gibi yerlere **kopyalanır**; depoyu güncellemek kurulu kopyayı değiştirmez.
+Bir varlığı düzelten commit, ilgili görev yeniden çalıştırılana kadar
+makinede etkisizdir. `ee-port-watch` düzeltmesi tam olarak böyle kaçtı:
+hata giderildikten sonra bile, hatanın canlı olduğu makinede eski sürüm
+çalışmaya devam etti. Kurulu kopyayı depoyla karşılaştırarak doğrulayın:
+`diff data/audio/ee-port-watch ~/.local/bin/ee-port-watch`
+
 **`services.unit_exists()` yalnızca SİSTEM unit'lerine bakar.** `--user`
 unit'leri orada görünmez ve sessizce "yok" sanılır → `user_unit_exists()`.
 
