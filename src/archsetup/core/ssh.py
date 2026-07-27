@@ -235,7 +235,8 @@ def status() -> int:
         if not priv.is_file():
             continue
         state = t("ssh.with_pass") if has_passphrase(priv) else t("ssh.no_pass")
-        print(f"    {priv.name:<24} {state:<10} {fingerprint(pub)}")
+        # Genislik en uzun cevirisine gore: "NO PASSPHRASE" 13 karakter.
+        print(f"    {priv.name:<24} {state:<14} {fingerprint(pub)}")
 
     entries = authorized_entries()
     print(t("ssh.status_authorized", count=len(entries)))
