@@ -1,13 +1,15 @@
 """Bound the disk that systemd-coredump is allowed to consume.
 
-MaxUse defaults to 10% of the filesystem, which on a 118 GB root is over
-11 GB -- and nothing reaches that faster than a service in a crash loop.
-A user unit that ran a Qt binary without a display produced 15729 dumps
-in a single day here, 4.1 GB on disk, with the CPU busy compressing them.
+MaxUse defaults to 10% of the disk but is capped at 4 GiB, so on anything
+larger than ~40 GB the effective default is 4 GiB. That is still a lot to
+hand to a service in a crash loop: a user unit running a Qt binary with no
+display produced 15729 dumps here in a single day and sat at 4.1 GB, the
+default cap, with systemd rotating dumps to stay under it.
 
-The cap does not prevent a crash loop. It keeps one from filling the
-root filesystem while it goes unnoticed, which is the part that turns a
-misbehaving service into a broken system.
+So the default does prevent a full disk -- what it does not do is keep a
+crash loop cheap. 1 GB leaves room to debug a real crash while cutting
+what a runaway service can occupy, and the dumps it does keep are the
+recent ones that matter.
 """
 
 from __future__ import annotations
