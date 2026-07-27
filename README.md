@@ -164,6 +164,17 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] SSH yönetimi: sunucu sertleştirme (drop-in + `sshd -t` doğrulaması ve
       geri alma), makine başına GitHub kimliği, `ssh-agent`, anahtar
       yenileme; kişisel envanter depo dışında (`~/.ssh/archsetup.toml`)
+- [ ] SSH: makine sıfırlama sonrası kalan iki elle adımı göreve dönüştürmek.
+      `ssh-authorize` terminale yapıştırılan açık anahtarı `ssh-keygen -l`
+      ile doğrular, envanterdeki alt ağdan `from="..."` kısıtını üretir ve
+      `authorized_keys`'e **ekler** — yeniden yazmaz, önce yedekler. (Ekleme
+      güvenlidir, kilitlenme riski dosyayı yeniden üretmekten gelir; bu görev
+      yazılırsa CLAUDE.md'deki "authorized_keys üretilmez" maddesi
+      "eklenebilir, üretilemez" diye inceltilmeli.) `ssh-forget` ise
+      sıfırlanan bir makinenin bayat `known_hosts` kaydını `ssh-keygen -R`
+      ile siler; envanterdeki host'lardan seçilir ve **her zaman açık onay
+      ister** — "REMOTE HOST IDENTIFICATION HAS CHANGED" bir ortadaki-adam
+      kontrolüdür, otomatik susturulacak bir gürültü değil.
 - [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).
