@@ -14,7 +14,8 @@ from pathlib import Path
 from ..core import i18n
 from ..core.pacman import run
 from . import disk
-from .chroot import chroot_run, target_ready
+from ..core.prompt import ask_yes
+from .chroot import chroot_run, gen_uki, target_ready
 from .state import state
 
 t = i18n.t
@@ -93,7 +94,16 @@ def install_systemd_boot() -> int:
             "\\EFI\\systemd\\systemd-bootx64.efi\n", encoding="utf-8"
         )
 
+    if rc != 0:
+        return rc
+
+    # This flow writes no /efi/loader/entries, so the only thing
+    # systemd-boot can boot is a UKI. Skipping the step leaves an
+    # installed system with an empty boot menu — hence the prompt here
+    # instead of a separate menu item the user has to remember.
     print(t("inst.sdboot_done"))
+    if ask_yes(t("inst.uki_now_q")):
+        rc |= gen_uki()
     return rc
 
 

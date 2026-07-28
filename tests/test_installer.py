@@ -229,6 +229,7 @@ def boot_env(tmp_path, monkeypatch, runlog):
 
 def test_systemd_boot_install(boot_env, monkeypatch):
     monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: False)
     assert bootloaders.install_systemd_boot() == 0
     cmdline = (boot_env / "etc" / "kernel" / "cmdline").read_text().strip()
     assert cmdline == (
@@ -236,6 +237,16 @@ def test_systemd_boot_install(boot_env, monkeypatch):
     )
     assert (boot_env / "efi/loader/loader.conf").exists()
     assert (boot_env / "etc/pacman.d/hooks/95-systemd-boot.hook").exists()
+
+
+def test_systemd_boot_offers_uki_generation(boot_env, monkeypatch):
+    """Without a UKI there are no loader entries either — nothing to boot."""
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: True)
+    called = []
+    monkeypatch.setattr(bootloaders, "gen_uki", lambda: called.append(True) or 0)
+    assert bootloaders.install_systemd_boot() == 0
+    assert called == [True]
 
 
 def test_efi_only_bootloaders_rejected_on_bios(boot_env, monkeypatch):

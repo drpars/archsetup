@@ -404,9 +404,10 @@ sb_continue_q = "Yine de devam edilsin mi?"
 sb_enroll_failed = "Anahtar üretimi/kaydı başarısız; imzalama atlandı."
 sb_no_uki = "İmzalanacak UKI bulunamadı; önce UKI Üret adımını çalıştırın."
 sb_verify = "sbctl verify raporu:"
+uki_now_q = "UKI şimdi üretilsin mi? (bu düzende açılabilir tek görüntü budur)"
 efi_required = "Bu önyükleyici yalnızca UEFI sistemlerde kurulabilir!"
 blkid_failed = "blkid {dev} için PARTUUID/TYPE okuyamadı."
-sdboot_done = "systemd-boot kuruldu. Şimdi 'UKI Üret' adımını çalıştırın."
+sdboot_done = "systemd-boot kuruldu. Bu düzende önyükleyici yalnızca UKI açabilir."
 
 [msg]
 done = "İşlem tamamlandı."

@@ -404,9 +404,10 @@ sb_continue_q = "Continue anyway?"
 sb_enroll_failed = "Key creation/enrollment failed; signing skipped."
 sb_no_uki = "No UKI found to sign; run the Generate UKI step first."
 sb_verify = "sbctl verify report:"
+uki_now_q = "Generate the UKI now? (it is the only bootable image in this layout)"
 efi_required = "This bootloader can only be installed on UEFI systems!"
 blkid_failed = "blkid could not read PARTUUID/TYPE for {dev}."
-sdboot_done = "systemd-boot installed. Now run the 'Generate UKI' step."
+sdboot_done = "systemd-boot installed. In this layout it can only boot a UKI."
 
 [msg]
 done = "Operation completed."
