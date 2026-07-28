@@ -127,6 +127,9 @@ async def test_installer_menu_structure():
         ids = list(app.screen._items)
         assert ids[:3] == ["keymap", "reflector", "parallel"]
         assert "pacstrap" in ids and "target" in ids
+        # Ek Paketler sbctl/efibootmgr/ucode getirir; chroot adımları bunlara
+        # dayandığı için Sistem Yapılandırması'ndan önce gelmeli.
+        assert ids.index("pacstrap") < ids.index("extras") < ids.index("target")
 
         app.screen.query_one(OptionList).highlighted = ids.index("target")
         await pilot.press("enter")

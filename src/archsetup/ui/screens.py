@@ -658,13 +658,15 @@ def make_installer_menu() -> MenuScreen:
         _run_item("format", "inst.format", "mkfs", disk.format_devices),
         _run_item("mount", "inst.mount", "/mnt", disk.mount_all),
         _run_item("pacstrap", "inst.pacstrap", "base + kernel", base.pacstrap_base),
-        MenuItem(
-            "target", t("inst.target_title"), "arch-chroot /mnt",
-            lambda screen: screen.app.push_screen(make_target_menu()),
-        ),
+        # Extras before system configuration: it brings sbctl (Secure Boot),
+        # efibootmgr and the microcode, all of which the chroot steps need.
         MenuItem(
             "extras", t("inst.extras"), "arch-chroot pacman",
             extras_screen,
+        ),
+        MenuItem(
+            "target", t("inst.target_title"), "arch-chroot /mnt",
+            lambda screen: screen.app.push_screen(make_target_menu()),
         ),
         _run_item("unmount", "inst.unmount", "umount -R /mnt", disk.unmount_all),
         _run_item("reboot", "inst.reboot", "systemctl reboot",
