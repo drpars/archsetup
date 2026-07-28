@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from archsetup.installer import base, bootloaders, chroot, disk, pickers
+from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
 from archsetup.installer.state import state
 
 
@@ -378,3 +378,44 @@ def test_setup_mode_reads_efivarfs_past_the_attribute_header(tmp_path, monkeypat
     assert chroot.setup_mode() is False
     monkeypatch.setattr(chroot, "SETUP_MODE_VAR", tmp_path / "absent")
     assert chroot.setup_mode() is None
+
+
+# --- NVMe reset ------------------------------------------------------------
+
+
+@pytest.fixture
+def nvme_env(monkeypatch, runlog):
+    monkeypatch.setattr(nvme, "guard", lambda: True)
+    monkeypatch.setattr(nvme, "ensure_tool", lambda: True)
+    monkeypatch.setattr(nvme, "list_namespaces", lambda: [("/dev/nvme0n1", "SSD", "1T")])
+    monkeypatch.setattr(nvme, "crypto_supported", lambda dev: False)
+    monkeypatch.setattr(nvme, "run", runlog)
+    # busy() stays real; tests point it at a fixture file instead of /proc.
+    monkeypatch.setattr(nvme, "IN_USE_SOURCES", ())
+    return runlog
+
+
+def test_nvme_reset_requires_the_device_path_typed_out(nvme_env, monkeypatch):
+    """A y/n prompt is too easy to answer by reflex for a whole-disk erase."""
+    _feed(monkeypatch, nvme, ["1", "1", "evet"])
+    assert nvme.reset_namespace() == 1
+    assert nvme_env.calls == []
+
+
+def test_nvme_reset_formats_after_confirmation(nvme_env, monkeypatch):
+    _feed(monkeypatch, nvme, ["1", "1", "/dev/nvme0n1"])
+    state.rootdev = "/dev/nvme0n1p2"
+    assert nvme.reset_namespace() == 0
+    assert ["nvme", "format", "--ses", "1", "--force", "/dev/nvme0n1"] in nvme_env.calls
+    # The partition it pointed at no longer exists.
+    assert state.rootdev is None
+
+
+def test_nvme_reset_refuses_a_namespace_in_use(nvme_env, monkeypatch, tmp_path):
+    """A mounted partition means the whole namespace is off limits."""
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/nvme0n1p2 /mnt ext4 rw 0 0\n")
+    monkeypatch.setattr(nvme, "IN_USE_SOURCES", ((str(mounts), None),))
+    _feed(monkeypatch, nvme, ["1"])
+    assert nvme.reset_namespace() == 1
+    assert nvme_env.calls == []

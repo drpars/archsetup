@@ -636,7 +636,7 @@ def make_target_menu() -> MenuScreen:
 
 
 def make_installer_menu() -> MenuScreen:
-    from ..installer import base, chroot, disk, pickers
+    from ..installer import base, chroot, disk, nvme, pickers
 
     def extras_screen(screen: MenuScreen) -> None:
         categories = data.load_categories("extras.toml", section="install")
@@ -653,6 +653,7 @@ def make_installer_menu() -> MenuScreen:
         ),
         _run_item("reflector", "inst.reflector", "mirrorlist", base.run_reflector),
         _run_item("parallel", "inst.parallel", "pacman.conf", base.parallel_downloads),
+        _run_item("nvme-reset", "inst.nvme_reset", "nvme format", nvme.reset_namespace),
         _run_item("cfdisk", "inst.cfdisk", "", disk.run_cfdisk),
         _run_item("select", "inst.select", "boot/swap/root/home", disk.select_partitions),
         _run_item("format", "inst.format", "mkfs", disk.format_devices),
