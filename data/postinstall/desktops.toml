@@ -69,6 +69,12 @@ id = "hyprland"
   name = "waybar"
 
   [[category.packages]]
+  name = "waybar-git"
+  aur = true
+  default = false
+  note = { tr = "Waybar geliştirme sürümü — 'waybar' ile çakışır, ikisinden birini seçin", en = "Waybar development build — conflicts with 'waybar', pick one" }
+
+  [[category.packages]]
   name = "waybar-updates"
   aur = true
 
@@ -135,7 +141,8 @@ id = "hyprland"
   [[category.packages]]
   name = "ddcci-driver-linux-dkms-git"
   aur = true
-  note = { tr = "Harici monitör parlaklığı (DDC/CI)", en = "External monitor brightness (DDC/CI)" }
+  default = false
+  note = { tr = "Harici monitör parlaklığı (DDC/CI) — yalnızca harici monitör varsa", en = "External monitor brightness (DDC/CI) — only with an external monitor" }
   post_msg = "msg.reboot_required"
 
 [[category]]

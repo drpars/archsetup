@@ -62,6 +62,10 @@ id = "console"
   name = "zsh"
 
   [[category.packages]]
+  name = "lazygit"
+  note = { tr = "Git için terminal arayüzü", en = "Terminal UI for git" }
+
+  [[category.packages]]
   name = "pkgfile"
 
 [[category]]
