@@ -228,3 +228,42 @@ async def test_extras_screen_uses_chroot_installer():
         assert isinstance(app.screen, screens.PackageScreen)
         assert app.screen._install_fn is not None
         assert app.screen.query_one(SelectionList).option_count >= 20
+
+
+async def test_pick_screen_filter_stays_reachable():
+    """Filtre yazıldıktan sonra Enter seçmeli, liste odaklıyken de yazılabilmeli.
+
+    Eski davranış: clear_options() vurguyu None yapıyordu, Enter hiçbir şey
+    seçmeden odağı listeye taşıyordu ve oradan yazmak hiçbir işe yaramıyordu
+    -- kullanıcıya filtre çalışmıyormuş gibi görünüyordu.
+    """
+    from textual.widgets import Input
+
+    picked = []
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.push_screen(
+            screens.PickScreen(
+                "Test", ["Amsterdam", "Ankara", "Athens", "Istanbul"], picked.append
+            )
+        )
+        await pilot.pause()
+        option_list = app.screen.query_one(OptionList)
+
+        await pilot.press("a", "n", "k")
+        await pilot.pause()
+        assert option_list.option_count == 1
+        assert option_list.highlighted == 0  # Enter'in alacagi bir satir var
+
+        # Odak listeye kaysa bile yazmak filtreye gitmeli
+        option_list.focus()
+        await pilot.pause()
+        await pilot.press("backspace", "backspace", "backspace", "i", "s")
+        await pilot.pause()
+        assert app.screen.query_one(Input).value == "is"
+        assert app.screen.query_one(Input).has_focus
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert picked == ["Istanbul"]

@@ -449,8 +449,9 @@ def make_theme_menu() -> MenuScreen:
 class PickScreen(Screen):
     """Filterable single-choice list (keymaps, locales, timezones...).
 
-    Type to narrow the list; Enter jumps to the list (or picks the only
-    match); selecting an item pops the screen and calls on_pick(value).
+    Type to narrow the list, Enter takes the highlighted match; selecting
+    an item pops the screen and calls on_pick(value). The filter stays
+    reachable at all times — see on_key.
     """
 
     BINDINGS = [Binding("escape", "go_back", t("ui.back"))]
@@ -472,6 +473,7 @@ class PickScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one(Input).focus()
+        self._highlight_first()
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
@@ -482,33 +484,59 @@ class PickScreen(Screen):
             return self._items
         return [item for item in self._items if query in item.lower()]
 
+    def _highlight_first(self) -> None:
+        """Keep a highlighted row so Enter always has something to take.
+
+        clear_options() leaves `highlighted` as None, and with no highlight
+        Enter fell through to focusing the list instead of picking. From
+        there the filter was unreachable: the Input no longer had focus,
+        typing did nothing, and the screen looked frozen mid-search.
+        """
+        option_list = self.query_one(OptionList)
+        option_list.highlighted = 0 if option_list.option_count else None
+
     def on_input_changed(self, event: Input.Changed) -> None:
         option_list = self.query_one(OptionList)
         option_list.clear_options()
         option_list.add_options(
             [Option(item, id=item) for item in self._filtered()]
         )
+        self._highlight_first()
+
+    def _type_into_filter(self, text: str) -> None:
+        field = self.query_one(Input)
+        field.value = text
+        field.cursor_position = len(text)
+        field.focus()
 
     def on_key(self, event: events.Key) -> None:
-        """Let arrow/page keys drive the list while typing in the filter."""
-        if not self.query_one(Input).has_focus:
+        """Route keys between the filter and the list, whichever has focus."""
+        field = self.query_one(Input)
+        if field.has_focus:
+            actions = {
+                "up": "action_cursor_up",
+                "down": "action_cursor_down",
+                "pageup": "action_page_up",
+                "pagedown": "action_page_down",
+            }
+            if event.key in actions:
+                event.stop()
+                event.prevent_default()
+                getattr(self.query_one(OptionList), actions[event.key])()
             return
-        actions = {
-            "up": "action_cursor_up",
-            "down": "action_cursor_down",
-            "pageup": "action_page_up",
-            "pagedown": "action_page_down",
-        }
-        if event.key in actions:
+
+        # Focus is on the list. Typing there is meant as filtering — the
+        # alternative is a screen that silently ignores the keyboard.
+        if event.is_printable and event.character:
             event.stop()
             event.prevent_default()
-            getattr(self.query_one(OptionList), actions[event.key])()
+            self._type_into_filter(field.value + event.character)
+        elif event.key == "backspace":
+            event.stop()
+            event.prevent_default()
+            self._type_into_filter(field.value[:-1])
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        matches = self._filtered()
-        if len(matches) == 1:
-            self._pick(matches[0])
-            return
         option_list = self.query_one(OptionList)
         if option_list.highlighted is not None and option_list.option_count:
             option = option_list.get_option_at_index(option_list.highlighted)
