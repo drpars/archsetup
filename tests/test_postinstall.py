@@ -513,3 +513,38 @@ def test_waydroid_zen_vs_dkms(tmp_path, monkeypatch, fake_write):
         (tmp_path / "mp.conf").read_text()
         == "options binder_linux devices=binder,hwbinder,vndbinder\n"
     )
+
+
+# --- XDG user directories ---
+
+
+def test_xdg_dir_creates_the_folders_when_they_are_missing(tmp_path, monkeypatch, runlog):
+    """xdg-user-dir yapilandirilmamis klasor icin $HOME cevaplar.
+
+    Bu cevabi oldugu gibi kabul etmek duvar kagitlarini ~/Pictures/Wallpaper
+    yerine ~/Wallpaper icine koyuyordu -- hata yok, yanlis yer.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(dotfiles.Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(dotfiles, "run", runlog)
+    monkeypatch.setattr(dotfiles.shutil, "which", lambda name: "/usr/bin/" + name)
+
+    answers = iter([home, home / "Pictures"])  # once $HOME, guncelleme sonrasi dogru
+    monkeypatch.setattr(dotfiles, "_query_xdg", lambda name: next(answers))
+
+    assert dotfiles._xdg_dir("PICTURES", "Pictures") == home / "Pictures"
+    assert ["xdg-user-dirs-update"] in runlog.calls
+    assert (home / "Pictures").is_dir()
+
+
+def test_xdg_dir_falls_back_to_the_english_name(tmp_path, monkeypatch, runlog):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(dotfiles.Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(dotfiles, "run", runlog)
+    monkeypatch.setattr(dotfiles, "_create_xdg_dirs", lambda: False)
+    monkeypatch.setattr(dotfiles, "_query_xdg", lambda name: None)
+
+    assert dotfiles._xdg_dir("PICTURES", "Pictures") == home / "Pictures"
+    assert (home / "Pictures").is_dir()

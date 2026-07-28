@@ -77,6 +77,8 @@ desc = "Swap, core dumps and bootloader"
 
 [dotfiles]
 menu_desc = "Copy, symlink or validate (drpars/dotfiles)"
+xdg_install_q = "The XDG user directories (Pictures, Documents...) are missing. Install xdg-user-dirs and create them?"
+xdg_creating = "Creating the XDG user directories (xdg-user-dirs-update)..."
 update_repo = "Update Repository"
 update_repo_desc = "Clone into ~/.dotfiles or git pull"
 section_config = "Config Files"

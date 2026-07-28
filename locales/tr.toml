@@ -77,6 +77,8 @@ desc = "Swap, çekirdek dökümü ve önyükleyici"
 
 [dotfiles]
 menu_desc = "Kopyala, sembolik bağla veya doğrula (drpars/dotfiles)"
+xdg_install_q = "XDG kullanıcı klasörleri (Resimler, Belgeler...) yok. xdg-user-dirs kurulup oluşturulsun mu?"
+xdg_creating = "XDG kullanıcı klasörleri oluşturuluyor (xdg-user-dirs-update)..."
 update_repo = "Depoyu Güncelle"
 update_repo_desc = "~/.dotfiles içine klonla veya git pull çek"
 section_config = "Config Dosyaları"

@@ -49,11 +49,45 @@ def list_items(section: str) -> list[str]:
     return sorted(p.name for p in base.iterdir())
 
 
+def _query_xdg(name: str) -> Path | None:
+    try:
+        out = subprocess.run(
+            ["xdg-user-dir", name], capture_output=True, text=True
+        )
+    except OSError:
+        return None
+    value = out.stdout.strip()
+    return Path(value) if value else None
+
+
+def _create_xdg_dirs() -> bool:
+    if shutil.which("xdg-user-dirs-update") is None:
+        if not ask_yes(t("dotfiles.xdg_install_q")):
+            return False
+        if run(["sudo", "pacman", "-S", "--needed", "xdg-user-dirs"]) != 0:
+            return False
+    print(t("dotfiles.xdg_creating"))
+    return run(["xdg-user-dirs-update"]) == 0
+
+
 def _xdg_dir(name: str, fallback: str) -> Path:
-    out = subprocess.run(["xdg-user-dir", name], capture_output=True, text=True)
-    if out.stdout.strip():
-        return Path(out.stdout.strip())
-    return Path.home() / fallback
+    """Path of an XDG user directory, created if it is not there yet.
+
+    On a fresh install nothing has run xdg-user-dirs-update, so
+    ~/.config/user-dirs.dirs does not exist and `xdg-user-dir PICTURES`
+    answers $HOME — not an error, just "no such directory configured".
+    Taking that answer at face value dropped the wallpapers straight into
+    ~/Wallpaper, and the dotfiles backups into ~/dotfiles_yedek.
+    """
+    home = Path.home()
+    path = _query_xdg(name)
+    if path is None or path == home:
+        _create_xdg_dirs()
+        path = _query_xdg(name)
+    if path is None or path == home:
+        path = home / fallback
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _backup_dir() -> Path:
