@@ -496,3 +496,56 @@ def test_copy_network_config_requires_iwd_in_the_target(tmp_path, monkeypatch, c
     monkeypatch.setattr(chroot, "_target_has", lambda pkg: False)
     assert chroot.copy_network_config() == 1
     assert not (tmp_path / "var").exists()
+
+
+# --- ESP partition type ---
+
+
+@pytest.fixture
+def esp_env(monkeypatch, runlog):
+    """lsblk cevaplarini ve konumu sahte, sfdisk cagrisini kayitli birak."""
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(disk, "_partition_location", lambda dev: ("/dev/sda", "1"))
+    return runlog
+
+
+def _lsblk(monkeypatch, parttype, pttype="gpt"):
+    monkeypatch.setattr(
+        disk, "_lsblk_value",
+        lambda dev, column: parttype if column == "PARTTYPE" else pttype,
+    )
+
+
+def test_correct_esp_type_asks_nothing(monkeypatch, esp_env):
+    _lsblk(monkeypatch, disk.ESP_GUID)
+    monkeypatch.setattr(disk, "ask_yes", lambda q: pytest.fail("sorulmamaliydi"))
+    assert disk.ensure_esp_type("/dev/sda1") == 0
+    assert esp_env.calls == []
+
+
+def test_wrong_esp_type_is_offered_a_fix(monkeypatch, esp_env):
+    # "Linux filesystem": bicimlendirme ve baglama sorunsuz calisir, hata
+    # yalnizca bootctl calistiginda -- yani kurulumun en sonunda -- cikar.
+    _lsblk(monkeypatch, "0fc63daf-8483-4772-8e79-3d69d8477de4")
+    monkeypatch.setattr(disk, "ask_yes", lambda q: True)
+    assert disk.ensure_esp_type("/dev/sda1") == 0
+    assert ["sfdisk", "--part-type", "/dev/sda", "1", disk.ESP_GUID] in esp_env.calls
+
+
+def test_wrong_esp_type_on_mbr_uses_the_type_byte(monkeypatch, esp_env):
+    _lsblk(monkeypatch, "0x83", pttype="dos")
+    monkeypatch.setattr(disk, "ask_yes", lambda q: True)
+    assert disk.ensure_esp_type("/dev/sda1") == 0
+    assert ["sfdisk", "--part-type", "/dev/sda", "1", disk.ESP_MBR] in esp_env.calls
+
+
+def test_declined_fix_blocks_the_bootloader(monkeypatch, esp_env):
+    _lsblk(monkeypatch, "0fc63daf-8483-4772-8e79-3d69d8477de4")
+    monkeypatch.setattr(disk, "ask_yes", lambda q: False)
+    assert disk.ensure_esp_type("/dev/sda1") != 0
+    assert esp_env.calls == []
+
+    # bootctl yine de calistirilmamali: /efi dolu olsa bile reddeder.
+    state.bootdev = "/dev/sda1"
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    assert bootloaders._require_efi() is False

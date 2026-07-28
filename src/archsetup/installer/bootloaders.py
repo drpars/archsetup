@@ -57,10 +57,15 @@ def _root_cmdline() -> str | None:
 
 
 def _require_efi() -> bool:
-    if disk.is_efi():
-        return True
-    print(t("inst.efi_required"))
-    return False
+    if not disk.is_efi():
+        print(t("inst.efi_required"))
+        return False
+    # Second chance to catch a mistyped ESP: the selection step already
+    # offered the fix, but the bootloader may be installed in a later
+    # session where that step never ran.
+    if state.bootdev and disk.ensure_esp_type(state.bootdev) != 0:
+        return False
+    return True
 
 
 def install_systemd_boot() -> int:

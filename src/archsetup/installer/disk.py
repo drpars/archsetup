@@ -25,6 +25,10 @@ t = i18n.t
 
 MNT = Path("/mnt")
 
+# GPT type GUID / MBR type byte of an EFI System Partition.
+ESP_GUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+ESP_MBR = "0xef"
+
 BOOT_FS = ("fat32", "ext4", "ext3", "ext2")
 ROOT_FS = ("btrfs", "ext4", "ext3", "ext2", "xfs", "f2fs", "jfs")
 FS_PACKAGES = {
@@ -79,6 +83,53 @@ def _choose(title: str, rows: list, allow_none: bool = False) -> str | None:
         print(t("inst.invalid"))
 
 
+def _lsblk_value(dev: str, column: str) -> str:
+    out = subprocess.run(
+        ["lsblk", "-dn", "-o", column, dev], capture_output=True, text=True
+    )
+    return out.stdout.strip().lower()
+
+
+def _partition_location(dev: str) -> tuple[str, str] | None:
+    """(parent disk, partition number) — what sfdisk needs to retype it."""
+    sysfs = Path("/sys/class/block") / Path(dev).name
+    try:
+        number = (sysfs / "partition").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return f"/dev/{sysfs.resolve().parent.name}", number
+
+
+def ensure_esp_type(dev: str) -> int:
+    """Check the boot partition's type and offer to correct it.
+
+    A FAT32 partition left as "Linux filesystem" formats, mounts and takes
+    files without complaint, so nothing goes wrong until the very last
+    step: `bootctl install` validates the GPT type GUID and refuses, and
+    firmware that only scans ESP-typed partitions never finds the loader
+    even if the files are there. Catching it at selection time costs one
+    sfdisk call; catching it after pacstrap costs a reinstall.
+    """
+    ptype = _lsblk_value(dev, "PARTTYPE")
+    if ptype in (ESP_GUID, ESP_MBR):
+        return 0
+
+    print(t("inst.esp_wrong_type", dev=dev, type=ptype or "-"))
+    location = _partition_location(dev)
+    if location is None:
+        print(t("inst.esp_no_fix", dev=dev))
+        return 1
+    if not ask_yes(t("inst.esp_fix_q", dev=dev)):
+        print(t("inst.esp_left_alone"))
+        return 1
+
+    parent, number = location
+    # The type is written per partition-table format: a GUID on GPT, a
+    # single type byte on MBR.
+    wanted = ESP_MBR if _lsblk_value(dev, "PTTYPE") == "dos" else ESP_GUID
+    return run(["sfdisk", "--part-type", parent, number, wanted])
+
+
 def run_cfdisk() -> int:
     if not guard():
         return 1
@@ -117,6 +168,10 @@ def select_partitions() -> int:
         return 1
 
     state.bootdev, state.swapdev, state.rootdev, state.homedev = boot, swap, root, home
+    if boot and is_efi():
+        # Advisory: a wrong type is worth fixing now, but refusing the
+        # whole selection over it would strand anyone who knows better.
+        ensure_esp_type(boot)
     return 0
 
 
