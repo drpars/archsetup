@@ -17,6 +17,7 @@ from archsetup.core import (
     network,
     nvidia_laptop,
     sddm,
+    tasks,
     virt,
     waydroid,
 )
@@ -548,3 +549,23 @@ def test_xdg_dir_falls_back_to_the_english_name(tmp_path, monkeypatch, runlog):
 
     assert dotfiles._xdg_dir("PICTURES", "Pictures") == home / "Pictures"
     assert (home / "Pictures").is_dir()
+
+
+# --- reflector ---
+
+
+def test_reflector_backs_up_the_working_mirrorlist(tmp_path, monkeypatch, runlog):
+    mirrorlist = tmp_path / "mirrorlist"
+    mirrorlist.write_text("Server = https://example.invalid/$repo/os/$arch\n")
+    monkeypatch.setattr(tasks, "MIRRORLIST", mirrorlist)
+    monkeypatch.setattr(tasks, "run", runlog)
+    monkeypatch.setattr(tasks.shutil, "which", lambda name: "/usr/bin/reflector")
+    monkeypatch.setattr(tasks, "input", lambda prompt="": "Turkey", raising=False)
+
+    assert tasks.reflector_mirrors() == 0
+    # Kotu bir yansi listesi her pacman cagrisini durdurur, reflector'u
+    # yeniden kuracak olani dahil; calisan kopya saklanmali.
+    assert ["sudo", "cp", str(mirrorlist), f"{mirrorlist}.bak"] in runlog.calls
+    save = next(c for c in runlog.calls if c[:2] == ["sudo", "reflector"])
+    assert save[-2:] == ["--save", str(mirrorlist)]
+    assert "--country" in save and "Turkey" in save

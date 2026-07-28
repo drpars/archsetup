@@ -37,6 +37,7 @@ from .pacman import run
 t = i18n.t
 
 PACMAN_LOCK = Path("/var/lib/pacman/db.lck")
+MIRRORLIST = Path("/etc/pacman.d/mirrorlist")
 
 
 def system_update() -> int:
@@ -75,7 +76,36 @@ def edit_pacman_conf() -> int:
 
 
 def edit_mirrorlist() -> int:
-    return _edit("/etc/pacman.d/mirrorlist")
+    return _edit(str(MIRRORLIST))
+
+
+def reflector_mirrors() -> int:
+    """Rank the mirrors again with reflector.
+
+    The installer runs this once on the live ISO, but mirrors go stale:
+    a country's fastest mirror at install time can be the one timing out
+    six months later, and that shows up as pacman "hanging" rather than
+    as an error pointing at the mirrorlist.
+    """
+    if shutil.which("reflector") is None:
+        if run(["sudo", "pacman", "-S", "--needed", "reflector"]) != 0:
+            return 1
+
+    try:
+        country = input(f"{t('msg.reflector_country_q')} ").strip()
+    except EOFError:
+        country = ""
+
+    # A bad mirrorlist stops every pacman call, including the one that
+    # would reinstall reflector — so keep the working copy.
+    if MIRRORLIST.is_file():
+        run(["sudo", "cp", str(MIRRORLIST), f"{MIRRORLIST}.bak"])
+        print(t("msg.reflector_backup", path=f"{MIRRORLIST}.bak"))
+
+    args = ["--protocol", "https", "--latest", "10", "--sort", "rate"]
+    if country:
+        args += ["--country", country]
+    return run(["sudo", "reflector", "--verbose", *args, "--save", str(MIRRORLIST)])
 
 
 def _install_from_aur_git(url: str) -> int:
@@ -125,6 +155,7 @@ TASKS: tuple[Task, ...] = (
     Task("refresh-keys", "task.refresh_keys", refresh_keys),
     Task("edit-pacman-conf", "task.edit_pacman_conf", edit_pacman_conf),
     Task("edit-mirrorlist", "task.edit_mirrorlist", edit_mirrorlist),
+    Task("reflector", "task.reflector", reflector_mirrors),
     Task("install-yay", "task.install_yay", install_yay),
     Task("install-paru", "task.install_paru", install_paru),
     Task("remove-db-lock", "task.remove_db_lock", remove_db_lock),
