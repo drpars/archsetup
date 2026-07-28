@@ -92,6 +92,24 @@ iki öğe aynı `id`'yi taşırsa ikincisi birincisini sessizce ezer.
 `Include` en üstte olduğu için drop-in ana dosyayı ezer; `Host *`
 varsayılanları da en sonda kalmalıdır.
 
+**Secure Boot'ta imzalanması gereken dosya ESP'dekidir.** `bootctl install`
+`/usr/lib/systemd/boot/efi/systemd-bootx64.efi`'nin **imzasız** kopyasını
+`/efi/EFI/systemd/` ve `/efi/EFI/BOOT/` altına koyar. Yalnızca `/usr/lib`
+altındakini imzalamak `sbctl` çıktısını "signed" gösterir ama firmware
+imzasız kopyayı yükler ve makine Secure Boot'a takılır. İkisi de gerekli:
+`/usr/lib/...efi.signed` systemd yükseltmelerinde ESP'ye kopyalanan dosyadır,
+ESP'dekiler ise bu açılışta okunan dosyalardır.
+
+**`enroll-keys` yalnızca setup mode'da çalışır.** Firmware setup mode'da
+değilse PK/KEK yazılamaz; kontrol `/sys/firmware/efi/efivars/SetupMode-...`
+dosyasından yapılır (4 bayt öznitelik başlığı + değer), `efivar` binary'si
+gerekmez.
+
+**pacstrap canlı ortamın `pacman.conf`'unu kullanır.** Hedefteki depoyu
+eklemek pacstrap'e yardım etmez; `linux-g14` gibi depo dışı bir çekirdek
+için [g14] önce `/etc/pacman.conf`'a girmeli. Depo satırı anahtar
+güvenilir kılınmadan yazılırsa sonraki her `-Sy` imza hatası verir.
+
 **`authorized_keys` üretilmez, yalnızca denetlenir.** `config.local` yanlış
 üretilirse dışarı bağlanamazsınız ve makinenin başındasınız; bozuk bir
 `from=` ise içeri bağlanmayı imkânsız kılar ve fiziksel erişim gerektirir.
