@@ -26,6 +26,11 @@ DEFAULT_KEYMAP = "trq"
 DEFAULT_LOCALE = "tr_TR"
 DEFAULT_TIMEZONE = "Europe/Istanbul"
 
+# ter-v16b is unreadably small on a HiDPI panel; v22b is the comfortable
+# middle of the range. All of these ship in terminus-font.
+CONSOLE_FONTS = ("ter-v16b", "ter-v20b", "ter-v22b", "ter-v24b", "ter-v28b", "ter-v32b")
+DEFAULT_FONT = "ter-v22b"
+
 
 def chroot_run(args: list[str]) -> int:
     return run(["arch-chroot", str(MNT), *args])
@@ -63,6 +68,18 @@ def set_hostname() -> int:
     return 0
 
 
+def _pick_font() -> str:
+    default_index = CONSOLE_FONTS.index(DEFAULT_FONT) + 1
+    print(f"\n{t('inst.font_q')}")
+    for index, font in enumerate(CONSOLE_FONTS, 1):
+        print(f"  {index}) {font}")
+    raw = input(f"{t('inst.choice')} [{default_index}]: ").strip() or str(default_index)
+    if raw.isdigit() and 1 <= int(raw) <= len(CONSOLE_FONTS):
+        return CONSOLE_FONTS[int(raw) - 1]
+    print(t("inst.invalid"))
+    return DEFAULT_FONT
+
+
 def set_vconsole(keymap: str | None = None) -> int:
     if not target_ready():
         return 1
@@ -73,7 +90,7 @@ def set_vconsole(keymap: str | None = None) -> int:
         )
     lines = [f"KEYMAP={keymap}"]
     if ask_yes(t("inst.terminus_q")):
-        lines.append("FONT=ter-v16b")
+        lines.append(f"FONT={_pick_font()}")
     (MNT / "etc/vconsole.conf").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"/mnt/etc/vconsole.conf <- {' '.join(lines)}")
     return 0
