@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import os
 import subprocess
 import sys
@@ -62,19 +63,54 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _ensure_textual_live() -> bool:
-    """On the live ISO, install python-textual on first run."""
+def _import_textual() -> bool:
     try:
         import textual  # noqa: F401
 
         return True
     except ModuleNotFoundError:
-        pass
-    import subprocess
+        return False
 
-    return subprocess.call(
+
+def _ensure_textual_live() -> bool:
+    """On the live ISO, install python-textual on first run."""
+    if _import_textual():
+        return True
+    if subprocess.call(
         ["pacman", "-Sy", "--needed", "--noconfirm", "python-textual"]
-    ) == 0
+    ) != 0:
+        return False
+    importlib.invalidate_caches()
+    return _import_textual()
+
+
+def _ensure_textual(t) -> bool:
+    """Install python-textual on the running system instead of only naming it.
+
+    The dependency is one package in the official repositories, so telling
+    the user to go and install it by hand is a step nobody benefits from.
+    It still asks first: this is the one place archsetup would touch the
+    system before the user has chosen any task.
+    """
+    if _import_textual():
+        return True
+    print(t("msg.textual_missing"), file=sys.stderr)
+
+    from .core.prompt import ask_yes
+
+    if not ask_yes(t("msg.textual_install_q")):
+        return False
+    if subprocess.call(
+        ["sudo", "pacman", "-S", "--needed", "python-textual"]
+    ) != 0:
+        return False
+    # The package landed in a site-packages directory that was already on
+    # sys.path when this process started, so the import cache has to go.
+    importlib.invalidate_caches()
+    if _import_textual():
+        return True
+    print(t("msg.textual_still_missing"), file=sys.stderr)
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -120,10 +156,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return task.fn()
 
-    try:
-        import textual  # noqa: F401
-    except ModuleNotFoundError:
-        print(t("msg.textual_missing"), file=sys.stderr)
+    if not _ensure_textual(t):
         return 1
 
     from .ui.app import RESTART, ArchSetupApp

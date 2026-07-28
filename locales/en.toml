@@ -455,7 +455,9 @@ not_detected = "not detected"
 root_forbidden = "This tool must not be run as root (sudo is requested when needed)."
 installer_todo = "Live ISO (installer) mode is not ported yet; keep using the old installarch script for now."
 unknown_task = "Unknown task: {task}. List tasks with: archsetup --list"
-textual_missing = "Textual not found. Install it with: sudo pacman -S --needed python-textual"
+textual_missing = "The python-textual package the interface needs is not installed."
+textual_install_q = "Install it now? (sudo pacman -S --needed python-textual)"
+textual_still_missing = "python-textual was installed but could not be imported; restart archsetup."
 
 [nvme]
 installing = "Installing nvme-cli..."

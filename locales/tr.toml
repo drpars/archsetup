@@ -455,7 +455,9 @@ not_detected = "algılanmadı"
 root_forbidden = "Bu araç root olarak çalıştırılmamalıdır (sudo gerektiğinde sorulur)."
 installer_todo = "Canlı ISO (kurucu) modu henüz taşınmadı; şimdilik eski installarch betiğini kullanın."
 unknown_task = "Bilinmeyen görev: {task}. Görevleri listelemek için: archsetup --list"
-textual_missing = "Textual bulunamadı. Kurmak için: sudo pacman -S --needed python-textual"
+textual_missing = "Arayüz için gereken python-textual paketi kurulu değil."
+textual_install_q = "Şimdi kurulsun mu? (sudo pacman -S --needed python-textual)"
+textual_still_missing = "python-textual kuruldu ama içe aktarılamadı; archsetup'ı yeniden başlatın."
 
 [nvme]
 installing = "nvme-cli kuruluyor..."
