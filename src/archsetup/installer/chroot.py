@@ -21,6 +21,7 @@ from ..core.prompt import ask_yes
 t = i18n.t
 
 MNT = Path("/mnt")
+ESP = MNT / "efi"
 DEFAULT_KEYMAP = "trq"
 DEFAULT_LOCALE = "tr_TR"
 DEFAULT_TIMEZONE = "Europe/Istanbul"
@@ -354,29 +355,87 @@ def enable_services() -> int:
     return rc
 
 
+SETUP_MODE_VAR = Path(
+    "/sys/firmware/efi/efivars/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+)
+SDBOOT_SRC = "/usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+# What the firmware actually loads. bootctl put unsigned copies here.
+ESP_BINARIES = ("EFI/systemd/systemd-bootx64.efi", "EFI/BOOT/BOOTX64.EFI")
+
+
+def setup_mode() -> bool | None:
+    """Firmware Secure Boot setup mode; None when it cannot be read.
+
+    Read straight from efivarfs — a 4-byte attribute header followed by
+    the value — so no efivar/efitools binary is required.
+    """
+    try:
+        raw = SETUP_MODE_VAR.read_bytes()
+    except OSError:
+        return None
+    return bool(raw[4]) if len(raw) > 4 else None
+
+
 def setup_secure_boot() -> int:
-    """sbctl: create/enroll keys, sign systemd-boot and the UKI."""
+    """sbctl: create/enroll keys, sign systemd-boot and every UKI."""
     if not target_ready():
         return 1
-    if subprocess.run(
-        ["arch-chroot", str(MNT), "pacman", "-Qq", "sbctl"], capture_output=True
-    ).returncode != 0:
+    if not _target_has("sbctl"):
         print(t("inst.sbctl_missing"))
         return 1
 
+    mode = setup_mode()
+    if mode is False:
+        # enroll-keys cannot write PK/KEK outside setup mode; going on
+        # would sign files against keys the firmware will never trust.
+        print(t("inst.sb_not_setup_mode"))
+        return 1
+    if mode is None:
+        print(t("inst.sb_mode_unknown"))
+        if not ask_yes(t("inst.sb_continue_q")):
+            return 1
+
     rc = chroot_run(["sbctl", "create-keys"])
     rc |= chroot_run(["sbctl", "enroll-keys", "-m"])
-    rc |= chroot_run([
-        "sbctl", "sign", "-s",
-        "-o", "/usr/lib/systemd/boot/efi/systemd-bootx64.efi.signed",
-        "/usr/lib/systemd/boot/efi/systemd-bootx64.efi",
-    ])
-    presets = _presets()
-    if presets and (uki := default_uki_path(presets[0])):
-        rc |= chroot_run(["sbctl", "sign", "-s", uki])
+    if rc != 0:
+        print(t("inst.sb_enroll_failed"))
+        return rc
 
+    # Two different files, both needed. The one under /usr/lib is what
+    # systemd-boot-update.service copies to the ESP after a systemd
+    # upgrade, so it has to exist in signed form...
+    rc |= chroot_run(["sbctl", "sign", "-s", "-o", f"{SDBOOT_SRC}.signed", SDBOOT_SRC])
+    # ...but signing it does nothing for *this* boot: `bootctl install`
+    # already copied the unsigned binary onto the ESP. Leaving those
+    # unsigned is why an install can report "signed" and still be
+    # rejected by Secure Boot on the next boot.
+    for relative in ESP_BINARIES:
+        if (ESP / relative).is_file():
+            rc |= chroot_run(["sbctl", "sign", "-s", f"/efi/{relative}"])
+
+    signed_uki = False
+    for preset in _presets():  # every kernel, not just the first alphabetically
+        uki = default_uki_path(preset)
+        if uki and (MNT / uki.lstrip("/")).is_file():
+            rc |= chroot_run(["sbctl", "sign", "-s", uki])
+            signed_uki = True
+    if not signed_uki:
+        print(t("inst.sb_no_uki"))
+
+    if _target_has("edk2-shell"):
+        shell = ESP / "shellx64.efi"
+        if not shell.is_file():
+            shell.write_bytes(
+                (MNT / "usr/share/edk2-shell/x64/Shell.efi").read_bytes()
+            )
+        rc |= chroot_run(["sbctl", "sign", "-s", "/efi/shellx64.efi"])
+
+    # Re-sign automatically whenever mkinitcpio rebuilds a UKI.
     hook = MNT / "etc/initcpio/post/uki-sbctl"
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text("#!/usr/bin/env bash\nsbctl sign-all\n", encoding="utf-8")
     hook.chmod(0o755)
+
+    print(f"\n{t('inst.sb_verify')}")
+    chroot_run(["sbctl", "verify"])  # report only: unrelated ESP files may fail
     return rc

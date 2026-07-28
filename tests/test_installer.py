@@ -305,3 +305,65 @@ def test_g14_repo_line_withheld_when_the_key_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(base, "run", lambda cmd, **kw: 1)
     assert base._add_g14(conf, []) != 0
     assert "[g14]" not in conf.read_text()
+
+
+# --- Secure Boot -----------------------------------------------------------
+
+
+@pytest.fixture
+def sb_env(tmp_path, monkeypatch, runlog):
+    esp = tmp_path / "efi"
+    (esp / "EFI/systemd").mkdir(parents=True)
+    (esp / "EFI/systemd/systemd-bootx64.efi").write_bytes(b"MZ")
+    (esp / "EFI/BOOT").mkdir(parents=True)
+    (esp / "EFI/BOOT/BOOTX64.EFI").write_bytes(b"MZ")
+    (esp / "EFI/Linux").mkdir(parents=True)
+    (esp / "EFI/Linux/arch.efi").write_bytes(b"MZ")
+    presets = tmp_path / "etc/mkinitcpio.d"
+    presets.mkdir(parents=True)
+    (presets / "linux-zen.preset").write_text('default_uki="/efi/EFI/Linux/arch.efi"\n')
+
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "ESP", esp)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: pkg == "sbctl")
+    monkeypatch.setattr(chroot, "chroot_run", runlog)
+    return tmp_path
+
+
+def test_secure_boot_signs_what_the_firmware_loads(sb_env, monkeypatch, runlog):
+    """`bootctl install` already put *unsigned* copies on the ESP.
+
+    Signing only /usr/lib/systemd/... leaves those untouched, so the
+    install reports "signed" and the machine still fails Secure Boot.
+    """
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    assert chroot.setup_secure_boot() == 0
+
+    signed = {call[-1] for call in runlog.calls if call[:2] == ["sbctl", "sign"]}
+    assert "/efi/EFI/systemd/systemd-bootx64.efi" in signed
+    assert "/efi/EFI/BOOT/BOOTX64.EFI" in signed
+    assert "/efi/EFI/Linux/arch.efi" in signed
+    assert f"{chroot.SDBOOT_SRC}.signed" in {
+        call[call.index("-o") + 1] for call in runlog.calls if "-o" in call
+    }
+    hook = sb_env / "etc/initcpio/post/uki-sbctl"
+    assert hook.stat().st_mode & 0o111
+
+
+def test_secure_boot_refuses_outside_setup_mode(sb_env, monkeypatch, runlog):
+    """enroll-keys cannot write PK/KEK; signing against them would be a lie."""
+    monkeypatch.setattr(chroot, "setup_mode", lambda: False)
+    assert chroot.setup_secure_boot() == 1
+    assert runlog.calls == []
+
+
+def test_setup_mode_reads_efivarfs_past_the_attribute_header(tmp_path, monkeypatch):
+    var = tmp_path / "SetupMode"
+    var.write_bytes(b"\x06\x00\x00\x00\x01")
+    monkeypatch.setattr(chroot, "SETUP_MODE_VAR", var)
+    assert chroot.setup_mode() is True
+    var.write_bytes(b"\x06\x00\x00\x00\x00")
+    assert chroot.setup_mode() is False
+    monkeypatch.setattr(chroot, "SETUP_MODE_VAR", tmp_path / "absent")
+    assert chroot.setup_mode() is None
