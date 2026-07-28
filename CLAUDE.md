@@ -116,6 +116,30 @@ eklemek pacstrap'e yardım etmez; `linux-g14` gibi depo dışı bir çekirdek
 için [g14] önce `/etc/pacman.conf`'a girmeli. Depo satırı anahtar
 güvenilir kılınmadan yazılırsa sonraki her `-Sy` imza hatası verir.
 
+**`xdg-user-dir` yapılandırılmamış klasör için `$HOME` döner.** Hata
+vermez, boş da dönmez. Bu cevabı olduğu gibi kullanmak duvar kağıtlarını
+`~/Pictures/Wallpaper` yerine `~/Wallpaper`'a, dotfile yedeklerini de
+`~/dotfiles_yedek`'e koyar. Yeni kurulumda `~/.config/user-dirs.dirs` hiç
+yoktur; önce `xdg-user-dirs-update` çalışmalı.
+
+**EFI bölümünün tipi de doğru olmalı, yalnızca dosya sistemi değil.**
+"Linux filesystem" tipli bir FAT32 bölümü `mkfs`, `mount` ve `cp` için
+kusursuz görünür; `bootctl` GPT tip GUID'ini doğrular ve reddeder, bazı
+firmware'ler de yalnızca ESP tipli bölümleri tarar. Hata kurulumun en
+sonunda çıkar. Düzeltmesi veri kaybı olmadan: `sfdisk --part-type`.
+
+**kmscon sistem klavyesini okumaz.** `xkb-layout` kendi dosyasına
+yazılmazsa libxkbcommon `us` düzenine düşer; `localectl set-x11-keymap`
+X11 varsayılanını yazar, kmscon oraya hiç bakmaz. Ayrıca AUR'daki paket
+adı **kmscon-git**; düz `kmscon` kaldırıldı. Bilinmeyen bir yapılandırma
+anahtarı (örneğin artık var olmayan `font-dpi`) ölümcül değildir ama her
+açılışta hata kaydı düşer — seçenek adları `src/config.c`'den doğrulanır.
+
+**`OptionList.clear_options()` vurguyu (`highlighted`) `None` yapar.**
+Filtreledikten sonra yeniden 0'a çekilmezse Enter hiçbir şey seçmez,
+odağı listeye taşır; oradan yazılan harfler hiçbir yere gitmediği için
+ekran donmuş gibi görünür.
+
 **`authorized_keys` üretilmez, yalnızca denetlenir.** `config.local` yanlış
 üretilirse dışarı bağlanamazsınız ve makinenin başındasınız; bozuk bir
 `from=` ise içeri bağlanmayı imkânsız kılar ve fiziksel erişim gerektirir.
