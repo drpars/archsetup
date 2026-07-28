@@ -130,6 +130,7 @@ def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(kmscon, "run", runlog)
     monkeypatch.setattr(kmscon, "_ask_tty", lambda: 4)
     monkeypatch.setattr(kmscon, "_ask_size", lambda: 18)
+    monkeypatch.setattr(kmscon, "_ask_layout", lambda default: default)
     monkeypatch.setattr(kmscon, "_font", lambda: kmscon.FONT)
     monkeypatch.setattr(
         kmscon.pacman, "install", lambda repo, aur: installed.append((repo, aur)) or 0
@@ -598,3 +599,64 @@ def test_reflector_backs_up_the_working_mirrorlist(tmp_path, monkeypatch, runlog
     save = next(c for c in runlog.calls if c[:2] == ["sudo", "reflector"])
     assert save[-2:] == ["--save", str(mirrorlist)]
     assert "--country" in save and "Turkey" in save
+
+
+def test_kmscon_layout_choice_drops_a_foreign_variant(tmp_path, monkeypatch, fake_write, runlog):
+    """Duzen degistirilirse varyant tasinmamali.
+
+    Varyant yazildigi duzene aittir; "tr" icin gecerli bir varyanti "us"
+    ile birlestirmek keymap derlemesini dusurur ve kmscon sessizce
+    varsayilan sistem klavyesine doner.
+    """
+    vconsole = tmp_path / "vconsole.conf"
+    vconsole.write_text("XKBLAYOUT=tr\nXKBMODEL=pc105\nXKBVARIANT=f\n")
+    conf = tmp_path / "kmscon" / "kmscon.conf"
+    monkeypatch.setattr(kmscon, "VCONSOLE", vconsole)
+    monkeypatch.setattr(kmscon, "CONFIG", conf)
+    monkeypatch.setattr(kmscon, "sudo_write", fake_write)
+    monkeypatch.setattr(kmscon, "run", runlog)
+    monkeypatch.setattr(kmscon, "_ask_tty", lambda: 5)
+    monkeypatch.setattr(kmscon, "_ask_size", lambda: 16)
+    monkeypatch.setattr(kmscon, "_font", lambda: kmscon.FONT)
+    monkeypatch.setattr(kmscon, "_ask_layout", lambda default: "us")
+    monkeypatch.setattr(kmscon.pacman, "install", lambda repo, aur: 0)
+    monkeypatch.setattr(kmscon.services, "disable", lambda n: 0)
+    monkeypatch.setattr(kmscon.services, "enable", lambda n: 0)
+
+    assert kmscon.install() == 0
+    text = conf.read_text()
+    assert "xkb-layout=us" in text
+    assert "xkb-variant" not in text
+
+
+def test_aur_install_bootstraps_a_helper(monkeypatch, runlog):
+    """AUR paketi isteyen ilk gorev, yardimci yokken cuvallamamali.
+
+    yay'in kendisi de AUR'da oldugu icin "once Sistem Guncelleme'den
+    kurun" demek sorunu bir adim oteye tasiyordu.
+    """
+    from archsetup.core import pacman
+
+    helpers = iter([None, "yay"])  # once yok, yay-bin kurulduktan sonra var
+    monkeypatch.setattr(pacman, "detect_aur_helper", lambda: next(helpers))
+    monkeypatch.setattr(pacman, "run", runlog)
+    monkeypatch.setattr(pacman, "install_from_aur_git", lambda url: runlog(["makepkg", url]))
+    # ensure_aur_helper() ask_yes'i cagri aninda ice aktariyor, modulu yamalamak yeter.
+    import archsetup.core.prompt as prompt_mod
+    monkeypatch.setattr(prompt_mod, "ask_yes", lambda q: True)
+
+    assert pacman.install([], ["kmscon-git"]) == 0
+    assert ["makepkg", pacman.YAY_BIN] in runlog.calls
+    assert ["yay", "-S", "--needed", "kmscon-git"] in runlog.calls
+
+
+def test_aur_install_fails_cleanly_when_declined(monkeypatch, runlog):
+    from archsetup.core import pacman
+    import archsetup.core.prompt as prompt_mod
+
+    monkeypatch.setattr(pacman, "detect_aur_helper", lambda: None)
+    monkeypatch.setattr(pacman, "run", runlog)
+    monkeypatch.setattr(prompt_mod, "ask_yes", lambda q: False)
+
+    assert pacman.install([], ["kmscon-git"]) != 0
+    assert runlog.calls == []

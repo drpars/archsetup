@@ -106,6 +106,7 @@ size_q = "Font size (points)"
 font_missing = "{font} is not installed; without it the glyphs render as boxes."
 font_install_q = "Install the {pkg} package?"
 keyboard = "Keyboard taken from /etc/vconsole.conf: {layout} ({model})"
+layout_q = "XKB keyboard layout (tr, us, ...)"
 done = "KMSCON configured for tty{tty}. Try it with Ctrl+Alt+F{tty}"
 
 [asus]
@@ -457,7 +458,8 @@ plugdev_hint = "For OpenRazer, add your user to the plugdev group: sudo gpasswd 
 virt_config_hint = "After installing, run 'Virt-Manager Configuration' in the Configuration menu."
 waydroid_hint = "For the binder module, run 'Waydroid Binder Setup' in the Configuration menu."
 file_missing = "File not found: {path}"
-aur_missing = "No AUR helper (yay/paru) found. Install one from the System Update menu first."
+aur_missing = "No AUR helper (yay/paru) is installed; AUR packages cannot be built without one."
+aur_install_q = "Build and install yay-bin from the AUR now?"
 detected = "detected"
 not_detected = "not detected"
 root_forbidden = "This tool must not be run as root (sudo is requested when needed)."

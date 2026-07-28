@@ -135,7 +135,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-139 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+142 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -170,7 +170,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (139 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (142 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [x] NVMe ad alanı sıfırlama (`nvme format`, kriptografik/kullanıcı verisi
       silme), bağlı aygıt reddi ve aygıt yolunu yazdırarak onay
 - [x] Kurucuda kablosuz ağ: `wl*` için networkd dosyası ve iwd'nin yalnızca

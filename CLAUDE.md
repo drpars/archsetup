@@ -144,3 +144,8 @@ ekran donmuş gibi görünür.
 üretilirse dışarı bağlanamazsınız ve makinenin başındasınız; bozuk bir
 `from=` ise içeri bağlanmayı imkânsız kılar ve fiziksel erişim gerektirir.
 İki dosyanın hata maliyeti eşit değil.
+
+**AUR yardımcısının kendisi de AUR'da.** `pacman.install()` bir AUR
+paketi istendiğinde yardımcı yoksa artık `yay-bin`'i klonlayıp kurmayı
+öneriyor; "önce Sistem Güncelleme'den kurun" demek sorunu bir adım öteye
+taşıyordu ve 2. aşamanın başında çalıştırılan ilk görevi çuvallatıyordu.

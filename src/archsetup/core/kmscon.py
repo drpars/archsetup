@@ -84,6 +84,14 @@ def _ask_size() -> int:
     return int(raw) if raw.isdigit() and 6 <= int(raw) <= 48 else DEFAULT_SIZE
 
 
+def _ask_layout(default: str) -> str:
+    try:
+        raw = input(f"{t('kmscon.layout_q')} [{default}]: ").strip()
+    except EOFError:
+        return default
+    return raw or default
+
+
 def keyboard() -> dict[str, str]:
     """XKB layout/model/variant from /etc/vconsole.conf.
 
@@ -154,6 +162,14 @@ def install() -> int:
 
     keys = keyboard()
     print(t("kmscon.keyboard", layout=keys["xkb-layout"], model=keys["xkb-model"]))
+
+    chosen = _ask_layout(keys["xkb-layout"])
+    if chosen != keys["xkb-layout"]:
+        # A variant belongs to the layout it was written for; carrying
+        # "nodeadkeys" over to another layout can fail to compile, and
+        # kmscon then silently reverts to the default system keymap.
+        keys["xkb-layout"], keys["xkb-variant"] = chosen, ""
+
     content = build_config(_ask_size(), _font(), keys)
 
     rc = run(["sudo", "mkdir", "-p", str(CONFIG.parent)])

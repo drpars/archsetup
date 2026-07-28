@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
 
 from . import i18n
 
 t = i18n.t
 
 AUR_HELPERS = ("yay", "paru")
+YAY_BIN = "https://aur.archlinux.org/yay-bin.git"
 
 
 def detect_aur_helper() -> str | None:
@@ -37,14 +39,46 @@ def is_installed(pkg: str) -> bool:
     ).returncode == 0
 
 
+def install_from_aur_git(url: str) -> int:
+    """Clone an AUR package and makepkg -si it, with no helper involved."""
+    with tempfile.TemporaryDirectory(prefix="archsetup-") as tmp:
+        build_dir = f"{tmp}/build"
+        rc = run(["git", "clone", url, build_dir])
+        if rc != 0:
+            return rc
+        return run(["makepkg", "-si"], cwd=build_dir)
+
+
+def ensure_aur_helper() -> str | None:
+    """Return an AUR helper, offering to bootstrap one if there is none.
+
+    On a fresh system the first task someone runs may well need an AUR
+    package, and yay itself comes from the AUR -- so pointing at the
+    System Update menu and failing just moved the problem. yay-bin is
+    prebuilt, so this costs a clone and a package install rather than a
+    Go toolchain and a compile.
+    """
+    helper = detect_aur_helper()
+    if helper is not None:
+        return helper
+
+    from .prompt import ask_yes
+
+    print(t("msg.aur_missing"))
+    if not ask_yes(t("msg.aur_install_q")):
+        return None
+    if install_from_aur_git(YAY_BIN) != 0:
+        return None
+    return detect_aur_helper()
+
+
 def install(repo_pkgs: list[str], aur_pkgs: list[str]) -> int:
     rc = 0
     if repo_pkgs:
         rc |= run(["sudo", "pacman", "-S", "--needed", *repo_pkgs])
     if aur_pkgs:
-        helper = detect_aur_helper()
+        helper = ensure_aur_helper()
         if helper is None:
-            print(f"\033[1;31m{t('msg.aur_missing')}\033[0m")
             rc |= 1
         else:
             rc |= run([helper, "-S", "--needed", *aur_pkgs])

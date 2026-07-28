@@ -106,6 +106,7 @@ size_q = "Yazı tipi boyutu (punto)"
 font_missing = "{font} kurulu değil; yoksa simgeler kutu olarak görünür."
 font_install_q = "{pkg} paketi kurulsun mu?"
 keyboard = "Klavye /etc/vconsole.conf dosyasından alındı: {layout} ({model})"
+layout_q = "XKB klavye düzeni (tr, us, ...)"
 done = "KMSCON tty{tty} için yapılandırıldı. Denemek için: Ctrl+Alt+F{tty}"
 
 [asus]
@@ -457,7 +458,8 @@ plugdev_hint = "OpenRazer için kullanıcıyı plugdev grubuna ekleyin: sudo gpa
 virt_config_hint = "Kurulumdan sonra Yapılandırma menüsündeki 'Virt-Manager Yapılandırması' görevini çalıştırın."
 waydroid_hint = "Binder modülü için Yapılandırma menüsündeki 'Waydroid Binder Kurulumu' görevini çalıştırın."
 file_missing = "Dosya bulunamadı: {path}"
-aur_missing = "AUR yardımcısı (yay/paru) bulunamadı. Önce Sistem Güncelleme menüsünden kurun."
+aur_missing = "AUR yardımcısı (yay/paru) kurulu değil; AUR paketleri onsuz kurulamaz."
+aur_install_q = "yay-bin şimdi AUR'dan derlenip kurulsun mu?"
 detected = "algılandı"
 not_detected = "algılanmadı"
 root_forbidden = "Bu araç root olarak çalıştırılmamalıdır (sudo gerektiğinde sorulur)."

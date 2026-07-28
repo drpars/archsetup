@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -108,21 +107,12 @@ def reflector_mirrors() -> int:
     return run(["sudo", "reflector", "--verbose", *args, "--save", str(MIRRORLIST)])
 
 
-def _install_from_aur_git(url: str) -> int:
-    with tempfile.TemporaryDirectory(prefix="archsetup-") as tmp:
-        build_dir = f"{tmp}/build"
-        rc = run(["git", "clone", url, build_dir])
-        if rc != 0:
-            return rc
-        return run(["makepkg", "-si"], cwd=build_dir)
-
-
 def install_yay() -> int:
-    return _install_from_aur_git("https://aur.archlinux.org/yay-bin.git")
+    return pacman.install_from_aur_git(pacman.YAY_BIN)
 
 
 def install_paru() -> int:
-    return _install_from_aur_git("https://aur.archlinux.org/paru-bin.git")
+    return pacman.install_from_aur_git("https://aur.archlinux.org/paru-bin.git")
 
 
 def bat_cache() -> int:
