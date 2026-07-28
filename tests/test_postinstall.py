@@ -361,7 +361,7 @@ def test_iwd_set_option_replaces_existing_key():
         "[Network]\n"
         "NameResolvingService=systemd\n"
     )
-    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+    out = iwd.set_option(text, "General", "EnableNetworkConfiguration", "false")
 
     assert "EnableNetworkConfiguration = false" in out
     assert "true" not in out
@@ -371,7 +371,7 @@ def test_iwd_set_option_replaces_existing_key():
 
 def test_iwd_set_option_inserts_under_existing_section():
     text = "# elle yazilmis\n[General]\nUseDefaultInterface=true\n"
-    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+    out = iwd.set_option(text, "General", "EnableNetworkConfiguration", "false")
 
     lines = out.splitlines()
     assert lines[0] == "# elle yazilmis"  # yorum korunur
@@ -394,7 +394,7 @@ def test_iwd_set_option_ignores_the_key_in_another_section():
         "[General]\n"
         "AddressRandomization=once\n"
     )
-    out = iwd._set_option(text, "General", "EnableNetworkConfiguration", "false")
+    out = iwd.set_option(text, "General", "EnableNetworkConfiguration", "false")
 
     lines = out.splitlines()
     assert lines[1] == "EnableNetworkConfiguration=true"  # [Network] dokunulmaz
@@ -403,7 +403,7 @@ def test_iwd_set_option_ignores_the_key_in_another_section():
 
 
 def test_iwd_set_option_appends_missing_section():
-    out = iwd._set_option("", "General", "EnableNetworkConfiguration", "false")
+    out = iwd.set_option("", "General", "EnableNetworkConfiguration", "false")
     assert out == "[General]\nEnableNetworkConfiguration = false\n"
 
 

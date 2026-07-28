@@ -41,7 +41,7 @@ VALUE = "false"
 MANAGERS = ("systemd-networkd", "NetworkManager")
 
 
-def _set_option(text: str, section: str, key: str, value: str) -> str:
+def set_option(text: str, section: str, key: str, value: str) -> str:
     """Set key=value under section, preserving comments and every other line.
 
     A rewrite from a template would be simpler, but main.conf is a file the
@@ -91,7 +91,7 @@ def configure() -> int:
             return 0
 
     text = MAIN_CONF.read_text(encoding="utf-8") if MAIN_CONF.is_file() else ""
-    updated = _set_option(text, SECTION, KEY, VALUE)
+    updated = set_option(text, SECTION, KEY, VALUE)
     if updated == text:
         print(t("iwd.already"))
         return 0

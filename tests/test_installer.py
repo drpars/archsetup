@@ -419,3 +419,80 @@ def test_nvme_reset_refuses_a_namespace_in_use(nvme_env, monkeypatch, tmp_path):
     _feed(monkeypatch, nvme, ["1"])
     assert nvme.reset_namespace() == 1
     assert nvme_env.calls == []
+
+
+# --- wireless: addressing and credentials ----------------------------------
+
+
+@pytest.fixture
+def services_env(tmp_path, monkeypatch, runlog):
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "usr").mkdir()
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "run", runlog)
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: True)
+    return tmp_path
+
+
+def test_wireless_gets_an_address_too(services_env, monkeypatch):
+    """iwd associates but does not address the link.
+
+    EnableNetworkConfiguration defaults to off, so enabling iwd while
+    writing a .network file for `en*` only left a laptop authenticated
+    with no IP at all.
+    """
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: pkg == "iwd")
+    assert chroot.enable_services() == 0
+
+    wireless = services_env / "etc/systemd/network/20-wireless.network"
+    assert "Name=wl*" in wireless.read_text()
+    assert "DHCP=yes" in wireless.read_text()
+    # Wired must win when both links are up.
+    wired = (services_env / "etc/systemd/network/20-wired.network").read_text()
+    assert "RouteMetric=100" in wired and "RouteMetric=600" in wireless.read_text()
+
+    # networkd owns addressing, so iwd must be pinned to authentication only.
+    main_conf = (services_env / "etc/iwd/main.conf").read_text()
+    assert "EnableNetworkConfiguration = false" in main_conf
+    assert "[General]" in main_conf
+
+
+def test_no_iwd_config_written_without_iwd(services_env, monkeypatch):
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: False)
+    assert chroot.enable_services() == 0
+    assert not (services_env / "etc/iwd/main.conf").exists()
+    assert not (services_env / "etc/systemd/network/20-wireless.network").exists()
+
+
+def test_copy_network_config_carries_profiles_with_tight_permissions(
+    tmp_path, monkeypatch
+):
+    live = tmp_path / "live-iwd"
+    live.mkdir()
+    (live / "HomeNet.psk").write_text("[Security]\nPassphrase=hunter2\n")
+    (live / "Open.open").write_text("[Settings]\n")
+    target_root = tmp_path / "mnt"
+    (target_root / "etc").mkdir(parents=True)
+    (target_root / "usr").mkdir()
+
+    monkeypatch.setattr(chroot, "MNT", target_root)
+    monkeypatch.setattr(chroot, "IWD_STATE", live)
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: True)
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: True)
+
+    assert chroot.copy_network_config() == 0
+    copied = target_root / "var/lib/iwd/HomeNet.psk"
+    assert copied.read_text() == "[Security]\nPassphrase=hunter2\n"
+    # The file holds the passphrase.
+    assert copied.stat().st_mode & 0o777 == 0o600
+    assert copied.parent.stat().st_mode & 0o777 == 0o700
+    assert (target_root / "var/lib/iwd/Open.open").exists()
+
+
+def test_copy_network_config_requires_iwd_in_the_target(tmp_path, monkeypatch, capsys):
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "usr").mkdir()
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: False)
+    assert chroot.copy_network_config() == 1
+    assert not (tmp_path / "var").exists()

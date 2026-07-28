@@ -625,6 +625,8 @@ def make_target_menu() -> MenuScreen:
         _run_item("watchdog", "inst.watchdog", "nowatchdog / iTCO_wdt", chroot.disable_watchdog),
         _run_item("services", "inst.services", "sshd, ağ, bluetooth (systemctl --root)",
                   chroot.enable_services),
+        _run_item("net-copy", "inst.net_copy", "/var/lib/iwd -> /mnt",
+                  chroot.copy_network_config),
         _run_item("edit-fstab", "inst.edit_fstab", "/mnt/etc/fstab",
                   lambda: chroot.edit_file("/mnt/etc/fstab")),
         _run_item("edit-mkinitcpio", "inst.edit_mkinitcpio", "/mnt/etc/mkinitcpio.conf",

@@ -92,6 +92,12 @@ iki öğe aynı `id`'yi taşırsa ikincisi birincisini sessizce ezer.
 `Include` en üstte olduğu için drop-in ana dosyayı ezer; `Host *`
 varsayılanları da en sonda kalmalıdır.
 
+**iwd bağlanır ama adres vermez.** `EnableNetworkConfiguration`
+varsayılanı `false`; iwd'yi etkinleştirip yalnızca `en*` için `.network`
+dosyası yazmak, kablosuzu "bağlı ama IP'siz" bırakır. `wl*` için de dosya
+gerekir. İkisinin birden adres vermesi ise ayrı bir hata — `core/iwd.py`
+tam olarak onu geri almak için var.
+
 **Secure Boot'ta imzalanması gereken dosya ESP'dekidir.** `bootctl install`
 `/usr/lib/systemd/boot/efi/systemd-bootx64.efi`'nin **imzasız** kopyasını
 `/efi/EFI/systemd/` ve `/efi/EFI/BOOT/` altına koyar. Yalnızca `/usr/lib`

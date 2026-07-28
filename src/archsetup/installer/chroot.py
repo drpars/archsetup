@@ -319,12 +319,44 @@ def disable_watchdog() -> int:
     return 0
 
 
+# RouteMetric keeps wired ahead of wireless when both links are up.
+# MulticastDNS is deliberately absent: the post-install network sharing
+# task runs Avahi, and resolved's own mDNS responder fights it for 5353.
 WIRED_NETWORK_CONF = """[Match]
 Name=en*
+Name=eth*
+
+[Link]
+RequiredForOnline=routable
 
 [Network]
 DHCP=yes
+
+[DHCPv4]
+RouteMetric=100
+
+[IPv6AcceptRA]
+RouteMetric=100
 """
+
+WIRELESS_NETWORK_CONF = """[Match]
+Name=wl*
+
+[Link]
+RequiredForOnline=routable
+
+[Network]
+DHCP=yes
+
+[DHCPv4]
+RouteMetric=600
+
+[IPv6AcceptRA]
+RouteMetric=600
+"""
+
+IWD_STATE = Path("/var/lib/iwd")
+IWD_PROFILE_GLOBS = ("*.psk", "*.open", "*.8021x")
 
 SERVICE_OWNERS = (
     ("openssh", "sshd"),
@@ -341,11 +373,35 @@ def _target_has(pkg: str) -> bool:
     ).returncode == 0
 
 
-def enable_services() -> int:
-    """Enable services for installed packages + wired DHCP via networkd.
+def _pin_iwd_to_authentication_only() -> None:
+    """Write EnableNetworkConfiguration=false into the target's iwd config.
 
-    iwd only manages wireless interfaces; without this step a wired
-    machine (or a QEMU guest with a virtio NIC) boots with no network.
+    Letting iwd and systemd-networkd both configure the link is the
+    conflict core/iwd.py exists to undo: resolved refuses DNS changes
+    from a second party once the link is managed, and every association
+    logs LinkBusy while Wi-Fi keeps half-working. installarch shipped
+    exactly that combination (EnableNetworkConfiguration=true *and*
+    networkd .network files); the corrected split goes in from the start
+    here, so the post-install task has nothing left to fix.
+    """
+    from ..core import iwd
+
+    conf = MNT / "etc/iwd/main.conf"
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    text = conf.read_text(encoding="utf-8") if conf.is_file() else ""
+    conf.write_text(
+        iwd.set_option(text, iwd.SECTION, iwd.KEY, iwd.VALUE), encoding="utf-8"
+    )
+    print(f"{conf} <- {iwd.KEY} = {iwd.VALUE}")
+
+
+def enable_services() -> int:
+    """Enable services for installed packages + DHCP via systemd-networkd.
+
+    Wireless needs as much care here as wired. iwd associates but does
+    not address the link unless EnableNetworkConfiguration is on, and
+    its default is off — so enabling iwd and writing a .network file for
+    `en*` only left a laptop authenticated with no IP address at all.
     systemd-networkd needs no extra package, so it is offered whenever
     NetworkManager is absent.
     """
@@ -363,13 +419,61 @@ def enable_services() -> int:
         (network_dir / "20-wired.network").write_text(
             WIRED_NETWORK_CONF, encoding="utf-8"
         )
+        print(f"{network_dir / '20-wired.network'} <- DHCP (en*, eth*)")
+
+        if _target_has("iwd"):
+            (network_dir / "20-wireless.network").write_text(
+                WIRELESS_NETWORK_CONF, encoding="utf-8"
+            )
+            print(f"{network_dir / '20-wireless.network'} <- DHCP (wl*)")
+            _pin_iwd_to_authentication_only()
+
         rc |= run(["systemctl", "--root", str(MNT), "enable",
                    "systemd-networkd", "systemd-resolved"])
         resolv = MNT / "etc/resolv.conf"
         resolv.unlink(missing_ok=True)
         resolv.symlink_to("../run/systemd/resolve/stub-resolv.conf")
-        print(f"{network_dir / '20-wired.network'} <- DHCP (en*)")
     return rc
+
+
+def copy_network_config() -> int:
+    """Carry the live environment's saved Wi-Fi networks into the target.
+
+    Connecting once with iwctl in the ISO is then enough: the installed
+    system boots onto the same network instead of needing a cable or a
+    second `iwctl station connect`. The profile files hold the network
+    passphrase, so they are copied 0600 into a 0700 directory and their
+    contents are never printed — only the network names.
+    """
+    if not target_ready():
+        return 1
+    if not _target_has("iwd"):
+        print(t("inst.net_no_iwd"))
+        return 1
+
+    profiles = sorted(
+        path for pattern in IWD_PROFILE_GLOBS for path in IWD_STATE.glob(pattern)
+    )
+    if not profiles:
+        print(t("inst.net_no_profiles", path=IWD_STATE))
+        return 0
+
+    print(t("inst.net_found"))
+    for path in profiles:
+        print(f"  {path.stem}")
+    if not ask_yes(t("inst.net_copy_q")):
+        print(t("msg.cancelled"))
+        return 0
+
+    target = MNT / "var/lib/iwd"
+    target.mkdir(parents=True, exist_ok=True)
+    target.chmod(0o700)
+    for path in profiles:
+        destination = target / path.name
+        destination.write_bytes(path.read_bytes())
+        destination.chmod(0o600)  # holds the network passphrase
+    print(t("inst.net_copied", count=len(profiles), path=target))
+    return 0
 
 
 SETUP_MODE_VAR = Path(
