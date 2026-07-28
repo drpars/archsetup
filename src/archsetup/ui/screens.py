@@ -375,6 +375,7 @@ def make_ssh_menu() -> MenuScreen:
 # Dördü de aynı şeyi yapar -- bir görev grubunu kendi başlığıyla göstermek --
 # bu yüzden dört ayrı fonksiyon yerine tek üretici kullanılıyor.
 CONFIG_SUBMENUS = (
+    ("agents", "menu.agents"),
     ("network", "menu.network"),
     ("appearance", "menu.appearance"),
     ("virt", "menu.virt"),

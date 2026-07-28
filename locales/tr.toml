@@ -59,6 +59,10 @@ title = "Dotfile Yönetimi"
 title = "SSH Yönetimi"
 desc = "Sunucu sertleştirme, makineye özel anahtar ve agent"
 
+[menu.agents]
+title = "Kodlama Ajanları"
+desc = "Terminal kodlama ajanları (Claude Code, Codewhale)"
+
 [menu.network]
 title = "Ağ"
 desc = "Dosya paylaşımı ve kablosuz adresleme"
@@ -108,6 +112,18 @@ font_install_q = "{pkg} paketi kurulsun mu?"
 keyboard = "Klavye /etc/vconsole.conf dosyasından alındı: {layout} ({model})"
 layout_q = "XKB klavye düzeni (tr, us, ...)"
 done = "KMSCON tty{tty} için yapılandırıldı. Denemek için: Ctrl+Alt+F{tty}"
+
+[agents]
+no_curl = "curl kurulu değil; kurucu betikler indirilemiyor."
+already = "{name} zaten kurulu: {path}"
+update_q = "{name} en son sürüme güncellensin mi?"
+installing = "{name} kuruluyor — kaynak: {url}"
+download_failed = "Kurucu betik indirilemedi: {url}"
+download_empty = "Kurucu betik boş geldi: {url}"
+not_where_expected = "Kurulum bitti ama {path} bulunamadı; projenin kurulum belgelerine bakın."
+shadowed = "DİKKAT: PATH'te önce {old} geliyor; yeni sürüm ({new}) gölgede kalır. Eski kopyayı kaldırın."
+path_missing = "{path} PATH'te değil; kabuk yapılandırmanıza ekleyin."
+done = "{name} hazır. Çalıştırmak için: {command}"
 
 [asus]
 g14_found = "[g14] deposu bulundu: ASUS paketleri resmi depodan kurulacak."
@@ -299,6 +315,10 @@ ssh_harden = "SSH Sunucusunu Sertleştir"
 ssh_harden_desc = "Yalnızca anahtarla giriş, root kapalı; drop-in yaz ve doğrula"
 ssh_identity = "SSH Kimliği ve Agent"
 ssh_identity_desc = "Makineye özel GitHub anahtarı, config.local ve ssh-agent"
+claude_code = "Claude Code"
+claude_code_desc = "Resmi kurucu betiği (claude.ai/install.sh) — ~/.local/bin"
+codewhale = "Codewhale"
+codewhale_desc = "Resmi kurucu betiği (codewhale.net/install.sh) — ~/.local/bin"
 ssh_rotate = "SSH Anahtarını Yenile"
 ssh_rotate_desc = "Kayıp/sızıntı: eskisini arşivle, yenisini üret, silinecek parmak izini yaz"
 

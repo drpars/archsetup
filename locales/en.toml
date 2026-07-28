@@ -59,6 +59,10 @@ title = "Dotfiles Management"
 title = "SSH Management"
 desc = "Server hardening, per-machine key and agent"
 
+[menu.agents]
+title = "Coding Agents"
+desc = "Terminal coding agents (Claude Code, Codewhale)"
+
 [menu.network]
 title = "Network"
 desc = "File sharing and wireless addressing"
@@ -108,6 +112,18 @@ font_install_q = "Install the {pkg} package?"
 keyboard = "Keyboard taken from /etc/vconsole.conf: {layout} ({model})"
 layout_q = "XKB keyboard layout (tr, us, ...)"
 done = "KMSCON configured for tty{tty}. Try it with Ctrl+Alt+F{tty}"
+
+[agents]
+no_curl = "curl is not installed; the installer scripts cannot be downloaded."
+already = "{name} is already installed: {path}"
+update_q = "Update {name} to the latest release?"
+installing = "Installing {name} from {url}"
+download_failed = "Could not download the installer script: {url}"
+download_empty = "The installer script came back empty: {url}"
+not_where_expected = "The install finished but {path} is missing; check the project's setup docs."
+shadowed = "WARNING: {old} comes first on PATH, so the new build ({new}) stays shadowed. Remove the old copy."
+path_missing = "{path} is not on PATH; add it in your shell configuration."
+done = "{name} is ready. Run it with: {command}"
 
 [asus]
 g14_found = "[g14] repository found: ASUS packages will be installed from it."
@@ -299,6 +315,10 @@ ssh_harden = "Harden SSH Server"
 ssh_harden_desc = "Key-only login, root disabled; write and validate the drop-in"
 ssh_identity = "SSH Identity and Agent"
 ssh_identity_desc = "Per-machine GitHub key, config.local and ssh-agent"
+claude_code = "Claude Code"
+claude_code_desc = "Official installer script (claude.ai/install.sh) — ~/.local/bin"
+codewhale = "Codewhale"
+codewhale_desc = "Official installer script (codewhale.net/install.sh) — ~/.local/bin"
 ssh_rotate = "Rotate SSH Key"
 ssh_rotate_desc = "Loss/leak: archive the old key, generate a new one, print what to remove"
 

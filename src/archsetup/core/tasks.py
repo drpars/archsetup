@@ -16,6 +16,7 @@ from . import (
     asus,
     audio_dsp,
     bootloader,
+    coding_agents,
     coredump,
     dotfiles,
     gpuconfig,
@@ -236,6 +237,18 @@ TASKS: tuple[Task, ...] = (
     Task("ssh-harden", "task.ssh_harden", ssh.harden, group="ssh"),
     Task("ssh-identity", "task.ssh_identity", ssh.identity, group="ssh"),
     Task("ssh-rotate", "task.ssh_rotate", ssh.rotate, group="ssh"),
+    Task(
+        "claude-code",
+        "task.claude_code",
+        coding_agents.install_claude_code,
+        group="agents",
+    ),
+    Task(
+        "codewhale",
+        "task.codewhale",
+        coding_agents.install_codewhale,
+        group="agents",
+    ),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
     Task(
         "bootloader-info",

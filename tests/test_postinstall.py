@@ -2,12 +2,14 @@
 
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 
 from archsetup.core import (
     asus,
     audio_dsp,
+    coding_agents,
     coredump,
     dotfiles,
     iwd,
@@ -660,3 +662,99 @@ def test_aur_install_fails_cleanly_when_declined(monkeypatch, runlog):
 
     assert pacman.install([], ["kmscon-git"]) != 0
     assert runlog.calls == []
+
+
+# --- coding agents ---
+
+
+@pytest.fixture
+def agent_env(tmp_path, monkeypatch, runlog):
+    """Kurucu betigi indirilmis gibi davranan sahte curl + sh."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    monkeypatch.setattr(coding_agents, "LOCAL_BIN", bindir)
+    monkeypatch.setattr(coding_agents.shutil, "which",
+                        lambda name: "/usr/bin/curl" if name == "curl" else None)
+
+    def fake_run(cmd, **kwargs):
+        runlog(cmd)
+        if cmd[0] == "curl":
+            Path(cmd[-1]).write_text("#!/bin/sh\ntrue\n")
+        else:  # kurucu betik calisti; ikiliyi birakmis olmali
+            (bindir / "claude").write_text("")
+            (bindir / "codewhale").write_text("")
+        return 0
+
+    monkeypatch.setattr(coding_agents, "run", fake_run)
+    monkeypatch.setenv("PATH", str(bindir))
+    return runlog
+
+
+def test_installer_is_downloaded_then_run_not_piped(agent_env):
+    """curl | bash yerine once dosyaya, sonra calistir.
+
+    Boruya baglanan kabuk baytlari geldikce calistirir; yarida kopan bir
+    baglanti yarim kurucuyu calistirir. Once dosyaya yazmak bunu "indirme
+    basarisiz, hicbir sey calismadi" haline getirir.
+    """
+    assert coding_agents.install_claude_code() == 0
+
+    curl, shell = agent_env.calls
+    assert curl[:3] == ["curl", "-fsSL", "https://claude.ai/install.sh"]
+    assert curl[3] == "-o"  # boruya degil, dosyaya
+    script = curl[4]
+    assert shell == ["bash", script]  # her proje kendi belgeledigi yorumlayici
+
+
+def test_codewhale_uses_its_own_documented_shell(agent_env):
+    assert coding_agents.install_codewhale() == 0
+    curl, shell = agent_env.calls
+    assert curl[2] == "https://codewhale.net/install.sh"
+    assert shell[0] == "sh"
+
+
+def test_empty_download_does_not_reach_the_shell(tmp_path, monkeypatch, runlog):
+    """curl -f cogu hatayi yakalar ama bos govdeli 200 de bir basaridir."""
+    monkeypatch.setattr(coding_agents, "LOCAL_BIN", tmp_path / "bin")
+    monkeypatch.setattr(coding_agents.shutil, "which",
+                        lambda name: "/usr/bin/curl" if name == "curl" else None)
+
+    def fake_run(cmd, **kwargs):
+        runlog(cmd)
+        if cmd[0] == "curl":
+            Path(cmd[-1]).write_text("")  # bos
+        return 0
+
+    monkeypatch.setattr(coding_agents, "run", fake_run)
+    assert coding_agents.install_claude_code() != 0
+    assert [c[0] for c in runlog.calls] == ["curl"]  # kabuk hic cagrilmadi
+
+
+def test_an_older_copy_earlier_on_path_is_reported(tmp_path, monkeypatch, capsys, runlog):
+    """npm -g ile kurulmus eski kopya PATH'te ondeyse yeni surum golgede kalir."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    npm_copy = tmp_path / "npm-global" / "bin" / "claude"
+    npm_copy.parent.mkdir(parents=True)
+    npm_copy.write_text("")
+
+    monkeypatch.setattr(coding_agents, "LOCAL_BIN", bindir)
+    monkeypatch.setattr(
+        coding_agents.shutil, "which",
+        lambda name: {"curl": "/usr/bin/curl", "claude": str(npm_copy)}.get(name),
+    )
+    monkeypatch.setattr(coding_agents, "ask_yes", lambda q: True)
+
+    def fake_run(cmd, **kwargs):
+        runlog(cmd)
+        if cmd[0] == "curl":
+            Path(cmd[-1]).write_text("#!/bin/sh\ntrue\n")
+        else:
+            (bindir / "claude").write_text("")
+        return 0
+
+    monkeypatch.setattr(coding_agents, "run", fake_run)
+    monkeypatch.setenv("PATH", str(bindir))
+
+    assert coding_agents.install_claude_code() == 0
+    assert str(npm_copy) in capsys.readouterr().out

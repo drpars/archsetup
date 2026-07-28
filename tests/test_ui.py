@@ -65,8 +65,8 @@ async def test_config_menu_is_submenus_not_a_flat_list():
         await pilot.press("enter")
         await pilot.pause()
         ids = list(app.screen._items)
-        assert ids[:6] == [
-            "dotfiles", "ssh", "network", "appearance", "virt", "system",
+        assert ids[:7] == [
+            "dotfiles", "ssh", "agents", "network", "appearance", "virt", "system",
         ]
         # Alt menülere taşınan görevler üst seviyede kalmamalı.
         for moved in ("swap-hibernate", "virt-config", "wallpapers", "kmscon"):

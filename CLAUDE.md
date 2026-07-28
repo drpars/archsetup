@@ -149,3 +149,13 @@ ekran donmuş gibi görünür.
 paketi istendiğinde yardımcı yoksa artık `yay-bin`'i klonlayıp kurmayı
 öneriyor; "önce Sistem Güncelleme'den kurun" demek sorunu bir adım öteye
 taşıyordu ve 2. aşamanın başında çalıştırılan ilk görevi çuvallatıyordu.
+
+**`curl | bash` yerine indir-sonra-çalıştır.** Boruya bağlanan kabuk
+baytları geldikçe çalıştırır; yarıda kopan bir bağlantı yarım kurucuyu
+çalıştırmış olur. Önce dosyaya yazmak bunu "indirme başarısız, hiçbir şey
+çalışmadı" haline getirir — aynı kaynak, aynı betik. `curl -f` de her şeyi
+yakalamaz: boş gövdeli bir 200 başarı sayılır, boyut ayrıca kontrol edilmeli.
+
+**Kullanıcı ev dizinine kurulan araçlarda PATH sırası kontrol edilmeli.**
+Aynı komutun `npm -g` ile gelmiş eski bir kopyası PATH'te önde duruyorsa
+güncelleme başarılı görünür ama eski sürüm çalışmaya devam eder.
