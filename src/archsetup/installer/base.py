@@ -83,6 +83,17 @@ def pacstrap_base() -> int:
         return 1
     kernel = KERNELS[int(raw) - 1]
 
+    # linux-g14 lives in the asus-linux repo, and pacstrap resolves against
+    # the *live* pacman.conf — without [g14] here the package is simply
+    # "target not found" and the whole pacstrap step fails.
+    if kernel == G14_KERNEL and not has_g14(LIVE_PACMAN_CONF):
+        print(t("inst.g14_needed"))
+        if not ask_yes(t("inst.g14_add_q")):
+            print(t("inst.g14_refused"))
+            return 1
+        if add_g14_repo_live() != 0:
+            return 1
+
     packages = ["base", "base-devel", "terminus-font", kernel]
     if ask_yes(t("inst.headers_q")):
         packages.append(f"{kernel}-headers")
@@ -93,6 +104,10 @@ def pacstrap_base() -> int:
     rc = run(["pacstrap", str(MNT), *packages])
     if rc == 0:
         state.kernel = kernel
+        if kernel == G14_KERNEL:
+            # The installed system needs the repo too, or its kernel has
+            # no source for updates.
+            rc |= add_g14_repo()
     return rc
 
 
@@ -137,16 +152,45 @@ def enable_multilib() -> int:
 
 
 G14_KEY = "8F654886F17D497FEFE3DB448B15A6B0E9A3FA35"
+G14_REPO = "\n[g14]\nServer = https://arch.asus-linux.org\n"
+G14_KERNEL = "linux-g14"
+LIVE_PACMAN_CONF = Path("/etc/pacman.conf")
+
+
+def has_g14(conf: Path) -> bool:
+    try:
+        return "[g14]" in conf.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+
+def _add_g14(conf: Path, prefix: list[str]) -> int:
+    """Add [g14] to one pacman.conf.
+
+    `prefix` is the arch-chroot invocation for the target, or empty to
+    act on the live environment. The repo line is written only after the
+    key is trusted — appending it first would make every later `pacman
+    -Sy` fail on an unknown signature, including pacstrap's own.
+    """
+    if has_g14(conf):
+        print(t("virt.already", path=conf))
+        return 0
+    rc = run([*prefix, "pacman-key", "--recv-keys", G14_KEY])
+    rc |= run([*prefix, "pacman-key", "--lsign-key", G14_KEY])
+    if rc != 0:
+        print(t("inst.g14_key_failed"))
+        return rc
+    with open(conf, "a", encoding="utf-8") as fh:
+        fh.write(G14_REPO)
+    print(f"{conf} <- [g14]")
+    return run([*prefix, "pacman", "-Sy"])
 
 
 def add_g14_repo() -> int:
-    conf = MNT / "etc/pacman.conf"
-    if "[g14]" in conf.read_text(encoding="utf-8"):
-        print(t("virt.already", path=conf))
-        return 0
-    rc = run(["arch-chroot", str(MNT), "pacman-key", "--recv-keys", G14_KEY])
-    rc |= run(["arch-chroot", str(MNT), "pacman-key", "--lsign-key", G14_KEY])
-    with open(conf, "a", encoding="utf-8") as fh:
-        fh.write("\n[g14]\nServer = https://arch.asus-linux.org\n")
-    rc |= run(["arch-chroot", str(MNT), "pacman", "-Sy"])
-    return rc
+    """Target system, so the installed machine can keep updating the kernel."""
+    return _add_g14(MNT / "etc/pacman.conf", ["arch-chroot", str(MNT)])
+
+
+def add_g14_repo_live() -> int:
+    """Live ISO: pacstrap resolves linux-g14 against *this* pacman.conf."""
+    return _add_g14(LIVE_PACMAN_CONF, [])

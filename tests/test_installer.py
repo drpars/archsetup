@@ -251,3 +251,57 @@ def test_refind_conf(boot_env, monkeypatch):
     text = (boot_env / "boot" / "refind_linux.conf").read_text()
     assert '"Boot with standard options" "root=PARTUUID=abcd-1234' in text
     assert "single" in text
+
+
+# --- [g14] repository ------------------------------------------------------
+
+
+def _g14_env(tmp_path, monkeypatch, runlog, live_text="[core]\n"):
+    live = tmp_path / "pacman.conf"
+    live.write_text(live_text)
+    (tmp_path / "etc").mkdir(exist_ok=True)
+    (tmp_path / "etc" / "pacman.conf").write_text("[core]\n")
+    monkeypatch.setattr(base, "LIVE_PACMAN_CONF", live)
+    monkeypatch.setattr(base, "MNT", tmp_path)
+    monkeypatch.setattr(base.disk, "guard", lambda: True)
+    monkeypatch.setattr("os.path.ismount", lambda p: True)
+    monkeypatch.setattr(base, "run", runlog)
+    return live
+
+
+def test_g14_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog):
+    """pacstrap resolves against the *live* pacman.conf.
+
+    Without [g14] there, linux-g14 is simply "target not found" and the
+    whole base install fails.
+    """
+    live = _g14_env(tmp_path, monkeypatch, runlog)
+    monkeypatch.setattr(base, "ask_yes", lambda q: True)
+    _feed(monkeypatch, base, [str(base.KERNELS.index(base.G14_KERNEL) + 1)])
+
+    assert base.pacstrap_base() == 0
+    commands = [" ".join(call) for call in runlog.calls]
+    lsign = next(i for i, c in enumerate(commands) if "--lsign-key" in c)
+    pacstrap = next(i for i, c in enumerate(commands) if c.startswith("pacstrap"))
+    assert lsign < pacstrap
+    assert "[g14]" in live.read_text()
+    # The installed system needs the repo too, or its kernel has no updates.
+    assert "[g14]" in (tmp_path / "etc" / "pacman.conf").read_text()
+
+
+def test_g14_refusal_aborts_instead_of_failing_in_pacstrap(tmp_path, monkeypatch, runlog):
+    _g14_env(tmp_path, monkeypatch, runlog)
+    monkeypatch.setattr(base, "ask_yes", lambda q: False)
+    _feed(monkeypatch, base, [str(base.KERNELS.index(base.G14_KERNEL) + 1)])
+
+    assert base.pacstrap_base() == 1
+    assert runlog.calls == []
+
+
+def test_g14_repo_line_withheld_when_the_key_fails(tmp_path, monkeypatch):
+    """A repo pacman cannot verify breaks every later -Sy, pacstrap included."""
+    conf = tmp_path / "pacman.conf"
+    conf.write_text("[core]\n")
+    monkeypatch.setattr(base, "run", lambda cmd, **kw: 1)
+    assert base._add_g14(conf, []) != 0
+    assert "[g14]" not in conf.read_text()
