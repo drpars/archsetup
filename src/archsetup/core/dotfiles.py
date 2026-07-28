@@ -179,29 +179,66 @@ def validate_items(section: str, items: list[str]) -> int:
     return rc
 
 
-def install_wallpapers() -> int:
-    """Mirror drpars/Wallpaper into Pictures/Wallpaper.
+def _wallpaper_sources() -> list[Path]:
+    """Top-level folders of the repo — Icons/, Wallpaper/, ... — not files.
 
-    Unlike the old script this targets a subdirectory (so --delete can
-    never touch unrelated files in Pictures) and excludes .git.
+    The repo mirrors the pictures directory rather than holding a flat
+    pile of images, so its root is the folder layout itself.
+    """
+    return sorted(
+        path
+        for path in WALLPAPER_REPO_DIR.iterdir()
+        if path.is_dir() and path.name != ".git"
+    )
+
+
+def _rsync_wallpapers(source: Path, target: Path, dry: bool) -> list[str]:
+    cmd = ["rsync", "-avh", "--delete", "--exclude=.git"]
+    if dry:
+        cmd += ["--dry-run", "--itemize-changes"]
+    return [*cmd, f"{source}/", str(target)]
+
+
+def install_wallpapers() -> int:
+    """Mirror drpars/Wallpaper into the XDG pictures directory.
+
+    Each top-level folder of the repo is synced onto its own counterpart,
+    rather than the repo root onto the pictures directory in one go. Two
+    things fall out of that:
+
+    * The layout stays flat. Syncing the root into Pictures/Wallpaper is
+      what produced Pictures/Wallpaper/Wallpaper — the repo already
+      contains the Wallpaper folder, so the destination added a level.
+    * --delete only ever looks inside a folder the repo owns. A directory
+      that exists only locally — ScreenShot/, say — is never a deletion
+      candidate for the crime of not being in the repo, which it would be
+      if --delete ran against the pictures directory itself.
     """
     if _ensure_rsync() != 0:
         return 1
     if ensure_repo("Wallpaper", WALLPAPER_REPO_DIR) != 0:
         return 1
 
-    target = _xdg_dir("PICTURES", "Pictures") / "Wallpaper"
-    target.mkdir(parents=True, exist_ok=True)
-    base_cmd = [
-        "rsync", "-avh", "--delete", "--exclude=.git",
-        f"{WALLPAPER_REPO_DIR}/", str(target),
-    ]
+    sources = _wallpaper_sources()
+    if not sources:
+        print(t("dotfiles.wallpapers_empty", path=WALLPAPER_REPO_DIR))
+        return 1
 
-    run([*base_cmd[:1], "--dry-run", "--itemize-changes", *base_cmd[1:]])
-    if not ask_yes(t("dotfiles.wallpapers_q", target=target)):
+    pictures = _xdg_dir("PICTURES", "Pictures")
+    print(t("dotfiles.wallpapers_folders", names=", ".join(p.name for p in sources)))
+    for source in sources:
+        run(_rsync_wallpapers(source, pictures / source.name, dry=True))
+
+    if not ask_yes(t("dotfiles.wallpapers_q", target=pictures)):
         print(t("msg.cancelled"))
         return 0
-    return run(base_cmd)
+
+    rc = 0
+    for source in sources:
+        target = pictures / source.name
+        target.mkdir(parents=True, exist_ok=True)
+        rc |= run(_rsync_wallpapers(source, target, dry=False))
+    return rc
 
 
 def install_nvim() -> int:

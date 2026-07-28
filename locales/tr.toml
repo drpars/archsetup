@@ -96,6 +96,8 @@ links_ok = "Tüm seçili bağlar geçerli."
 nvim_root_q = "Root kullanıcısı için de bağlansın mı?"
 nvim_remove_q = "nvim yapılandırması, verisi ve önbelleği TAMAMEN silinecek. Emin misiniz?"
 removed = "Silindi: {path}"
+wallpapers_folders = "Depodaki klasörler: {names}"
+wallpapers_empty = "{path} içinde klasör yok; depo beklenen düzende değil."
 wallpapers_q = "Duvar kağıdı değişiklikleri uygulansın mı? Hedef: {target}"
 
 [sddm]

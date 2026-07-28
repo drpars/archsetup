@@ -159,3 +159,11 @@ yakalamaz: boş gövdeli bir 200 başarı sayılır, boyut ayrıca kontrol edilm
 **Kullanıcı ev dizinine kurulan araçlarda PATH sırası kontrol edilmeli.**
 Aynı komutun `npm -g` ile gelmiş eski bir kopyası PATH'te önde duruyorsa
 güncelleme başarılı görünür ama eski sürüm çalışmaya devam eder.
+
+**drpars/Wallpaper deposu Resimler dizininin aynası, düz bir resim yığını
+değil.** Kökünde klasörlerin kendisi duruyor (`Icons/`, `Wallpaper/`), bu
+yüzden hedef `XDG_PICTURES_DIR`'ın kendisi olmalı; repo kökünü
+`Pictures/Wallpaper`'a kopyalamak `Pictures/Wallpaper/Wallpaper` üretir.
+`--delete` de repo kökünden değil, her üst klasör için ayrı ayrı
+çalıştırılmalı — yoksa depoda bulunmayan yerel bir klasörü (`ScreenShot/`)
+siler.

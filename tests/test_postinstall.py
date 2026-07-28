@@ -78,11 +78,24 @@ def test_copy_via_rsync(dot_env, monkeypatch):
 
 
 @pytest.mark.skipif(shutil.which("rsync") is None, reason="rsync required")
-def test_wallpapers_subdir_and_git_excluded(dot_env, monkeypatch):
+def test_wallpapers_land_flat_and_spare_local_only_folders(dot_env, monkeypatch):
+    """Depo, Resimler dizininin aynasi: kokunde klasorlerin kendisi var.
+
+    Repo kokunu Pictures/Wallpaper'a kopyalamak bu yuzden
+    Pictures/Wallpaper/Wallpaper uretiyordu. Ayrica --delete, depoda
+    olmayan yerel bir klasoru (ScreenShot) silmemeli.
+    """
     wall = dot_env / "wall"
     (wall / ".git").mkdir(parents=True)
-    (wall / "sunset.jpg").write_text("img")
+    (wall / "Wallpaper").mkdir()
+    (wall / "Wallpaper" / "sunset.jpg").write_text("img")
+    (wall / "Icons").mkdir()
+    (wall / "Icons" / "folder.png").write_text("icon")
+
     pics = dot_env / "Pictures"
+    (pics / "ScreenShot").mkdir(parents=True)
+    (pics / "ScreenShot" / "shot.png").write_text("mine")
+
     monkeypatch.setattr(dotfiles, "WALLPAPER_REPO_DIR", wall)
     monkeypatch.setattr(dotfiles, "ensure_repo", lambda name, target: 0)
     monkeypatch.setattr(dotfiles, "_xdg_dir", lambda name, fb: pics)
@@ -90,7 +103,23 @@ def test_wallpapers_subdir_and_git_excluded(dot_env, monkeypatch):
 
     assert dotfiles.install_wallpapers() == 0
     assert (pics / "Wallpaper" / "sunset.jpg").exists()
+    assert (pics / "Icons" / "folder.png").exists()
+    assert not (pics / "Wallpaper" / "Wallpaper").exists()  # ic ice gecmemeli
+    assert (pics / "ScreenShot" / "shot.png").exists()  # --delete buraya ulasmamali
     assert not (pics / "Wallpaper" / ".git").exists()
+
+
+def test_wallpapers_refuses_an_unexpected_repo_layout(dot_env, monkeypatch):
+    """Kokunde klasor yoksa duz dosyalari Resimler'e sacmak yerine dur."""
+    wall = dot_env / "wall"
+    wall.mkdir()
+    (wall / "sunset.jpg").write_text("img")
+    monkeypatch.setattr(dotfiles, "WALLPAPER_REPO_DIR", wall)
+    monkeypatch.setattr(dotfiles, "ensure_repo", lambda name, target: 0)
+    monkeypatch.setattr(dotfiles, "_xdg_dir", lambda name, fb: dot_env / "Pictures")
+    monkeypatch.setattr(dotfiles, "ask_yes", lambda prompt: pytest.fail("sorulmamaliydi"))
+
+    assert dotfiles.install_wallpapers() != 0
 
 
 def test_sddm_silent(tmp_path, monkeypatch, fake_write, runlog):

@@ -96,6 +96,8 @@ links_ok = "All selected links are valid."
 nvim_root_q = "Also link for the root user?"
 nvim_remove_q = "nvim configuration, data and cache will be COMPLETELY removed. Are you sure?"
 removed = "Removed: {path}"
+wallpapers_folders = "Folders in the repository: {names}"
+wallpapers_empty = "No folders inside {path}; the repository is not in the expected layout."
 wallpapers_q = "Apply the wallpaper changes? Target: {target}"
 
 [sddm]
