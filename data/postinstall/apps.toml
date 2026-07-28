@@ -40,6 +40,14 @@ id = "console"
   name = "ripgrep"
 
   [[category.packages]]
+  name = "fzf"
+  note = { tr = "Bulanık arama; kabuk kısayolları için init satırı gerekir", en = "Fuzzy finder; needs an init line for the shell keybindings" }
+
+  [[category.packages]]
+  name = "zoxide"
+  note = { tr = "Sık kullanılan dizinlere atlama (z); kabuk init satırı gerekir", en = "Jump to frequent directories (z); needs a shell init line" }
+
+  [[category.packages]]
   name = "btop"
 
   [[category.packages]]
