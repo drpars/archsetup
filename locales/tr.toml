@@ -102,7 +102,11 @@ done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında g
 [kmscon]
 tty_q = "KMSCON hangi TTY için ayarlansın?"
 tty_invalid = "Geçersiz TTY numarası (3-6 arası olmalı)."
-done = "KMSCON tty{tty} için yapılandırıldı."
+size_q = "Yazı tipi boyutu (punto)"
+font_missing = "{font} kurulu değil; yoksa simgeler kutu olarak görünür."
+font_install_q = "{pkg} paketi kurulsun mu?"
+keyboard = "Klavye /etc/vconsole.conf dosyasından alındı: {layout} ({model})"
+done = "KMSCON tty{tty} için yapılandırıldı. Denemek için: Ctrl+Alt+F{tty}"
 
 [asus]
 g14_found = "[g14] deposu bulundu: ASUS paketleri resmi depodan kurulacak."

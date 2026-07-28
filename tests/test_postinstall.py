@@ -125,10 +125,15 @@ def test_sddm_sugarcandy(tmp_path, monkeypatch, fake_write, runlog):
 
 def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):
     services_log = []
+    installed = []
     monkeypatch.setattr(kmscon, "sudo_write", fake_write)
     monkeypatch.setattr(kmscon, "run", runlog)
     monkeypatch.setattr(kmscon, "_ask_tty", lambda: 4)
-    monkeypatch.setattr(kmscon.pacman, "install", lambda repo, aur: 0)
+    monkeypatch.setattr(kmscon, "_ask_size", lambda: 18)
+    monkeypatch.setattr(kmscon, "_font", lambda: kmscon.FONT)
+    monkeypatch.setattr(
+        kmscon.pacman, "install", lambda repo, aur: installed.append((repo, aur)) or 0
+    )
     monkeypatch.setattr(kmscon.services, "disable", lambda n: services_log.append(("d", n)) or 0)
     monkeypatch.setattr(kmscon.services, "enable", lambda n: services_log.append(("e", n)) or 0)
     monkeypatch.setattr(kmscon, "CONFIG", tmp_path / "kmscon" / "kmscon.conf")
@@ -136,6 +141,30 @@ def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):
     assert kmscon.install() == 0
     assert ("d", "getty@tty4.service") in services_log
     assert ("e", "kmsconvt@tty4.service") in services_log
+    # Düz "kmscon" AUR'dan kalktı; eski ad "target not found" ile döner.
+    assert installed == [([], ["kmscon-git"])]
+
+
+def test_kmscon_takes_the_keyboard_from_vconsole(tmp_path, monkeypatch):
+    vconsole = tmp_path / "vconsole.conf"
+    vconsole.write_text('KEYMAP=trq\nFONT=ter-v22b\nXKBLAYOUT="tr"\nXKBMODEL=pc105\n')
+    monkeypatch.setattr(kmscon, "VCONSOLE", vconsole)
+
+    keys = kmscon.keyboard()
+    assert keys["xkb-layout"] == "tr"
+    assert keys["xkb-model"] == "pc105"
+
+    conf = kmscon.build_config(16, kmscon.FONT, keys)
+    # kmscon sistem klavyesini okumaz: xkb-layout yazılmazsa libxkbcommon
+    # "us" düzenine düşer ve Türkçe VT'li makinede konsol İngilizce olur.
+    assert "xkb-layout=tr" in conf
+    # Bilinmeyen anahtar ölümcül değil ama her açılışta hata kaydı düşer.
+    assert "font-dpi" not in conf
+
+
+def test_kmscon_keyboard_falls_back_without_vconsole(tmp_path, monkeypatch):
+    monkeypatch.setattr(kmscon, "VCONSOLE", tmp_path / "yok.conf")
+    assert kmscon.keyboard()["xkb-layout"] == kmscon.DEFAULT_LAYOUT
 
 
 def test_network_group_before_chown(tmp_path, monkeypatch, fake_write, runlog):

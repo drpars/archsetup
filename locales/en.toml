@@ -102,7 +102,11 @@ done = "SDDM theme installed. Visible on the next login screen."
 [kmscon]
 tty_q = "Which TTY should KMSCON be configured for?"
 tty_invalid = "Invalid TTY number (must be 3-6)."
-done = "KMSCON configured for tty{tty}."
+size_q = "Font size (points)"
+font_missing = "{font} is not installed; without it the glyphs render as boxes."
+font_install_q = "Install the {pkg} package?"
+keyboard = "Keyboard taken from /etc/vconsole.conf: {layout} ({model})"
+done = "KMSCON configured for tty{tty}. Try it with Ctrl+Alt+F{tty}"
 
 [asus]
 g14_found = "[g14] repository found: ASUS packages will be installed from it."
