@@ -253,6 +253,35 @@ def _target_bootloader():
         ) = saved
 
 
+FALLBACK_PRESETS = "PRESETS=('default' 'fallback')"
+
+
+def _enable_fallback_preset(text: str) -> str:
+    """Leave exactly one active PRESETS line, holding default *and* fallback.
+
+    A fallback image is the only thing to boot when the default one comes out
+    broken, which is precisely when a rescue entry is needed. It is built with
+    `-S autodetect`, so it carries every module rather than only the hardware
+    present at build time -- that is also what keeps the disk bootable after
+    it moves to another machine or into a VM.
+
+    Kernel packages disagree on the stock layout: Arch's linux.preset ships
+    the pair active, while linux-g14 ships PRESETS=('default') active with the
+    pair commented out beneath it. Commenting every live PRESETS line first
+    and then activating the pair gives the same result for both, instead of
+    leaving two assignments whose order silently decides the outcome.
+    """
+    text = re.sub(r"^(PRESETS=)", r"#\1", text, flags=re.MULTILINE)
+    revived, count = re.subn(
+        r"^#(PRESETS=\('default' 'fallback'\))", r"\1", text, count=1,
+        flags=re.MULTILINE,
+    )
+    if count:
+        return revived
+    # No commented pair to revive (a preset written by hand, say).
+    return f"{text.rstrip()}\n{FALLBACK_PRESETS}\n"
+
+
 def gen_uki() -> int:
     """Switch the target to systemd initramfs + Unified Kernel Image output."""
     if not target_ready():
@@ -273,13 +302,11 @@ def gen_uki() -> int:
 
     text = preset.read_text(encoding="utf-8")
     text = re.sub(r"^#(ALL_config)", r"\1", text, flags=re.MULTILINE)
-    text = re.sub(r"^#(default_uki)", r"\1", text, flags=re.MULTILINE)
-    text = re.sub(r"^#(default_options)", r"\1", text, flags=re.MULTILINE)
-    text = re.sub(r"^(default_image=)", r"#\1", text, flags=re.MULTILINE)
-    text = re.sub(
-        r"^PRESETS=\('default' 'fallback'\)", "PRESETS=('default')", text,
-        flags=re.MULTILINE,
-    )
+    for name in ("default", "fallback"):
+        text = re.sub(rf"^#({name}_uki)", r"\1", text, flags=re.MULTILINE)
+        text = re.sub(rf"^#({name}_options)", r"\1", text, flags=re.MULTILINE)
+        text = re.sub(rf"^({name}_image=)", r"#\1", text, flags=re.MULTILINE)
+    text = _enable_fallback_preset(text)
     preset.write_text(text, encoding="utf-8")
 
     uki = default_uki_path(preset)

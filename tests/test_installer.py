@@ -103,6 +103,9 @@ def test_uki_preset_conversion(tmp_path, monkeypatch, runlog):
         'default_image="/boot/initramfs-linux-zen.img"\n'
         '#default_uki="/efi/EFI/Linux/arch-linux-zen.efi"\n'
         '#default_options="--splash x.bmp"\n'
+        'fallback_image="/boot/initramfs-linux-zen-fallback.img"\n'
+        '#fallback_uki="/efi/EFI/Linux/arch-linux-zen-fallback.efi"\n'
+        '#fallback_options="-S autodetect"\n'
     )
     (etc / "mkinitcpio.conf").write_text("HOOKS=(base udev block filesystems fsck)\n")
     chroot_calls = []
@@ -117,10 +120,46 @@ def test_uki_preset_conversion(tmp_path, monkeypatch, runlog):
     assert chroot.gen_uki() == 0
     text = preset.read_text()
     assert 'default_uki="/efi/EFI/Linux/arch-linux-zen.efi"' in text
-    assert "#default_image=" in text and "PRESETS=('default')" in text
+    assert "#default_image=" in text
     assert "base systemd" in (etc / "mkinitcpio.conf").read_text()
     assert ["mkdir", "-p", "/efi/EFI/Linux"] in chroot_calls
     assert ["mkinitcpio", "-P"] in chroot_calls
+    # Fallback korunur: bozuk bir imaj üretilirse dönülecek tek yer o.
+    assert "PRESETS=('default' 'fallback')" in text
+    assert 'fallback_uki="/efi/EFI/Linux/arch-linux-zen-fallback.efi"' in text
+    assert "#fallback_image=" in text
+    # -S autodetect: fallback her modülü taşır, yalnızca o anki donanımı değil.
+    assert 'fallback_options="-S autodetect"' in text
+
+
+def _presets_lines(text):
+    return [l for l in text.splitlines() if l.startswith("PRESETS=")]
+
+
+def test_fallback_preset_survives_the_g14_layout():
+    """linux-g14 ships PRESETS=('default') live and the pair commented out.
+
+    Only uncommenting the pair would leave two live assignments, and which
+    one wins is decided by their order in the file rather than on purpose.
+    """
+    g14 = (
+        "ALL_kver=\"/boot/vmlinuz-linux-g14\"\n"
+        "PRESETS=('default')\n"
+        "#PRESETS=('default' 'fallback')\n"
+    )
+    out = chroot._enable_fallback_preset(g14)
+    assert _presets_lines(out) == ["PRESETS=('default' 'fallback')"]
+
+
+def test_fallback_preset_leaves_the_stock_arch_layout_alone():
+    stock = "ALL_kver=\"/boot/vmlinuz-linux\"\nPRESETS=('default' 'fallback')\n"
+    out = chroot._enable_fallback_preset(stock)
+    assert _presets_lines(out) == ["PRESETS=('default' 'fallback')"]
+
+
+def test_fallback_preset_added_when_there_is_nothing_to_revive():
+    out = chroot._enable_fallback_preset("PRESETS=('default')\n")
+    assert _presets_lines(out) == ["PRESETS=('default' 'fallback')"]
 
 
 def test_watchdog_amd_uki_target(tmp_path, monkeypatch):
