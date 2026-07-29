@@ -29,6 +29,17 @@ MNT = Path("/mnt")
 ESP_GUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 ESP_MBR = "0xef"
 
+# vfat has no permission bits of its own, so without a mask everything on the
+# ESP ends up world readable and bootctl warns that
+# /efi/loader/random-seed is world accessible — which it is, and with Secure
+# Boot plus a System Token the seed is worth protecting.
+#
+# This has to be right at mount time, twice over: fstab is produced by
+# `genfstab -p`, which copies whatever the partition is mounted with, and vfat
+# reads fmask/dmask only on the *first* mount. `mount -o remount` silently
+# changes nothing and reports success.
+ESP_MOUNT_OPTS = "fmask=0077,dmask=0077"
+
 BOOT_FS = ("fat32", "ext4", "ext3", "ext2")
 ROOT_FS = ("btrfs", "ext4", "ext3", "ext2", "xfs", "f2fs", "jfs")
 FS_PACKAGES = {
@@ -242,6 +253,19 @@ def format_devices() -> int:
     return rc
 
 
+def _esp_mount_args(dev: str) -> list[str]:
+    """Mask options for a vfat boot partition, nothing for anything else.
+
+    BOOT_FS also allows ext2/3/4, which reject fmask/dmask and would fail the
+    mount outright. The filesystem is read off the device rather than
+    remembered from the format step, because formatting is optional — an
+    existing ESP can be reused, and then nothing was ever chosen.
+    """
+    if _lsblk_value(dev, "FSTYPE") != "vfat":
+        return []
+    return ["-o", ESP_MOUNT_OPTS]
+
+
 def mount_all() -> int:
     if not guard():
         return 1
@@ -255,7 +279,8 @@ def mount_all() -> int:
     (MNT / "efi").mkdir(exist_ok=True)
     (MNT / "home").mkdir(exist_ok=True)
     if state.bootdev:
-        rc |= run(["mount", state.bootdev, f"{MNT}/efi"])
+        rc |= run(["mount", *_esp_mount_args(state.bootdev), state.bootdev,
+                   f"{MNT}/efi"])
     if state.swapdev:
         rc |= run(["swapon", state.swapdev])
     if state.homedev:

@@ -37,6 +37,35 @@ def test_esp_forced_to_fat32(monkeypatch, runlog):
     assert ["mkfs.fat", "-F", "32", "-n", "BOOT", "/dev/sda1"] in runlog.calls
 
 
+def test_esp_mounted_with_a_restrictive_mask(tmp_path, monkeypatch, runlog):
+    """fstab comes from `genfstab -p`, which copies the live mount options.
+
+    Getting this wrong leaves the ESP world readable and bootctl warning that
+    /efi/loader/random-seed is world accessible. It cannot be repaired with a
+    remount either: vfat reads fmask/dmask only on the first mount.
+    """
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(disk, "MNT", tmp_path)
+    monkeypatch.setattr(disk, "_lsblk_value", lambda dev, column: "vfat")
+    state.rootdev, state.bootdev = "/dev/sda2", "/dev/sda1"
+
+    assert disk.mount_all() == 0
+    assert [
+        "mount", "-o", "fmask=0077,dmask=0077", "/dev/sda1", f"{tmp_path}/efi"
+    ] in runlog.calls
+
+
+def test_non_vfat_boot_partition_gets_no_mask(tmp_path, monkeypatch, runlog):
+    """BOOT_FS also allows ext2/3/4, which reject fmask/dmask outright."""
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(disk, "MNT", tmp_path)
+    monkeypatch.setattr(disk, "_lsblk_value", lambda dev, column: "ext4")
+    state.rootdev, state.bootdev = "/dev/sda2", "/dev/sda1"
+
+    assert disk.mount_all() == 0
+    assert ["mount", "/dev/sda1", f"{tmp_path}/efi"] in runlog.calls
+
+
 def test_guard_refuses_outside_iso(monkeypatch):
     monkeypatch.delenv("ARCHSETUP_UNSAFE")
     monkeypatch.setattr(disk.env, "is_archiso", lambda: False)
