@@ -174,7 +174,7 @@ done = "libvirt yapılandırıldı. Grup üyeliği için oturumu kapatıp açın
 
 [waydroid]
 missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
-zen = "linux-zen çekirdeği binder modülünü içerir; yalnızca servis etkinleştirildi."
+builtin = "Çekirdek binder'ı yerleşik veriyor; DKMS modülü kurulmadı, yalnızca servis etkinleştirildi."
 done = "Waydroid binder yapılandırıldı. Çalıştırmadan önce yeniden başlatın!"
 
 [ssh]
@@ -310,7 +310,7 @@ network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servi
 virt_config = "Virt-Manager Yapılandırması"
 virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, servisler"
 waydroid_setup = "Waydroid Binder Kurulumu"
-waydroid_setup_desc = "binder_linux modülü (zen çekirdekte yerleşik) + servis"
+waydroid_setup_desc = "binder_linux modülü (çekirdekte yerleşikse atlanır) + servis"
 ssh_status = "SSH Durumu"
 ssh_status_desc = "Salt okunur rapor: anahtarlar, yetkiler, sunucu ve agent"
 ssh_harden = "SSH Sunucusunu Sertleştir"

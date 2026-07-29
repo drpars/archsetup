@@ -559,26 +559,53 @@ def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):
     assert "unix_sock_group = 'libvirt'" in (etc / "libvirtd.conf").read_text()
 
 
-def test_waydroid_zen_vs_dkms(tmp_path, monkeypatch, fake_write):
-    installed = {"waydroid", "linux-zen"}
+def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
+    """Built-in binder must skip the DKMS module, whatever the kernel is called.
+
+    Installing binder_linux-dkms next to a built-in binder fails with EBUSY and
+    drags systemd-modules-load.service down with it.
+    """
+    procfs = tmp_path / "filesystems"
+    procfs.write_text("nodev\tsysfs\nnodev\tbinder\n\text4\n")
     enables, installs = [], []
     monkeypatch.setattr(waydroid, "sudo_write", fake_write)
-    monkeypatch.setattr(waydroid.pacman, "is_installed", lambda p: p in installed)
+    monkeypatch.setattr(waydroid, "FILESYSTEMS", procfs)
+    monkeypatch.setattr(waydroid.pacman, "is_installed", lambda p: p == "waydroid")
     monkeypatch.setattr(waydroid.pacman, "install", lambda r, a: installs.append(tuple(a)) or 0)
     monkeypatch.setattr(waydroid.services, "enable", lambda n: enables.append(n) or 0)
     monkeypatch.setattr(waydroid, "MODULES_LOAD", tmp_path / "ml.conf")
     monkeypatch.setattr(waydroid, "MODPROBE", tmp_path / "mp.conf")
 
     assert waydroid.setup() == 0
-    assert not (tmp_path / "mp.conf").exists()  # zen: modül işi yok
+    assert installs == []
+    assert not (tmp_path / "mp.conf").exists()
+    assert enables == ["waydroid-container"]
 
-    installed.discard("linux-zen")
+    procfs.write_text("nodev\tsysfs\n\text4\n")
     assert waydroid.setup() == 0
     assert installs == [("binder_linux-dkms", "python-pyclip")]
     assert (
         (tmp_path / "mp.conf").read_text()
         == "options binder_linux devices=binder,hwbinder,vndbinder\n"
     )
+
+
+def test_binderfs_is_not_binder(tmp_path, monkeypatch):
+    """binderfs is the control filesystem, not the driver a substring match
+    would happily confuse it with."""
+    procfs = tmp_path / "filesystems"
+    monkeypatch.setattr(waydroid, "FILESYSTEMS", procfs)
+
+    procfs.write_text("nodev\tbinderfs\n")
+    assert waydroid.has_builtin_binder() is False
+
+    procfs.write_text("nodev\tbinder\n")
+    assert waydroid.has_builtin_binder() is True
+
+
+def test_binder_check_survives_missing_procfs(tmp_path, monkeypatch):
+    monkeypatch.setattr(waydroid, "FILESYSTEMS", tmp_path / "nope")
+    assert waydroid.has_builtin_binder() is False
 
 
 # --- XDG user directories ---

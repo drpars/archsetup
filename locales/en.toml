@@ -174,7 +174,7 @@ done = "libvirt configured. Log out and back in for group membership."
 
 [waydroid]
 missing = "waydroid is not installed; install it from Applications > Common Applications first."
-zen = "The linux-zen kernel ships the binder module; only the service was enabled."
+builtin = "The kernel ships binder built in; the DKMS module was skipped and only the service enabled."
 done = "Waydroid binder configured. Reboot before running it!"
 
 [ssh]
@@ -310,7 +310,7 @@ network_sharing_desc = "Samba configuration, sambashare group, mDNS and services
 virt_config = "Virt-Manager Configuration"
 virt_config_desc = "libvirt socket/user settings, groups, services"
 waydroid_setup = "Waydroid Binder Setup"
-waydroid_setup_desc = "binder_linux module (built into zen kernel) + service"
+waydroid_setup_desc = "binder_linux module (skipped when built into the kernel) + service"
 ssh_status = "SSH Status"
 ssh_status_desc = "Read-only report: keys, authorizations, server and agent"
 ssh_harden = "Harden SSH Server"
