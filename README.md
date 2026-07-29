@@ -170,7 +170,13 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (147 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (155 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
+      networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
+      keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,
+      libvirtd soket aktivasyonuna geçti, host'a virtio *guest* modülleri
+      eklenmiyor, binder DKMS yalnızca çekirdek binder'ı vermiyorsa kuruluyor
+      (`/proc/filesystems`), ESP `fmask/dmask=0077` ile bağlanıyor
 - [x] NVMe ad alanı sıfırlama (`nvme format`, kriptografik/kullanıcı verisi
       silme), bağlı aygıt reddi ve aygıt yolunu yazdırarak onay
 - [x] Kurucuda kablosuz ağ: `wl*` için networkd dosyası ve iwd'nin yalnızca
