@@ -36,6 +36,14 @@ CONFIG = Path("/etc/kmscon/kmscon.conf")
 VCONSOLE = Path("/etc/vconsole.conf")
 
 PACKAGE = "kmscon-git"
+
+# kmscon-git's PKGBUILD forgets `check` in makedepends, so no AUR helper
+# knows to pull it in and meson stops with
+#   ERROR: Dependency "check" not found, tried pkgconfig
+# after the sources are already fetched. Installing it from the repo first
+# costs one small package and turns a failed build into a working one.
+BUILD_DEPS = ["check"]
+
 FONT = "JetBrainsMono Nerd Font Mono"
 FONT_PACKAGE = "ttf-jetbrains-mono-nerd"
 DEFAULT_SIZE = 16
@@ -156,7 +164,7 @@ def install() -> int:
         print(t("msg.cancelled"))
         return 1
 
-    rc = pacman.install([], [PACKAGE])
+    rc = pacman.install(BUILD_DEPS, [PACKAGE])
     if rc != 0:
         return rc
 

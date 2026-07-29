@@ -175,7 +175,9 @@ def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):
     assert ("d", "getty@tty4.service") in services_log
     assert ("e", "kmsconvt@tty4.service") in services_log
     # Düz "kmscon" AUR'dan kalktı; eski ad "target not found" ile döner.
-    assert installed == [([], ["kmscon-git"])]
+    # check depodan önce gelmeli: kmscon-git onu makedepends'e yazmadığı için
+    # AUR yardımcısı kurmaz ve meson "Dependency check not found" ile durur.
+    assert installed == [(["check"], ["kmscon-git"])]
 
 
 def test_kmscon_takes_the_keyboard_from_vconsole(tmp_path, monkeypatch):
