@@ -27,7 +27,9 @@ MKINITCPIO = Path("/etc/mkinitcpio.conf")
 NVIDIA_MODPROBE = Path("/etc/modprobe.d/nvidia.conf")
 
 NVIDIA_MODULES = ("nvidia", "nvidia_modeset", "nvidia_uvm", "nvidia_drm")
-AMD_MODULES = ("amdgpu", "radeon")
+# radeon is the pre-GCN driver and is deliberately left out: everything amdgpu
+# supports, radeon does not, and carrying it only grows the initramfs.
+AMD_MODULES = ("amdgpu",)
 NVIDIA_CMDLINE_PARAM = "nvidia_drm.modeset=1"
 NVIDIA_MODPROBE_CONTENT = "options nvidia_drm modeset=1 fbdev=1\n"
 
