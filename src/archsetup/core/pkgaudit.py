@@ -1,4 +1,4 @@
-"""Audit the package names in data/ against the sync databases.
+"""Audit the package names in data/ against the sync databases (and the AUR).
 
 Package lists rot quietly. Names get merged into another package, renamed
 without a Replaces, or dropped outright, and nothing says so until someone
@@ -9,25 +9,37 @@ one `pacman -S --needed <all of them>`: a single unresolvable name aborts
 the whole transaction with "target not found" and *nothing* gets installed.
 So one dead entry silently disables an entire category.
 
-Names fall into four cases, and telling them apart matters:
+Repository names fall into four cases, and telling them apart matters:
 
   ok        a package by exactly that name exists
-  group     not a package but a group, which pacman installs happily
+  group     not a package but a group, which pacman installs happily.
+            `pacman -Si` fails on groups, so reading that failure as
+            "missing" would condemn a perfectly installable entry
   provided  resolves to a differently named package, via provides or
             replaces (mlocate -> plocate). Installing still works, so this
             is a warning, not an error
   missing   nothing resolves it. This is what breaks a category
 
-AUR entries are reported as unchecked: answering for them would mean
-querying the AUR over the network, and this audit is meant to stay offline
-and safe to run anywhere.
+Everything above reads the local sync databases under /var/lib/pacman/sync,
+which pacman downloaded on the last -Sy. No network, no root. That also
+sets the limit worth knowing: the audit is only as current as those files,
+so a stale index can report "clean" about a name that died last week. Hence
+the staleness check in report().
+
+AUR entries need the network, so they are skipped unless audit(..., aur=True)
+is asked for -- and even then a failed lookup degrades to "unchecked"
+instead of failing the run.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import tomllib
-from dataclasses import dataclass
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import paths
@@ -35,11 +47,30 @@ from . import i18n
 
 t = i18n.t
 
+# Repository statuses.
 OK = "ok"
 GROUP = "group"
 PROVIDED = "provided"
 MISSING = "missing"
-AUR = "aur"
+
+# AUR statuses.
+AUR_UNCHECKED = "aur-unchecked"
+AUR_OK = "aur-ok"
+AUR_MISSING = "aur-missing"
+AUR_IN_REPO = "aur-in-repo"
+
+# Secondary AUR notes; an entry can carry both.
+ORPHAN = "orphan"
+OUTDATED = "outdated"
+
+FATAL = (MISSING, AUR_MISSING)
+
+SYNC_DIR = Path("/var/lib/pacman/sync")
+STALE_AFTER_DAYS = 7
+
+AUR_RPC = "https://aur.archlinux.org/rpc/v5/info"
+AUR_BATCH = 100
+AUR_TIMEOUT = 15
 
 
 @dataclass(frozen=True)
@@ -49,6 +80,7 @@ class Finding:
     name: str
     status: str
     resolved: str = ""  # the package a PROVIDED name actually resolves to
+    notes: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _pacman_ok(args: list[str]) -> bool:
@@ -71,14 +103,12 @@ def _resolves_to(name: str) -> str | None:
     )
     if out.returncode != 0:
         return None
-    first = out.stdout.strip().splitlines()
-    return first[0].strip() if first else None
+    lines = out.stdout.strip().splitlines()
+    return lines[0].strip() if lines else None
 
 
-def classify(name: str, aur: bool = False) -> tuple[str, str]:
-    """Return (status, resolved_name) for one package name."""
-    if aur:
-        return AUR, ""
+def classify(name: str) -> tuple[str, str]:
+    """Return (status, resolved_name) for one repository package name."""
     if _pacman_ok(["-Si", name]):
         return OK, name
     if _pacman_ok(["-Sg", name]):
@@ -89,6 +119,48 @@ def classify(name: str, aur: bool = False) -> tuple[str, str]:
     if resolved == name:
         return OK, name
     return PROVIDED, resolved
+
+
+def aur_info(names: list[str]) -> dict[str, dict] | None:
+    """Look names up in the AUR. None means the lookup itself failed.
+
+    None and {} mean very different things -- "we could not ask" versus
+    "we asked and none of them exist" -- so a network failure must never
+    collapse into a pile of missing packages.
+    """
+    found: dict[str, dict] = {}
+    for start in range(0, len(names), AUR_BATCH):
+        batch = names[start:start + AUR_BATCH]
+        query = urllib.parse.urlencode({"arg[]": batch}, doseq=True)
+        try:
+            with urllib.request.urlopen(
+                f"{AUR_RPC}?{query}", timeout=AUR_TIMEOUT
+            ) as response:
+                payload = json.load(response)
+        except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+            return None
+        for entry in payload.get("results", []):
+            found[entry["Name"]] = entry
+    return found
+
+
+def _classify_aur(name: str, info: dict | None) -> tuple[str, tuple[str, ...]]:
+    # Ask the repositories first, whatever the AUR said. A package that
+    # graduated usually has its AUR entry deleted afterwards as a duplicate,
+    # so "not in the AUR" is the normal look of a *promoted* package, not
+    # only of a dead one. Calling those missing would be a false alarm on
+    # exactly the packages that are in the best shape.
+    in_repo = _pacman_ok(["-Si", name])
+    if info is None:
+        return (AUR_IN_REPO if in_repo else AUR_MISSING), ()
+    notes = []
+    if not info.get("Maintainer"):
+        notes.append(ORPHAN)
+    if info.get("OutOfDate"):
+        notes.append(OUTDATED)
+    # Still in the AUR but also in the repos: nothing breaks, but aur = true
+    # rebuilds from source what already ships as a signed binary.
+    return (AUR_IN_REPO if in_repo else AUR_OK), tuple(notes)
 
 
 def _entries(path: Path) -> list[tuple[str, str, bool]]:
@@ -106,47 +178,130 @@ def _entries(path: Path) -> list[tuple[str, str, bool]]:
     return found
 
 
-def audit(data_dir: Path | None = None) -> list[Finding]:
+def audit(data_dir: Path | None = None, aur: bool = False) -> list[Finding]:
     root = data_dir or paths.DATA_DIR
-    findings: list[Finding] = []
+    collected: list[tuple[str, str, str, bool]] = []
     for path in sorted(root.rglob("*.toml")):
         source = str(path.relative_to(root))
-        for category, name, aur in _entries(path):
-            status, resolved = classify(name, aur)
+        for category, name, is_aur in _entries(path):
+            collected.append((source, category, name, is_aur))
+
+    aur_names = sorted({name for _, _, name, is_aur in collected if is_aur})
+    lookup = aur_info(aur_names) if (aur and aur_names) else None
+
+    findings = []
+    for source, category, name, is_aur in collected:
+        if not is_aur:
+            status, resolved = classify(name)
             findings.append(Finding(source, category, name, status, resolved))
+        elif lookup is None:
+            findings.append(Finding(source, category, name, AUR_UNCHECKED))
+        else:
+            status, notes = _classify_aur(name, lookup.get(name))
+            findings.append(Finding(source, category, name, status, notes=notes))
     return findings
 
 
-def report(findings: list[Finding]) -> int:
-    """Print the problems and return an exit code (non-zero if any are fatal)."""
-    missing = [f for f in findings if f.status == MISSING]
-    provided = [f for f in findings if f.status == PROVIDED]
-    aur = [f for f in findings if f.status == AUR]
+def stale_databases(days: int = STALE_AFTER_DAYS,
+                    sync_dir: Path | None = None) -> list[tuple[str, int]]:
+    """(repo name, age in days) for sync databases older than `days`.
 
+    Without this the audit can report a clean bill of health from an index
+    that predates the rename it was meant to catch -- a wrong answer that
+    looks exactly like a right one.
+    """
+    import time
+
+    root = sync_dir or SYNC_DIR
+    now = time.time()
+    stale = []
+    for db in sorted(root.glob("*.db")):
+        try:
+            age = int((now - db.stat().st_mtime) // 86400)
+        except OSError:
+            continue
+        if age >= days:
+            stale.append((db.stem, age))
+    return stale
+
+
+def _print_group(header_key: str, rows: list[str]) -> None:
+    if not rows:
+        return
+    print(t(header_key))
+    for row in rows:
+        print(f"  {row}")
+    print()
+
+
+def report(findings: list[Finding], sync_dir: Path | None = None) -> int:
+    """Print the problems and return an exit code (non-zero if any are fatal)."""
+    def of(*statuses):
+        return [f for f in findings if f.status in statuses]
+
+    missing = of(MISSING)
+    aur_missing = of(AUR_MISSING)
+    provided = of(PROVIDED)
+    in_repo = of(AUR_IN_REPO)
+    unchecked = of(AUR_UNCHECKED)
+    flagged = [f for f in findings if f.notes]
+
+    # Repo and AUR packages go to pacman and to the helper as two separate
+    # transactions, so a dead name in one does not touch the other. Keeping
+    # the two lists apart is what makes the stated blast radius true.
     if missing:
-        print(t("pkgaudit.missing_header"))
-        for f in missing:
-            print(f"  {f.source} [{f.category}]  {f.name}")
-        # Name the categories: one dead entry takes the whole install with it.
+        _print_group(
+            "pkgaudit.missing_header",
+            [f"{f.source} [{f.category}]  {f.name}" for f in missing],
+        )
         broken = sorted({f"{f.source} [{f.category}]" for f in missing})
         print(t("pkgaudit.missing_effect", categories=", ".join(broken)))
         print()
 
-    if provided:
-        print(t("pkgaudit.provided_header"))
-        for f in provided:
-            print(f"  {f.source} [{f.category}]  {f.name} -> {f.resolved}")
+    if aur_missing:
+        _print_group(
+            "pkgaudit.aur_missing_header",
+            [f"{f.source} [{f.category}]  {f.name}" for f in aur_missing],
+        )
+        broken = sorted({f"{f.source} [{f.category}]" for f in aur_missing})
+        print(t("pkgaudit.aur_missing_effect", categories=", ".join(broken)))
         print()
+
+    _print_group(
+        "pkgaudit.provided_header",
+        [f"{f.source} [{f.category}]  {f.name} -> {f.resolved}" for f in provided],
+    )
+    _print_group(
+        "pkgaudit.in_repo_header",
+        [f"{f.source} [{f.category}]  {f.name}" for f in in_repo],
+    )
+    _print_group(
+        "pkgaudit.flagged_header",
+        [f"{f.source} [{f.category}]  {f.name}  ({', '.join(f.notes)})"
+         for f in flagged],
+    )
+
+    stale = stale_databases(sync_dir=sync_dir)
+    if stale:
+        _print_group(
+            "pkgaudit.stale_header",
+            [t("pkgaudit.stale_row", repo=name, days=age) for name, age in stale],
+        )
 
     print(t(
         "pkgaudit.summary",
         total=len(findings),
-        missing=len(missing),
+        missing=len(missing) + len(aur_missing),
         provided=len(provided),
-        aur=len(aur),
+        aur=len(unchecked),
     ))
-    return 1 if missing else 0
+    if unchecked:
+        print(t("pkgaudit.aur_hint"))
+    return 1 if (missing or aur_missing) else 0
 
 
-def run() -> int:
-    return report(audit())
+def run(aur: bool = False) -> int:
+    findings = audit(aur=aur)
+    if aur and any(f.status == AUR_UNCHECKED for f in findings):
+        print(t("pkgaudit.aur_unreachable"))
+    return report(findings)

@@ -62,6 +62,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         dest="check_packages",
                         help="check every package name in data/ against the "
                              "sync databases")
+    parser.add_argument("--aur", action="store_true",
+                        help="with --check-packages: also query the AUR "
+                             "(needs network)")
     parser.add_argument("--lang", help="interface language (tr, en, ...)")
     parser.add_argument("--installer", action="store_true",
                         help="force installer (live ISO) mode")
@@ -134,7 +137,12 @@ def main(argv: list[str] | None = None) -> int:
         # sync databases, so it is safe to run as anyone, anywhere.
         from .core import pkgaudit
 
-        return pkgaudit.run()
+        return pkgaudit.run(aur=args.aur)
+
+    if args.aur:
+        # Silently ignoring it would look like the AUR had been checked.
+        print(t("pkgaudit.aur_needs_check"), file=sys.stderr)
+        return 1
 
     if args.list_tasks:
         width = max(len(task.id) for task in tasks.TASKS)

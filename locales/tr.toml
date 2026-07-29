@@ -174,8 +174,17 @@ wait_online_done = "wait-online sınırlandırıldı (--any --timeout=3): {path}
 [pkgaudit]
 missing_header = "ÇÖZÜLEMEYEN PAKETLER — bunlar kurulumu düşürür:"
 missing_effect = "  → pacman tek işlem kullandığı için bu kategorilerde HİÇBİR paket kurulmaz: {categories}"
+aur_missing_header = "AUR'DA BULUNAMAYAN PAKETLER (depoda da yok):"
+aur_missing_effect = "  → AUR yardımcısı ayrı bir işlem çalıştırdığı için bu kategorilerin AUR paketlerinden HİÇBİRİ kurulmaz: {categories}"
 provided_header = "Başka bir paket tarafından sağlanıyor (çalışır, ama adı eskimiş):"
+in_repo_header = "Artık resmi depoda — 'aur = true' kaldırılmalı (imzalı ikili varken kaynaktan derleniyor):"
+flagged_header = "AUR uyarıları (kurulum düşmez, ama kırılganlık işareti):"
+stale_header = "Senkron indeksi bayat — bu denetim eski veriye bakıyor olabilir:"
+stale_row = "{repo}: {days} gün önce güncellendi"
 summary = "{total} paket denetlendi — {missing} çözülemeyen, {provided} eskimiş ad, {aur} AUR (denetlenmedi)."
+aur_hint = "AUR paketlerini de denetlemek için: archsetup --check-packages --aur"
+aur_unreachable = "AUR'a ulaşılamadı; o paketler denetlenmeden geçildi."
+aur_needs_check = "--aur yalnızca --check-packages ile birlikte kullanılır."
 
 [virt]
 already = "{path} zaten yapılandırılmış."

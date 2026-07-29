@@ -271,18 +271,6 @@ id = "plasma"
   note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası) + güncelleme bildirimi", en = "Graphical package manager (app store) + update notifier" }
 
   [[category.packages]]
-  name = "plasma5-applets-virtual-desktop-bar-git"
-  aur = true
-  note = { tr = "Sanal masaüstü çubuğu", en = "Virtual desktop bar applet" }
-  default = false
-
-  [[category.packages]]
-  name = "plasma5-applets-window-appmenu-git"
-  aur = true
-  note = { tr = "Pencere uygulama menüsü", en = "Window app menu applet" }
-  default = false
-
-  [[category.packages]]
   name = "sddm-conf-git"
   aur = true
   note = { tr = "SDDM yapılandırma aracı", en = "SDDM configuration tool" }

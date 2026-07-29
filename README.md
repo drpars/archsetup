@@ -82,8 +82,22 @@ sessizce devre dışı bırakır.
 
 Adlar dört gruba ayrılır: tam eşleşen, grup (`plasma`), başka paketçe
 sağlanan (çalışır ama adı eskimiş) ve çözülemeyen. Yalnızca sonuncusu sıfırdan
-farklı çıkış kodu üretir. AUR girdileri çevrimdışı yanıtlanamayacağı için
-denetlenmez, sayılır.
+farklı çıkış kodu üretir.
+
+Denetim yerel senkron veritabanını okur, yani **son `pacman -Sy` kadar
+günceldir**. Bayat bir indeks geçen hafta ölmüş bir ada "temiz" diyebilir —
+doğru cevaptan ayırt edilemeyen yanlış bir cevap. Bu yüzden indeksi bir
+haftadan eskiyse rapor uyarır.
+
+```bash
+./archsetup --check-packages --aur
+```
+
+AUR girdilerini de sorgular (ağ gerektirir, tek toplu istek). Üç şeye bakar:
+paket AUR'dan kalkmış mı, **resmi depoya terfi etmiş mi** (`aur = true` artık
+yanlış: imzalı ikili varken kaynaktan derleniyor), ve bakımsız/eskimiş olarak
+işaretli mi. Ağa ulaşılamazsa denetim düşmez, o paketler "denetlenmedi"
+sayılır — "soramadık" ile "yok" birbirine karıştırılmaz.
 
 ### SSH yönetimi
 

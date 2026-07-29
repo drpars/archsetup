@@ -256,7 +256,6 @@ id = "common"
 
   [[category.packages]]
   name = "waydroid"
-  aur = true
   post_msg = "msg.waydroid_hint"
 
   [[category.packages]]
@@ -280,7 +279,6 @@ id = "common"
 
   [[category.packages]]
   name = "webapp-manager"
-  aur = true
 
   [[category.packages]]
   name = "stacer-bin"

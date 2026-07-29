@@ -174,8 +174,17 @@ wait_online_done = "wait-online limited (--any --timeout=3): {path}"
 [pkgaudit]
 missing_header = "UNRESOLVABLE PACKAGES — these abort the install:"
 missing_effect = "  -> pacman uses a single transaction, so NOTHING installs in: {categories}"
+aur_missing_header = "PACKAGES NOT FOUND IN THE AUR (and not in the repos either):"
+aur_missing_effect = "  -> the helper runs its own transaction, so NONE of the AUR packages install in: {categories}"
 provided_header = "Provided by another package (works, but the name is stale):"
+in_repo_header = "Now in the official repositories — drop 'aur = true' (this rebuilds from source what ships as a signed binary):"
+flagged_header = "AUR warnings (nothing breaks yet, but these are fragile):"
+stale_header = "Sync database is stale — this audit may be reading old data:"
+stale_row = "{repo}: last updated {days} days ago"
 summary = "{total} packages checked — {missing} unresolvable, {provided} stale names, {aur} AUR (unchecked)."
+aur_hint = "To check the AUR entries too: archsetup --check-packages --aur"
+aur_unreachable = "The AUR could not be reached; those packages were left unchecked."
+aur_needs_check = "--aur only works together with --check-packages."
 
 [virt]
 already = "{path} already configured."
