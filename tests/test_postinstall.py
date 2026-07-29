@@ -3,6 +3,7 @@
 import json
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -199,23 +200,47 @@ def test_kmscon_keyboard_falls_back_without_vconsole(tmp_path, monkeypatch):
     assert kmscon.keyboard()["xkb-layout"] == kmscon.DEFAULT_LAYOUT
 
 
-def test_network_group_before_chown(tmp_path, monkeypatch, fake_write, runlog):
+@pytest.fixture
+def samba_env(tmp_path, monkeypatch, fake_write, runlog):
+    """network.configure() with everything privileged stubbed out."""
+    enables, disables = [], []
     monkeypatch.setattr(network, "run", runlog)
     monkeypatch.setattr(network, "sudo_write", fake_write)
     monkeypatch.setattr(network.pacman, "install", lambda repo, aur: 0)
     monkeypatch.setattr(network.pacman, "is_installed", lambda p: True)
-    monkeypatch.setattr(network.services, "enable", lambda n: 0)
+    monkeypatch.setattr(network.services, "enable", lambda n: enables.append(n) or 0)
+    monkeypatch.setattr(network.services, "disable", lambda n: disables.append(n) or 0)
     monkeypatch.setattr(network, "_group_exists", lambda n: False)
     monkeypatch.setattr(network.getpass, "getuser", lambda: "drpars")
     monkeypatch.setattr(network.shutil, "which", lambda n: None)
     monkeypatch.setattr(network, "SMB_CONF", tmp_path / "smb.conf")
+    return SimpleNamespace(enables=enables, disables=disables, runlog=runlog)
+
+
+def test_network_group_before_chown(tmp_path, monkeypatch, samba_env):
+    monkeypatch.setattr(network.prompt, "ask_yes", lambda q: True)
 
     assert network.configure() == 0
     conf = (tmp_path / "smb.conf").read_text()
     assert "log file = /var/log/samba/%m.log" in conf
-    calls = runlog.calls
+    calls = samba_env.runlog.calls
     assert calls.index(["sudo", "groupadd", "-r", "sambashare"]) < calls.index(
         ["sudo", "chown", "root:sambashare", network.USERSHARES]
+    )
+    assert samba_env.enables == ["smb", "nmb", "avahi-daemon.service"]
+    assert samba_env.disables == []
+
+
+def test_samba_boot_answer_decides_enable_or_disable(monkeypatch, samba_env):
+    """Saying no keeps smb/nmb off network-online.target's critical path."""
+    monkeypatch.setattr(network.prompt, "ask_yes", lambda q: False)
+
+    assert network.configure() == 0
+    assert samba_env.disables == ["smb", "nmb"]
+    assert samba_env.enables == ["avahi-daemon.service"]
+    # Still restarted, so the shares work right now without a reboot.
+    assert ["sudo", "systemctl", "restart", "smb.service", "nmb.service"] in (
+        samba_env.runlog.calls
     )
 
 

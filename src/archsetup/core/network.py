@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import i18n, pacman, services
+from . import i18n, pacman, prompt, services
 from .pacman import run
 from .sysedit import sudo_write
 
@@ -82,9 +82,29 @@ def _configure_samba() -> int:
     rc |= run(["sudo", "systemctl", "restart", "smb.service", "nmb.service"])
     print(t("network.smbpasswd", user=user))
     rc |= run(["sudo", "smbpasswd", "-a", user])
-    rc |= services.enable("smb")
-    rc |= services.enable("nmb")
+    rc |= _samba_boot_policy()
     return rc
+
+
+def _samba_boot_policy() -> int:
+    """Ask whether Samba should start at boot instead of assuming it should.
+
+    smb/nmb are ordered after network-online.target, which makes them the one
+    thing dragging systemd-networkd-wait-online onto the critical path
+    (graphical.target <- smb <- nmb <- network-online.target). On a laptop
+    whose shares are used occasionally that is minutes of boot time for
+    nothing, and `systemctl start smb nmb` brings them up immediately when
+    they are actually wanted — no reboot involved. A machine that serves
+    shares continuously wants the opposite, so neither answer can be the
+    silent default.
+
+    The services were just restarted, so they keep running either way; this
+    only decides what happens on the next boot.
+    """
+    if prompt.ask_yes(t("network.smb_at_boot_q")):
+        return services.enable("smb") | services.enable("nmb")
+    print(t("network.smb_manual"))
+    return services.disable("smb") | services.disable("nmb")
 
 
 def wait_online_timeout() -> int:

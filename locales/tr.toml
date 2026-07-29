@@ -165,7 +165,9 @@ done = "Ağ yapılandırması {managers} servisine bırakıldı. Etkili olması 
 
 [network]
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
-done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
+done = "Ağ paylaşımı yapılandırıldı."
+smb_at_boot_q = "Samba (smb/nmb) her açılışta başlatılsın mı? Boot süresini uzatır; gerektiğinde 'systemctl start smb nmb' ile anında açılır."
+smb_manual = "smb/nmb boot'ta başlatılmayacak. Gerektiğinde: sudo systemctl start smb nmb"
 no_wait_online = "systemd-networkd-wait-online bulunamadı; atlanıyor."
 wait_online_done = "wait-online sınırlandırıldı (--any --timeout=3): {path}"
 
