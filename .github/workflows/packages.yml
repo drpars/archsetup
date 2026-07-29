@@ -1,0 +1,41 @@
+name: packages
+
+# Deliberately not run on every push. This check can turn red without a single
+# line changing -- a package leaving the repositories is enough -- so tying it
+# to commits would both miss the failure it exists to catch and train everyone
+# to ignore a red mark that has nothing to do with what they just pushed.
+on:
+  schedule:
+    # Monday 06:00 UTC. Package lists rot while nobody touches them, so time
+    # is the only trigger that fires on the actual failure mode.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    paths:
+      - "data/**"
+      - ".github/workflows/packages.yml"
+
+jobs:
+  audit:
+    # Only where pacman exists. The audit reads the sync databases, so an
+    # Ubuntu runner cannot answer the question at all.
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # Before checkout: the image ships neither git nor python, and multilib
+      # is off by default. Leaving multilib off would report the lib32-*
+      # packages as missing -- a false alarm produced by the audit's own
+      # environment rather than by the data being audited.
+      - name: Enable multilib and install prerequisites
+        run: |
+          printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+          pacman -Sy --noconfirm git python
+
+      - uses: actions/checkout@v4
+
+      # The -Sy above also means this runs against a fresh index, so the
+      # staleness that limits the same command on a laptop does not apply.
+      # --aur needs the network; if the AUR cannot be reached those entries
+      # are reported unchecked rather than failing the run.
+      - name: Audit package names
+        run: ./archsetup --check-packages --aur

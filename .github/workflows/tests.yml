@@ -1,0 +1,23 @@
+name: tests
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Installing from pyproject rather than naming packages here is the
+      # point of running this on a clean machine at all: a dependency missing
+      # from the project metadata fails here instead of hiding behind a local
+      # .venv that already happens to have it.
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Tests
+        run: python -m pytest -q

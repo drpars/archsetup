@@ -63,6 +63,66 @@ Yeniden başlatma sonrası (`./run-vm.sh boot` ile ISO'suz):
       → kurulum sonrası modu açılıyor, `bootloader-info` "systemd-boot (UKI)"
       gösteriyor
 
+## Kurulum bitti ≠ kurulum doğru
+
+Yukarıdaki liste kurucunun **çalıştığını** doğruluyor, ürettiği sistemin
+**doğru** olduğunu değil. Aradaki fark teorik değil: 2026-07-28'de bu betikle
+yapılan gerçek kurulum hatasız tamamlandı ve her boot'ta 4 servis hatası veren,
+2dk 20sn açılan, ESP'si herkese okunabilir bir sistem üretti. Hiçbiri ekranda
+görünmedi.
+
+O yüzden yeniden başlatmadan sonra bunlar da bakılmalı:
+
+```bash
+journalctl -p 3 -b            # BOŞ olmalı; tek satır bile bir yapılandırma artığıdır
+systemd-analyze               # userspace süresi; onlarca saniye ise critical-chain'e bak
+systemd-analyze critical-chain
+```
+
+- [ ] `journalctl -p 3 -b` çıktısı boş (modül yükleme, servis başlatma hatası yok)
+- [ ] Boot süresi makul; `critical-chain`'de tek bir servis dakikalar tutmuyor
+
+**ESP izinleri** (`disk.py` mount seçenekleri → `genfstab` → fstab zinciri):
+
+```bash
+findmnt -no OPTIONS /efi      # fmask=0077,dmask=0077 içermeli
+grep efi /etc/fstab           # maske fstab'a da yazılmış olmalı
+bootctl status | grep -i 'world accessible' || echo "uyari yok - dogru"
+```
+
+- [ ] `/efi` `fmask=0077,dmask=0077` ile bağlı
+- [ ] Aynı maske **fstab'da da** var (yalnızca mount'ta olması yeterli değil —
+      fstab yanlışsa sonraki boot'ta eski davranış döner)
+- [ ] `bootctl` "random-seed world accessible" uyarısı vermiyor
+
+**UKI fallback** (`chroot.py` preset düzenlemesi):
+
+```bash
+ls /efi/EFI/Linux/             # İKİ dosya olmalı: normal + fallback
+bootctl list | grep -i fallback
+df -h /efi                     # iki imaj sığdıktan sonra yer kaldı mı
+```
+
+- [ ] `/efi/EFI/Linux/` altında **iki** UKI var (biri `-fallback`)
+- [ ] `bootctl list` fallback girdisini gösteriyor — yani menüden seçilebilir
+- [ ] ESP dolmadı (iki UKI + firmware sığıyor)
+- [ ] **Fallback gerçekten açılıyor:** yeniden başlat, önyükleme menüsünden
+      fallback girdisini seç, sistem açılsın. Açılmayan bir kurtarma girdisi
+      olmamasından beterdir — var sanırsın.
+
+**Modül listesi** (kurucunun bıraktığı artıklar):
+
+```bash
+grep ^MODULES /etc/mkinitcpio.conf    # virtio_* ve radeon OLMAMALI
+```
+
+- [ ] `MODULES` içinde `virtio_blk`/`virtio_pci`/`virtio_net`/`radeon` yok
+
+> Bu bölüm QEMU içinde çalıştırıldığında bir uyarı: VM'de kök disk gerçekten
+> virtio üzerindedir, dolayısıyla `autodetect` `virtio_blk`'i **imaja** koyar.
+> Bu doğrudur ve beklenendir — kontrol edilen şey `MODULES=()` satırına elle
+> yazılmamış olması, imajda bulunmaması değil.
+
 ## Diğer senaryolar
 
 | Komut | Senaryo |

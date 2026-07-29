@@ -1,5 +1,8 @@
 # archsetup
 
+[![tests](https://github.com/drpars/archsetup/actions/workflows/tests.yml/badge.svg)](https://github.com/drpars/archsetup/actions/workflows/tests.yml)
+[![packages](https://github.com/drpars/archsetup/actions/workflows/packages.yml/badge.svg)](https://github.com/drpars/archsetup/actions/workflows/packages.yml)
+
 🇹🇷 Arch Linux kurulumu ve kurulum sonrası yapılandırma için interaktif TUI aracı.
 🇬🇧 Interactive TUI for Arch Linux installation and post-install setup.
 
