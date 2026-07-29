@@ -171,6 +171,12 @@ smb_manual = "smb/nmb will not start at boot. When needed: sudo systemctl start 
 no_wait_online = "systemd-networkd-wait-online not found; skipping."
 wait_online_done = "wait-online limited (--any --timeout=3): {path}"
 
+[pkgaudit]
+missing_header = "UNRESOLVABLE PACKAGES — these abort the install:"
+missing_effect = "  -> pacman uses a single transaction, so NOTHING installs in: {categories}"
+provided_header = "Provided by another package (works, but the name is stale):"
+summary = "{total} packages checked — {missing} unresolvable, {provided} stale names, {aur} AUR (unchecked)."
+
 [virt]
 already = "{path} already configured."
 libvirt_missing = "libvirt is not installed; install it from Applications > Virtualization first."

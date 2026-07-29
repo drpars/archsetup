@@ -171,6 +171,12 @@ smb_manual = "smb/nmb boot'ta başlatılmayacak. Gerektiğinde: sudo systemctl s
 no_wait_online = "systemd-networkd-wait-online bulunamadı; atlanıyor."
 wait_online_done = "wait-online sınırlandırıldı (--any --timeout=3): {path}"
 
+[pkgaudit]
+missing_header = "ÇÖZÜLEMEYEN PAKETLER — bunlar kurulumu düşürür:"
+missing_effect = "  → pacman tek işlem kullandığı için bu kategorilerde HİÇBİR paket kurulmaz: {categories}"
+provided_header = "Başka bir paket tarafından sağlanıyor (çalışır, ama adı eskimiş):"
+summary = "{total} paket denetlendi — {missing} çözülemeyen, {provided} eskimiş ad, {aur} AUR (denetlenmedi)."
+
 [virt]
 already = "{path} zaten yapılandırılmış."
 libvirt_missing = "libvirt kurulu değil; önce Uygulamalar > Sanallaştırma kategorisinden kurun."

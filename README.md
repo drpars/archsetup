@@ -63,6 +63,28 @@ Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 ./archsetup --lang en       # arayüz dili
 ```
 
+### Paket listelerini denetleme
+
+```bash
+./archsetup --check-packages
+```
+
+`data/` altındaki her paket adını senkron veritabanlarına karşı sınar. Salt
+okunur; root gerekmez, ağa çıkmaz.
+
+Bu denetimin sebebi paket listelerinin sessizce çürümesi: bir ad başka pakete
+katılır (`libva-mesa-driver` → `mesa`), `Replaces` bırakmadan yeniden
+adlandırılır (`plasma-discover` → `discover`) ya da tamamen kalkar
+(`bridge-utils`). Kurulum tek `pacman -S --needed <hepsi>` çağrısıyla
+yapıldığı için **çözülemeyen tek bir ad işlemin tamamını düşürür** ve o
+kategoriden hiçbir paket kurulmaz. Yani ölü bir girdi bütün bir kategoriyi
+sessizce devre dışı bırakır.
+
+Adlar dört gruba ayrılır: tam eşleşen, grup (`plasma`), başka paketçe
+sağlanan (çalışır ama adı eskimiş) ve çözülemeyen. Yalnızca sonuncusu sıfırdan
+farklı çıkış kodu üretir. AUR girdileri çevrimdışı yanıtlanamayacağı için
+denetlenmez, sayılır.
+
 ### SSH yönetimi
 
 `Yapılandırma → SSH Yönetimi` altında dört görev var:

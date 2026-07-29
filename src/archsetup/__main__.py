@@ -1,9 +1,10 @@
 """Command line entry point.
 
-    archsetup              interactive TUI
-    archsetup --list       list headless tasks
-    archsetup <task-id>    run a single task without the TUI
-    archsetup --lang en    override the interface language
+    archsetup                   interactive TUI
+    archsetup --list            list headless tasks
+    archsetup <task-id>         run a single task without the TUI
+    archsetup --lang en         override the interface language
+    archsetup --check-packages  audit data/ against the sync databases
 """
 
 from __future__ import annotations
@@ -57,6 +58,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("task", nargs="?", help="task id to run headlessly")
     parser.add_argument("--list", action="store_true", dest="list_tasks",
                         help="list available tasks")
+    parser.add_argument("--check-packages", action="store_true",
+                        dest="check_packages",
+                        help="check every package name in data/ against the "
+                             "sync databases")
     parser.add_argument("--lang", help="interface language (tr, en, ...)")
     parser.add_argument("--installer", action="store_true",
                         help="force installer (live ISO) mode")
@@ -123,6 +128,13 @@ def main(argv: list[str] | None = None) -> int:
     t = i18n.t
 
     from .core import tasks
+
+    if args.check_packages:
+        # Deliberately before the installer/root branches: this only reads the
+        # sync databases, so it is safe to run as anyone, anywhere.
+        from .core import pkgaudit
+
+        return pkgaudit.run()
 
     if args.list_tasks:
         width = max(len(task.id) for task in tasks.TASKS)
