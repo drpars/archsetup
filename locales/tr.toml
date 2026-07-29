@@ -166,6 +166,8 @@ done = "Ağ yapılandırması {managers} servisine bırakıldı. Etkili olması 
 [network]
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı; smb, nmb ve avahi servisleri etkin."
+no_wait_online = "systemd-networkd-wait-online bulunamadı; atlanıyor."
+wait_online_done = "wait-online sınırlandırıldı (--any --timeout=3): {path}"
 
 [virt]
 already = "{path} zaten yapılandırılmış."
@@ -307,6 +309,8 @@ asus_supergfx = "supergfxctl (isteğe bağlı)"
 asus_supergfx_desc = "GPU modu değiştirme; yalnızca VM geçişi veya dGPU sorunları için"
 network_sharing = "Ağ Paylaşımı (Samba/Avahi)"
 network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servisler"
+wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
+wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (120 sn boot gecikmesini keser)"
 virt_config = "Virt-Manager Yapılandırması"
 virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, servisler"
 waydroid_setup = "Waydroid Binder Kurulumu"

@@ -219,6 +219,35 @@ def test_network_group_before_chown(tmp_path, monkeypatch, fake_write, runlog):
     )
 
 
+def test_wait_online_dropin(tmp_path, monkeypatch, fake_write, runlog):
+    dropin = tmp_path / "wait-online.d" / "any.conf"
+    monkeypatch.setattr(network, "run", runlog)
+    monkeypatch.setattr(network, "sudo_write", fake_write)
+    monkeypatch.setattr(network.services, "unit_exists", lambda n: True)
+    monkeypatch.setattr(network, "WAIT_ONLINE_DROPIN", dropin)
+
+    assert network.wait_online_timeout() == 0
+    text = dropin.read_text()
+    # ExecStart must be cleared first; systemd appends otherwise.
+    assert "ExecStart=\nExecStart=/usr/lib/systemd/systemd-networkd-wait-online" in text
+    assert "--any --timeout=3" in text
+    assert ["sudo", "systemctl", "daemon-reload"] in runlog.calls
+    # The unit is throttled, never disabled: smb/nmb and the keyring sync are
+    # ordered after network-online.target.
+    assert not any("disable" in call for call in runlog.calls)
+
+
+def test_wait_online_skipped_without_networkd(tmp_path, monkeypatch, runlog):
+    written = []
+    monkeypatch.setattr(network, "run", runlog)
+    monkeypatch.setattr(network, "sudo_write", lambda p, c: written.append(p) or 0)
+    monkeypatch.setattr(network.services, "unit_exists", lambda n: False)
+
+    assert network.wait_online_timeout() == 0
+    assert written == []
+    assert runlog.calls == []
+
+
 def test_asus_g14_routing(tmp_path, monkeypatch):
     installs, enables = [], []
     monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)

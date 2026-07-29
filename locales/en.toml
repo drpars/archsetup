@@ -166,6 +166,8 @@ done = "Network configuration left to {managers}. To apply: sudo systemctl resta
 [network]
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured; smb, nmb and avahi services enabled."
+no_wait_online = "systemd-networkd-wait-online not found; skipping."
+wait_online_done = "wait-online limited (--any --timeout=3): {path}"
 
 [virt]
 already = "{path} already configured."
@@ -307,6 +309,8 @@ asus_supergfx = "supergfxctl (optional)"
 asus_supergfx_desc = "GPU mode switching; only for VM passthrough or dGPU issues"
 network_sharing = "Network Sharing (Samba/Avahi)"
 network_sharing_desc = "Samba configuration, sambashare group, mDNS and services"
+wait_online_timeout = "Shorten Network Wait"
+wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (cuts the 120 s boot delay)"
 virt_config = "Virt-Manager Configuration"
 virt_config_desc = "libvirt socket/user settings, groups, services"
 waydroid_setup = "Waydroid Binder Setup"

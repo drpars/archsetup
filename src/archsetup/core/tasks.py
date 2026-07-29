@@ -213,6 +213,12 @@ TASKS: tuple[Task, ...] = (
         network.configure,
         group="network",
     ),
+    Task(
+        "wait-online-timeout",
+        "task.wait_online_timeout",
+        network.wait_online_timeout,
+        group="network",
+    ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
     Task(
         "waydroid-setup",
