@@ -314,7 +314,7 @@ network_sharing_desc = "Samba configuration, sambashare group, mDNS and services
 wait_online_timeout = "Shorten Network Wait"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (cuts the 120 s boot delay)"
 virt_config = "Virt-Manager Configuration"
-virt_config_desc = "libvirt socket/user settings, groups, services"
+virt_config_desc = "libvirt socket/user settings, groups, socket activation"
 waydroid_setup = "Waydroid Binder Setup"
 waydroid_setup_desc = "binder_linux module (skipped when built into the kernel) + service"
 ssh_status = "SSH Status"

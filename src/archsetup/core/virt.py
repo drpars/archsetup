@@ -6,8 +6,8 @@ Ported from installarchde's config_virt_manager with fixes:
   is kvm_amd/kvm_intel, which ship built in. The old script added them and
   every kernel that does not build them (linux-g14) then failed at boot
   with "Failed to find module 'virtio_blk'",
-- libvirtd is enabled and started before virsh net-autostart/net-start
-  (the old order ran virsh against a stopped daemon).
+- libvirtd runs through socket activation instead of being enabled at boot
+  (see _enable_libvirt_sockets).
 """
 
 from __future__ import annotations
@@ -25,6 +25,17 @@ t = i18n.t
 LIBVIRTD_CONF = Path("/etc/libvirt/libvirtd.conf")
 QEMU_CONF = Path("/etc/libvirt/qemu.conf")
 NETWORK_CONF = Path("/etc/libvirt/network.conf")
+
+# Enabling libvirtd.service costs ~2.5 s on the critical boot path
+# (multi-user.target <- libvirtd <- virtlogd) and Arch's own preset ships it
+# disabled. Socket activation starts the daemon on first access instead.
+LIBVIRT_SOCKETS = (
+    "libvirtd.socket",
+    "libvirtd-ro.socket",
+    "libvirtd-admin.socket",
+    "virtlogd.socket",
+    "virtlockd.socket",
+)
 
 
 def _append_once(path: Path, marker: str, block: str) -> bool:
@@ -44,6 +55,25 @@ def _group_exists(name: str) -> bool:
     return (
         subprocess.run(["getent", "group", name], capture_output=True).returncode == 0
     )
+
+
+def _enable_libvirt_sockets() -> int:
+    """Switch libvirt to socket activation.
+
+    Order matters. libvirtd.service carries Also= lines for virtlockd.socket,
+    virtlogd.socket, libvirtd.socket, libvirtd-ro.socket and
+    libvirtd-admin.socket, so `systemctl disable libvirtd.service` takes every
+    one of those sockets down with it. Disabling after enabling would leave the
+    machine with neither the service nor socket activation, and virt-manager
+    could no longer start the daemon at all.
+
+    The sockets are started as well as enabled: the virsh net-* calls below
+    connect immediately, and an enabled-but-not-started socket would refuse
+    them until the next boot.
+    """
+    rc = services.disable("libvirtd.service")
+    rc |= run(["sudo", "systemctl", "enable", "--now", *LIBVIRT_SOCKETS])
+    return rc
 
 
 def configure() -> int:
@@ -76,9 +106,7 @@ def configure() -> int:
             run(["sudo", "groupadd", "-f", group])
 
     rc = run(["sudo", "usermod", "-aG", "kvm,libvirt", user])
-    rc |= services.enable("libvirtd.service")
-    rc |= services.enable("virtlogd.service")
-    rc |= run(["sudo", "systemctl", "start", "libvirtd.service"])
+    rc |= _enable_libvirt_sockets()
 
     # Tolerated: these fail harmlessly when the network is already active.
     run(["sudo", "virsh", "net-autostart", "default"])

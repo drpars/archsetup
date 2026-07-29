@@ -582,11 +582,12 @@ def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):
         (etc / name).write_text("# stock\n")
     mk = etc / "mkinitcpio.conf"
     mk.write_text("MODULES=()\n")
+    disables = []
 
     monkeypatch.setattr(virt, "run", runlog)
     monkeypatch.setattr(virt, "sudo_write", fake_write)
     monkeypatch.setattr(virt.pacman, "is_installed", lambda p: True)
-    monkeypatch.setattr(virt.services, "enable", lambda n: 0)
+    monkeypatch.setattr(virt.services, "disable", lambda n: disables.append(n) or 0)
     monkeypatch.setattr(virt, "_group_exists", lambda g: g == "kvm")
     monkeypatch.setattr(virt.getpass, "getuser", lambda: "drpars")
     monkeypatch.setattr(virt, "LIBVIRTD_CONF", etc / "libvirtd.conf")
@@ -603,14 +604,38 @@ def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):
     assert mk.read_text() == "MODULES=()\n"
     assert ["sudo", "mkinitcpio", "-P"] not in runlog.calls
 
-    start = runlog.calls.index(["sudo", "systemctl", "start", "libvirtd.service"])
-    virsh = runlog.calls.index(["sudo", "virsh", "net-autostart", "default"])
-    assert start < virsh
+    # Socket activation, not a boot-time service.
+    sockets = ["sudo", "systemctl", "enable", "--now", *virt.LIBVIRT_SOCKETS]
+    assert sockets in runlog.calls
+    assert ["sudo", "systemctl", "start", "libvirtd.service"] not in runlog.calls
+    assert disables == ["libvirtd.service"]
+    # virsh talks to the socket, so it has to be up first.
+    assert runlog.calls.index(sockets) < runlog.calls.index(
+        ["sudo", "virsh", "net-autostart", "default"]
+    )
 
     # idempotent
     runlog.calls.clear()
     assert virt.configure() == 0
     assert "unix_sock_group = 'libvirt'" in (etc / "libvirtd.conf").read_text()
+
+
+def test_libvirt_sockets_enabled_after_service_disable(monkeypatch, tmp_path,
+                                                       fake_write, runlog):
+    """Order matters: libvirtd.service's Also= lines take the sockets with it.
+
+    Enabling the sockets first and disabling the service afterwards would undo
+    the enable and leave the machine with no way to reach libvirtd at all.
+    """
+    order = []
+    monkeypatch.setattr(virt, "run", lambda cmd, **kw: order.append(cmd) or 0)
+    monkeypatch.setattr(
+        virt.services, "disable", lambda n: order.append(["disable", n]) or 0
+    )
+
+    assert virt._enable_libvirt_sockets() == 0
+    assert order[0] == ["disable", "libvirtd.service"]
+    assert order[1] == ["sudo", "systemctl", "enable", "--now", *virt.LIBVIRT_SOCKETS]
 
 
 def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):

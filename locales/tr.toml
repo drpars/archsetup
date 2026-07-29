@@ -314,7 +314,7 @@ network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servi
 wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (120 sn boot gecikmesini keser)"
 virt_config = "Virt-Manager Yapılandırması"
-virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, servisler"
+virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, soket aktivasyonu"
 waydroid_setup = "Waydroid Binder Kurulumu"
 waydroid_setup_desc = "binder_linux modülü (çekirdekte yerleşikse atlanır) + servis"
 ssh_status = "SSH Durumu"
