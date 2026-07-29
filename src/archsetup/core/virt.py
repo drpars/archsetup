@@ -1,8 +1,11 @@
 """libvirt / virt-manager configuration.
 
 Ported from installarchde's config_virt_manager with fixes:
-- mkinitcpio -P actually runs after adding the virtio modules (the old
-  script edited MODULES but never regenerated the initramfs),
+- no virtio modules are added to the initramfs. virtio_blk/pci/net are VM
+  *guest* drivers and do nothing for a virt-manager *host*; the host side
+  is kvm_amd/kvm_intel, which ship built in. The old script added them and
+  every kernel that does not build them (linux-g14) then failed at boot
+  with "Failed to find module 'virtio_blk'",
 - libvirtd is enabled and started before virsh net-autostart/net-start
   (the old order ran virsh against a stopped daemon).
 """
@@ -13,7 +16,7 @@ import getpass
 import subprocess
 from pathlib import Path
 
-from . import gpuconfig, i18n, pacman, services
+from . import i18n, pacman, services
 from .pacman import run
 from .sysedit import sudo_write
 
@@ -22,7 +25,6 @@ t = i18n.t
 LIBVIRTD_CONF = Path("/etc/libvirt/libvirtd.conf")
 QEMU_CONF = Path("/etc/libvirt/qemu.conf")
 NETWORK_CONF = Path("/etc/libvirt/network.conf")
-VIRT_MODULES = ("virtio", "virtio_blk", "virtio_pci", "virtio_net")
 
 
 def _append_once(path: Path, marker: str, block: str) -> bool:
@@ -68,9 +70,6 @@ def configure() -> int:
         'firewall_backend="iptables"',
         'firewall_backend="iptables"\n',
     )
-
-    if gpuconfig._merge_modules(VIRT_MODULES):
-        run(["sudo", "mkinitcpio", "-P"])
 
     for group in ("libvirt", "kvm"):
         if not _group_exists(group):

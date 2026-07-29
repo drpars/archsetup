@@ -543,8 +543,12 @@ def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):
 
     assert virt.configure() == 0
     assert "unix_sock_group = 'libvirt'" in (etc / "libvirtd.conf").read_text()
-    assert "MODULES=(virtio virtio_blk virtio_pci virtio_net)" in mk.read_text()
-    assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
+
+    # virtio_* are guest drivers: the host must not pull them into the initramfs
+    # (linux-g14 does not even build them).
+    assert mk.read_text() == "MODULES=()\n"
+    assert ["sudo", "mkinitcpio", "-P"] not in runlog.calls
+
     start = runlog.calls.index(["sudo", "systemctl", "start", "libvirtd.service"])
     virsh = runlog.calls.index(["sudo", "virsh", "net-autostart", "default"])
     assert start < virsh
@@ -552,7 +556,7 @@ def test_virt_configure(tmp_path, monkeypatch, fake_write, runlog):
     # idempotent
     runlog.calls.clear()
     assert virt.configure() == 0
-    assert ["sudo", "mkinitcpio", "-P"] not in runlog.calls
+    assert "unix_sock_group = 'libvirt'" in (etc / "libvirtd.conf").read_text()
 
 
 def test_waydroid_zen_vs_dkms(tmp_path, monkeypatch, fake_write):
