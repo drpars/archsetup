@@ -16,6 +16,8 @@ condition = "gpu:amd"
 
   [[category.packages]]
   name = "xf86-video-amdgpu"
+  note = { tr = "Yalnızca Xorg DDX; Wayland'de ve modesetting ile gereksiz", en = "Xorg DDX only; unused on Wayland and with modesetting" }
+  default = false
 
   [[category.packages]]
   name = "vulkan-radeon"
@@ -23,36 +25,22 @@ condition = "gpu:amd"
   [[category.packages]]
   name = "lib32-vulkan-radeon"
 
-  [[category.packages]]
-  name = "libva-mesa-driver"
-
-  [[category.packages]]
-  name = "lib32-libva-mesa-driver"
-
-  [[category.packages]]
-  name = "mesa-vdpau"
-
-  [[category.packages]]
-  name = "lib32-mesa-vdpau"
+  # VA-API comes from mesa/lib32-mesa themselves: they provide (and replace)
+  # libva-mesa-driver, so naming it separately only duplicated the entry.
+  #
+  # mesa-vdpau and lib32-mesa-vdpau are gone for good — Mesa 25.3 dropped the
+  # VDPAU state trackers in favour of VA-API. Listing them made every AMD
+  # driver install abort with "target not found" before installing anything.
 
 [[category]]
 id = "nvidia"
 condition = "gpu:nvidia"
 
-  [[category.packages]]
-  name = "nvidia"
-  note = { tr = "Kapalı kaynak, linux çekirdeği için", en = "Proprietary, for the linux kernel" }
-  default = false
-
-  [[category.packages]]
-  name = "nvidia-lts"
-  note = { tr = "Kapalı kaynak, linux-lts için", en = "Proprietary, for linux-lts" }
-  default = false
-
-  [[category.packages]]
-  name = "nvidia-dkms"
-  note = { tr = "Kapalı kaynak, tüm çekirdekler (DKMS)", en = "Proprietary, any kernel (DKMS)" }
-  default = false
+  # The proprietary kernel modules (nvidia, nvidia-lts, nvidia-dkms) no longer
+  # exist: with the 590 driver the main packages switched to the open kernel
+  # modules and nvidia-open now Replaces them. Turing (RTX 20xx / GTX 1650)
+  # and newer belong here. Pascal and older are unsupported by 590+ and need
+  # the legacy branch below.
 
   [[category.packages]]
   name = "nvidia-open"
@@ -60,8 +48,19 @@ condition = "gpu:nvidia"
   default = false
 
   [[category.packages]]
+  name = "nvidia-open-lts"
+  note = { tr = "Açık çekirdek modülü, linux-lts için", en = "Open kernel module, for linux-lts" }
+  default = false
+
+  [[category.packages]]
   name = "nvidia-open-dkms"
   note = { tr = "Açık çekirdek modülü, tüm çekirdekler (DKMS)", en = "Open kernel module, any kernel (DKMS)" }
+
+  [[category.packages]]
+  name = "nvidia-580xx-dkms"
+  aur = true
+  note = { tr = "Pascal (GTX 10xx) ve öncesi: 590 desteği bıraktı", en = "Pascal (GTX 10xx) and older: dropped by 590" }
+  default = false
 
   [[category.packages]]
   name = "nvidia-utils"
