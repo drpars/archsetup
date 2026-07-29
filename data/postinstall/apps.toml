@@ -31,7 +31,7 @@ id = "console"
   name = "mc"
 
   [[category.packages]]
-  name = "mlocate"
+  name = "plocate"
 
   [[category.packages]]
   name = "fd"
@@ -92,7 +92,7 @@ id = "compression"
   name = "unrar"
 
   [[category.packages]]
-  name = "p7zip"
+  name = "7zip"
 
   [[category.packages]]
   name = "lzop"
@@ -350,7 +350,7 @@ id = "yazi_extras"
   name = "ffmpegthumbnailer"
 
   [[category.packages]]
-  name = "p7zip"
+  name = "7zip"
 
   [[category.packages]]
   name = "jq"

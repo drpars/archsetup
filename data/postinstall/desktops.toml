@@ -104,7 +104,7 @@ id = "hyprland"
   name = "swappy"
 
   [[category.packages]]
-  name = "swww"
+  name = "awww"
 
   [[category.packages]]
   name = "imv"
@@ -263,13 +263,12 @@ id = "plasma"
   name = "kdiskmark"
   note = { tr = "Disk performans test aracı", en = "Disk benchmark tool" }
 
+  # Renamed to plain "discover", and the notifier is part of it now. Neither
+  # old name carries a Replaces, so pacman could not resolve them and the
+  # whole plasma install aborted with "target not found".
   [[category.packages]]
-  name = "plasma-discover"
-  note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası)", en = "Graphical package manager (app store)" }
-
-  [[category.packages]]
-  name = "discover-notifier"
-  note = { tr = "Discover bildirim aracı", en = "Discover update notifier" }
+  name = "discover"
+  note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası) + güncelleme bildirimi", en = "Graphical package manager (app store) + update notifier" }
 
   [[category.packages]]
   name = "plasma5-applets-virtual-desktop-bar-git"
