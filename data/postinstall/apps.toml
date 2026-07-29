@@ -530,8 +530,11 @@ id = "virtualization"
   name = "libvirt"
   post_msg = "msg.virt_config_hint"
 
+  # iptables-nft was merged into iptables, which provides and replaces it.
+  # libvirt still wants the iptables interface for NAT networking; the repo
+  # package speaks it while writing nftables rules underneath.
   [[category.packages]]
-  name = "iptables-nft"
+  name = "iptables"
 
   [[category.packages]]
   name = "dnsmasq"
@@ -551,8 +554,20 @@ id = "virtualization"
   [[category.packages]]
   name = "virt-viewer"
 
+  # UEFI guests need OVMF firmware, and qemu-desktop does not depend on it.
+  # Without this, creating a UEFI VM fails at firmware selection.
   [[category.packages]]
-  name = "bridge-utils"
+  name = "edk2-ovmf"
+  note = { tr = "UEFI misafirler için OVMF ürün yazılımı", en = "OVMF firmware for UEFI guests" }
 
   [[category.packages]]
   name = "swtpm"
+
+  [[category.packages]]
+  name = "virtiofsd"
+  note = { tr = "Host ↔ misafir klasör paylaşımı", en = "Host to guest folder sharing" }
+  default = false
+
+  # bridge-utils is gone from the repos: brctl was superseded by iproute2 and
+  # libvirt manages bridges over netlink. Listing it aborted the whole
+  # virtualization install with "target not found".
