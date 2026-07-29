@@ -185,6 +185,10 @@ id = "system"
   default = false
 
   [[category.packages]]
+  name = "ntfsprogs"
+  note = { tr = "NTFS araçları (mkntfs, ntfsfix); ntfs-3g gerekmez", en = "NTFS tools (mkntfs, ntfsfix); does not need ntfs-3g" }
+
+  [[category.packages]]
   name = "acpi"
 
   [[category.packages]]
