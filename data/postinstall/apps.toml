@@ -246,6 +246,33 @@ id = "common"
   name = "libreoffice-still"
   default = false
 
+  # zathura tek basina hicbir bicimi acamaz -- her bicim ayri bir eklenti.
+  # mupdf arka ucu PDF/ePub/OpenXPS'i birlikte veriyor, masaustunde kurulu
+  # olan da bu. poppler arka ucu ayni yuvayi doldurdugu icin ikisi ayni
+  # anda kurulamaz; listede yalnizca mupdf var.
+  [[category.packages]]
+  name = "zathura"
+  note = { tr = "Belge okuyucu (vim tusları)", en = "Document viewer (vim keys)" }
+
+  [[category.packages]]
+  name = "zathura-pdf-mupdf"
+  note = { tr = "PDF + ePub + XPS", en = "PDF + ePub + XPS" }
+
+  [[category.packages]]
+  name = "zathura-djvu"
+  note = "DjVu"
+  default = false
+
+  [[category.packages]]
+  name = "zathura-cb"
+  note = { tr = "Çizgi roman (cbz/cbr)", en = "Comic book (cbz/cbr)" }
+  default = false
+
+  [[category.packages]]
+  name = "zathura-ps"
+  note = "PostScript"
+  default = false
+
   [[category.packages]]
   name = "openrgb"
 
@@ -474,14 +501,15 @@ id = "theme_engines"
   aur = true
   default = false
 
+  # darkly-bin, darkly ve darkly-qt6-git ayni depoyu (Bali10050/Darkly)
+  # paketliyor ve ayni surumu (0.5.38) veriyor. Ikisi birden secilirse
+  # cakisirlar: darkly-qt6-git yalnizca "darkly" ile conflict tanimliyor,
+  # darkly-bin ile degil -- yani cakisma pacman'da degil dosya duzeyinde
+  # patlar. Hazir ikili olan tutuldu; digeri KF6 derlemesi istiyor.
   [[category.packages]]
   name = "darkly-bin"
   aur = true
-
-  [[category.packages]]
-  name = "darkly-qt6-git"
-  aur = true
-  default = false
+  note = { tr = "Qt/KDE stili (Lightly forku)", en = "Qt/KDE style (Lightly fork)" }
 
 [[category]]
 id = "themes"
