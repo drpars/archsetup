@@ -123,9 +123,8 @@ def test_wallpapers_refuses_an_unexpected_repo_layout(dot_env, monkeypatch):
     assert dotfiles.install_wallpapers() != 0
 
 
-def test_sddm_silent(tmp_path, monkeypatch, fake_write, runlog):
+def test_sddm_silent(tmp_path, monkeypatch, fake_write):
     monkeypatch.setattr(sddm, "sudo_write", fake_write)
-    monkeypatch.setattr(sddm, "run", runlog)
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: True)
     monkeypatch.setattr(sddm.pacman, "install", lambda repo, aur: 0)
     monkeypatch.setattr(sddm, "SDDM_CONF", tmp_path / "sddm.conf")
@@ -135,24 +134,6 @@ def test_sddm_silent(tmp_path, monkeypatch, fake_write, runlog):
 
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: False)
     assert sddm.install_silent() == 1
-
-
-def test_sddm_sugarcandy(tmp_path, monkeypatch, fake_write, runlog):
-    repo = tmp_path / "dotrepo"
-    (repo / "sddm" / "sugar-candy").mkdir(parents=True)
-    (repo / "sddm" / "sddm.conf").write_text("[Autologin]\nUser=drpars\n")
-    (repo / "sddm" / "sugar-candy" / "sugar-candy.tar.gz").write_bytes(b"x")
-
-    monkeypatch.setattr(sddm, "sudo_write", fake_write)
-    monkeypatch.setattr(sddm, "run", runlog)
-    monkeypatch.setattr(sddm, "_sddm_installed", lambda: True)
-    monkeypatch.setattr(sddm, "DOTFILES_DIR", repo)
-    monkeypatch.setattr(sddm, "SDDM_CONF_DIR", tmp_path / "sddm.conf.d")
-    monkeypatch.setattr(sddm, "THEMES_DIR", tmp_path / "themes")
-
-    assert sddm.install_sugarcandy() == 0
-    assert "sugar-candy" in (tmp_path / "sddm.conf.d" / "10-theme.conf").read_text()
-    assert any(cmd[:2] == ["sudo", "tar"] for cmd in runlog.calls)
 
 
 def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):

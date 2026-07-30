@@ -200,12 +200,6 @@ TASKS: tuple[Task, ...] = (
         group="dotfiles",
     ),
     Task("sddm-silent", "task.sddm_silent", sddm.install_silent, group="appearance"),
-    Task(
-        "sddm-sugarcandy",
-        "task.sddm_sugarcandy",
-        sddm.install_sugarcandy,
-        group="appearance",
-    ),
     Task("kmscon", "task.kmscon", kmscon.install, group="appearance"),
     Task(
         "network-sharing",

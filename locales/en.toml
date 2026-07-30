@@ -102,7 +102,6 @@ wallpapers_q = "Apply the wallpaper changes? Target: {target}"
 
 [sddm]
 overwrite_q = "{path} already exists, overwrite it?"
-files_missing = "SDDM files not found in the repo: {path}"
 done = "SDDM theme installed. Visible on the next login screen."
 
 [kmscon]
@@ -314,8 +313,6 @@ wallpapers = "Wallpapers"
 wallpapers_desc = "Mirror drpars/Wallpaper into Pictures/Wallpaper"
 sddm_silent = "SDDM Silent Theme"
 sddm_silent_desc = "Install sddm-silent-theme (AUR) and write /etc/sddm.conf"
-sddm_sugarcandy = "SDDM Sugar Candy Theme"
-sddm_sugarcandy_desc = "Install from the theme archive in the dotfiles repo"
 kmscon = "Install KMSCON"
 kmscon_desc = "kmscon (AUR) + service swap for the chosen TTY"
 asus_tools = "ASUS ROG/TUF Tools"

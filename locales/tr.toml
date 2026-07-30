@@ -102,7 +102,6 @@ wallpapers_q = "Duvar kağıdı değişiklikleri uygulansın mı? Hedef: {target
 
 [sddm]
 overwrite_q = "{path} zaten var, üzerine yazılsın mı?"
-files_missing = "SDDM dosyaları depoda bulunamadı: {path}"
 done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında görünür."
 
 [kmscon]
@@ -314,8 +313,6 @@ wallpapers = "Duvar Kağıtları"
 wallpapers_desc = "drpars/Wallpaper deposunu Resimler/Wallpaper içine eşitle"
 sddm_silent = "SDDM Silent Teması"
 sddm_silent_desc = "sddm-silent-theme (AUR) kur ve /etc/sddm.conf yaz"
-sddm_sugarcandy = "SDDM Sugar Candy Teması"
-sddm_sugarcandy_desc = "dotfiles deposundaki tema arşivinden kur"
 kmscon = "KMSCON Kur"
 kmscon_desc = "kmscon (AUR) + seçilen TTY için hizmet değişimi"
 asus_tools = "ASUS ROG/TUF Araçları"
