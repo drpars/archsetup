@@ -68,6 +68,29 @@ def _require_efi() -> bool:
     return True
 
 
+MENU_TIMEOUT = "3"
+
+
+def _loader_conf() -> str:
+    """loader.conf, with a timeout that lets the machine boot on its own.
+
+    This used to be written as `timeout menu-force`, which is not a long
+    timeout -- it is no timeout at all. systemd-boot shows the menu and waits
+    for a keypress forever. Anything without someone at the keyboard (a
+    server, a VM, a machine rebooted over SSH) simply never comes back up,
+    and from the outside that is indistinguishable from a failed boot.
+
+    A numeric timeout still shows the menu, so the fallback entry stays one
+    keypress away; it just does not require the keypress. menu-force remains
+    available for anyone who wants to choose every time.
+    """
+    if ask_yes(t("inst.menu_force_q")):
+        timeout = "menu-force"
+    else:
+        timeout = MENU_TIMEOUT
+    return f"timeout  {timeout}\nconsole-mode  max\n"
+
+
 def install_systemd_boot() -> int:
     if not target_ready() or not _require_efi():
         return 1
@@ -82,9 +105,7 @@ def install_systemd_boot() -> int:
     ])
 
     (MNT / "efi/loader").mkdir(parents=True, exist_ok=True)
-    (MNT / "efi/loader/loader.conf").write_text(
-        "timeout  menu-force\nconsole-mode  max\n", encoding="utf-8"
-    )
+    (MNT / "efi/loader/loader.conf").write_text(_loader_conf(), encoding="utf-8")
     hooks_dir = MNT / "etc/pacman.d/hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
     (hooks_dir / "95-systemd-boot.hook").write_text(SDBOOT_HOOK, encoding="utf-8")

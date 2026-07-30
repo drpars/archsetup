@@ -4,6 +4,7 @@ import re
 
 import pytest
 
+from archsetup.core import i18n
 from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
 from archsetup.installer.state import state
 
@@ -617,6 +618,36 @@ def test_declined_fix_blocks_the_bootloader(monkeypatch, esp_env):
     state.bootdev = "/dev/sda1"
     monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
     assert bootloaders._require_efi() is False
+
+
+# --- loader.conf timeout ---------------------------------------------------
+
+
+def test_loader_timeout_is_numeric_by_default(boot_env, monkeypatch):
+    """`timeout menu-force` is not a long timeout, it is no timeout at all.
+
+    systemd-boot then waits for a keypress forever, so a server, a VM or a
+    machine rebooted over SSH never comes back -- and from outside that looks
+    exactly like a failed boot. It happened in the QEMU run.
+    """
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: False)
+
+    assert bootloaders.install_systemd_boot() == 0
+    conf = (boot_env / "efi/loader/loader.conf").read_text()
+    assert "timeout  3" in conf
+    assert "menu-force" not in conf
+
+
+def test_loader_menu_force_still_available(boot_env, monkeypatch):
+    # Only the menu question gets a yes; a blanket yes would also accept the
+    # "generate the UKI now" prompt, which needs a pacstrapped target.
+    menu_q = i18n.t("inst.menu_force_q")
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: q == menu_q)
+
+    assert bootloaders.install_systemd_boot() == 0
+    assert "timeout  menu-force" in (boot_env / "efi/loader/loader.conf").read_text()
 
 
 # --- locale input ----------------------------------------------------------
