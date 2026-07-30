@@ -79,11 +79,40 @@ def _configure_samba() -> int:
     rc |= run(["sudo", "chown", "root:sambashare", USERSHARES])
     rc |= run(["sudo", "chmod", "1770", USERSHARES])
 
-    rc |= run(["sudo", "systemctl", "restart", "smb.service", "nmb.service"])
+    # smbpasswd parola veritabanina yaziyor, calisan bir smbd istemiyor --
+    # o yuzden once soruluyor. Servisleri baslatmak dakikalar surebiliyor
+    # (bkz. _start_samba) ve kullaniciyi sebebi gorunmeyen bir beklemenin
+    # arkasinda tutmanin anlami yok.
     print(t("network.smbpasswd", user=user))
     rc |= run(["sudo", "smbpasswd", "-a", user])
     rc |= _samba_boot_policy()
+    rc |= _start_samba()
     return rc
+
+
+def _start_samba() -> int:
+    """smb/nmb'yi en sonda, uyararak baslat.
+
+    Ikisi de ``Wants=network-online.target`` + ``After=network-online.target``
+    tasiyor. Yani ``systemctl restart smb nmb`` yalnizca iki servisi degil,
+    ``network-online.target``i de baslatiyor; o da
+    ``systemd-networkd-wait-online``i cekiyor. O birimin varsayilani **tum**
+    arayuzlerin routable olmasini beklemek: kablosuz bir makinede bos duran
+    ethernet portu hicbir zaman routable olmuyor ve cagri 120 saniye sonra
+    timeout'la donuyor.
+
+    Bu bekleme eskiden smbpasswd isteminden ONCE yasaniyordu, yani kullanici
+    iki dakika boyunca ekranda hicbir sey olmadan bekliyordu. Sira degisti;
+    ustelik drop-in yoksa once o teklif ediliyor -- ayni bekleme her onyuklemede
+    de yasaniyor, orada duzeltmek burada beklemekten daha degerli.
+    """
+    if not WAIT_ONLINE_DROPIN.is_file() and services.unit_exists(WAIT_ONLINE_UNIT):
+        print(t("network.wait_online_missing"))
+        if prompt.ask_yes(t("network.wait_online_q")):
+            wait_online_timeout()
+
+    print(t("network.starting_samba"))
+    return run(["sudo", "systemctl", "restart", "smb.service", "nmb.service"])
 
 
 def _samba_boot_policy() -> int:

@@ -192,6 +192,9 @@ already = "iwd zaten ağ yapılandırmasını yapmıyor; değişiklik gerekmedi.
 done = "Ağ yapılandırması {managers} servisine bırakıldı. Etkili olması için: sudo systemctl restart iwd (kablosuz bağlantı kısa süre kopar)."
 
 [network]
+wait_online_missing = "systemd-networkd-wait-online drop-in'i yok. Samba servisleri network-online.target'a bagli oldugu icin baslatmak 2 dakikaya kadar surebilir -- ve ayni bekleme her onyuklemede yasanir."
+wait_online_q = "Once bu duzeltme uygulansin mi? (--any --timeout=3)"
+starting_samba = "smb/nmb baslatiliyor; network-online.target beklenirse birkac saniye surebilir..."
 smbpasswd = "Samba kullanıcısı {user} için bir parola belirleyin:"
 done = "Ağ paylaşımı yapılandırıldı."
 smb_at_boot_q = "Samba (smb/nmb) her açılışta başlatılsın mı? Boot süresini uzatır; gerektiğinde 'systemctl start smb nmb' ile anında açılır."

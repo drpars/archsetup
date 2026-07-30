@@ -307,6 +307,10 @@ def samba_env(tmp_path, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(network.getpass, "getuser", lambda: "drpars")
     monkeypatch.setattr(network.shutil, "which", lambda n: None)
     monkeypatch.setattr(network, "SMB_CONF", tmp_path / "smb.conf")
+    # Drop-in ve unit varligi gercek makineden okunmamali; yoksa test
+    # calistigi makineye gore farkli dala girer.
+    monkeypatch.setattr(network, "WAIT_ONLINE_DROPIN", tmp_path / "any.conf")
+    monkeypatch.setattr(network.services, "unit_exists", lambda n: False)
     return SimpleNamespace(enables=enables, disables=disables, runlog=runlog)
 
 
@@ -1077,3 +1081,45 @@ def test_chassis_falls_back_to_dmi_when_hostnamectl_is_absent(monkeypatch, tmp_p
     assert hardware.chassis() == "laptop"
     assert hardware.is_laptop() is True
     hardware.chassis.cache_clear()
+
+
+def test_password_is_asked_before_the_services_are_started(tmp_path, monkeypatch, samba_env):
+    """Baslatmak 2 dakika surebiliyor; kullanici o beklemeyi sebepsiz gormemeli.
+
+    smb.service `Wants=/After=network-online.target` tasidigi icin onu
+    baslatmak systemd-networkd-wait-online'i de cekiyor. Drop-in yokken o birim
+    tum arayuzlerin routable olmasini bekliyor ve bos ethernet portu varken
+    120 saniyede timeout'a dusuyor. smbpasswd calisan bir smbd istemedigi icin
+    once sorulabilir.
+    """
+    monkeypatch.setattr(network.prompt, "ask_yes", lambda q: True)
+
+    assert network.configure() == 0
+    calls = samba_env.runlog.calls
+    assert calls.index(["sudo", "smbpasswd", "-a", "drpars"]) < calls.index(
+        ["sudo", "systemctl", "restart", "smb.service", "nmb.service"]
+    )
+
+
+def test_missing_wait_online_dropin_is_offered_before_starting(tmp_path, monkeypatch, samba_env):
+    """Ayni bekleme her onyuklemede yasaniyor; burada duzeltmek daha degerli."""
+    monkeypatch.setattr(network.prompt, "ask_yes", lambda q: True)
+    monkeypatch.setattr(network.services, "unit_exists", lambda n: True)
+    applied = []
+    monkeypatch.setattr(
+        network, "wait_online_timeout", lambda: applied.append(True) or 0
+    )
+
+    assert network.configure() == 0
+    assert applied == [True]
+
+
+def test_existing_wait_online_dropin_is_not_offered_again(tmp_path, monkeypatch, samba_env):
+    (tmp_path / "any.conf").write_text("[Service]\n")
+    monkeypatch.setattr(network.prompt, "ask_yes", lambda q: True)
+    monkeypatch.setattr(network.services, "unit_exists", lambda n: True)
+    monkeypatch.setattr(
+        network, "wait_online_timeout", lambda: pytest.fail("tekrar uygulanmamaliydi")
+    )
+
+    assert network.configure() == 0

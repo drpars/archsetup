@@ -192,6 +192,9 @@ already = "iwd already leaves network configuration alone; nothing to change."
 done = "Network configuration left to {managers}. To apply: sudo systemctl restart iwd (briefly drops the wireless link)."
 
 [network]
+wait_online_missing = "The systemd-networkd-wait-online drop-in is missing. Samba is ordered after network-online.target, so starting it can take up to 2 minutes -- and the same wait happens on every boot."
+wait_online_q = "Apply that fix first? (--any --timeout=3)"
+starting_samba = "Starting smb/nmb; this can take a few seconds while network-online.target is reached..."
 smbpasswd = "Set a password for Samba user {user}:"
 done = "Network sharing configured."
 smb_at_boot_q = "Start Samba (smb/nmb) at every boot? It lengthens boot; otherwise 'systemctl start smb nmb' brings it up instantly when needed."

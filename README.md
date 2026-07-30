@@ -311,7 +311,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-229 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+232 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -345,14 +345,17 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] SDDM teması (Silent) + giriş ekranı avatarı, duvar kağıtları, kmscon
 - [x] Sıfırdan kurulumda `~/.local/state/wallpaper` bağlantısı: hyprpaper ve
       hyprlock oradan okuyor, `wallselect` ise ancak ilk seçimde yazıyor
-- [x] Ağ paylaşımı: Samba (usershare, sambashare grubu) + Avahi + firewalld
+- [x] Ağ paylaşımı: Samba (usershare, sambashare grubu) + Avahi + firewalld.
+      Servisler en sonda başlatılır: smb/nmb `network-online.target`'a bağlı
+      olduğu için başlatmak, drop-in yokken 2 dakikaya kadar sürebiliyor —
+      o bekleme artık parola isteminin arkasında değil
 - [x] Kalan uygulama kategorileri: yazı tipleri, tema motorları, temalar,
       oyun başlatıcılar, sanallaştırma (virt-config görevi), OpenRazer,
       Waydroid binder kurulumu
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (229 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (232 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
       networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
       keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,
