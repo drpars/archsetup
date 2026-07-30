@@ -421,6 +421,9 @@ def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(nvidia_laptop, "run", runlog)
     monkeypatch.setattr(nvidia_laptop, "sudo_write", fake_write)
     monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
+    # Sasi gercek makineden okunmamali: CI konteynerinde hostnamectl yok,
+    # orada gorev "bilinmiyor" dalina dusup soru sorardi.
+    monkeypatch.setattr(nvidia_laptop.hardware, "is_laptop", lambda: True)
     monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: True)
     monkeypatch.setattr(nvidia_laptop.services, "unit_exists", lambda n: True)
     monkeypatch.setattr(nvidia_laptop.services, "enable", lambda n: enabled.append(n) or 0)
@@ -1032,3 +1035,45 @@ def test_sleep_services_add_suspend_then_hibernate_when_asked(monkeypatch):
 
     assert nvidia_laptop.enable_sleep_services() == 0
     assert nvidia_laptop.S2H_SERVICE in enabled
+
+
+def test_laptop_task_warns_on_a_desktop_and_can_be_declined(monkeypatch, tmp_path, capsys):
+    """Onceden gorevi masaustunde engelleyen tek sey menu basligiydi."""
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
+    monkeypatch.setattr(nvidia_laptop.hardware, "is_laptop", lambda: False)
+    monkeypatch.setattr(nvidia_laptop.hardware, "chassis", lambda: "desktop")
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: True)
+    monkeypatch.setattr(nvidia_laptop, "MODPROBE_CONF", tmp_path / "nvidia.conf")
+    monkeypatch.setattr(nvidia_laptop, "ask_yes", lambda prompt: False)
+
+    assert nvidia_laptop.configure() == 0
+    assert not (tmp_path / "nvidia.conf").exists()
+    # Dogru gorev soylenmeli, yoksa kullanici uyariyi asip bunu calistirir.
+    assert "nvidia-sleep" in capsys.readouterr().out
+
+
+def test_unknown_chassis_is_not_treated_as_a_desktop(monkeypatch, tmp_path, capsys):
+    """Canli ISO'da hostnamectl cevap vermeyebilir; sessizce reddetme."""
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
+    monkeypatch.setattr(nvidia_laptop.hardware, "is_laptop", lambda: None)
+    monkeypatch.setattr(nvidia_laptop.hardware, "chassis", lambda: "")
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: True)
+    monkeypatch.setattr(nvidia_laptop, "ask_yes", lambda prompt: False)
+
+    assert nvidia_laptop.configure() == 0
+    out = capsys.readouterr().out
+    assert "desktop" not in out.lower()
+
+
+def test_chassis_falls_back_to_dmi_when_hostnamectl_is_absent(monkeypatch, tmp_path):
+    dmi = tmp_path / "chassis_type"
+    dmi.write_text("10\n")  # Notebook
+    monkeypatch.setattr(hardware, "CHASSIS_TYPE", dmi)
+    monkeypatch.setattr(
+        hardware.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(OSError())
+    )
+    hardware.chassis.cache_clear()
+
+    assert hardware.chassis() == "laptop"
+    assert hardware.is_laptop() is True
+    hardware.chassis.cache_clear()

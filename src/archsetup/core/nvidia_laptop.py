@@ -126,6 +126,8 @@ def configure() -> int:
     if not pacman.is_installed("nvidia-utils"):
         print(t("nvidia_laptop.driver_missing"))
         return 1
+    if not _chassis_ok():
+        return 0
 
     print(t("nvidia_laptop.turing" if is_turing() else "nvidia_laptop.ampere"))
 
@@ -188,3 +190,31 @@ def enable_sleep_services(ask_s2h: bool = True) -> int:
     if rc == 0:
         print(t("nvidia_laptop.sleep_done"))
     return rc
+
+
+def _chassis_ok() -> bool:
+    """Bu gorev bir dizustu recetesi; masaustunde her maddesi yanlis.
+
+    Onceden gorevi engelleyen tek sey menu basligiydi. NVIDIA'li bir
+    masaustunde secilirse yazilanlar:
+
+      * ``fbdev=0`` -- tek kartli makinede konsolu surecek baska GPU yok
+      * S0ix + ``NVreg_DynamicPowerManagement`` -- s2idle dizustu ayarlari
+      * Optimus runtime-PM udev kurallari -- hibrit olmayan makinede karsiligi yok
+      * ``nvidia-powerd --now`` -- Dynamic Boost, yalniz dizustunde var
+
+    Sasi bilinmiyorsa (None) reddetmiyoruz: canli ISO gibi ortamlarda
+    hostnamectl cevap vermeyebilir ve "bilmiyorum" ile "masaustu" ayni sey
+    degil. Iki durumda da karar kullanicinin, ama uyari acik.
+    """
+    laptop = hardware.is_laptop()
+    if laptop is True:
+        return True
+
+    key = "nvidia_laptop.not_laptop" if laptop is False else "nvidia_laptop.chassis_unknown"
+    print(t(key, chassis=hardware.chassis() or "?"))
+    print(t("nvidia_laptop.sleep_hint"))
+    if ask_yes(t("nvidia_laptop.continue_q")):
+        return True
+    print(t("msg.cancelled"))
+    return False

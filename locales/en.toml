@@ -158,6 +158,10 @@ supergfx_note = "supergfxctl is no longer recommended; install it only for VM pa
 nvidia_hint = "On a hybrid NVIDIA laptop, also run the 'NVIDIA Laptop Power Management' task."
 
 [nvidia_laptop]
+not_laptop = "This machine is not a laptop (chassis: {chassis}). This task is a laptop recipe: fbdev=0 is wrong with a single GPU, S0ix/DynamicPowerManagement are s2idle laptop settings, the Optimus udev rules have nothing to act on, and nvidia-powerd (Dynamic Boost) only exists on laptops."
+chassis_unknown = "Could not detect the chassis ({chassis}). This task writes laptop-specific settings."
+sleep_hint = "If what you want is VRAM preservation across sleep, this is the wrong task: archsetup nvidia-sleep"
+continue_q = "Apply it anyway?"
 no_gpu_any = "No NVIDIA GPU found; this task is only for machines with an NVIDIA card."
 s2h_q = "Does this machine use suspend-then-hibernate? (suspend first, hibernate later when idle)"
 sleep_done = "NVIDIA sleep units enabled. VRAM is written out on suspend and hibernate."

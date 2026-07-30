@@ -7,6 +7,13 @@ from functools import cache
 from pathlib import Path
 
 BOARD_NAME = Path("/sys/class/dmi/id/board_name")
+CHASSIS_TYPE = Path("/sys/class/dmi/id/chassis_type")
+
+# SMBIOS chassis type numbers that mean "portable". 8 Portable, 9 Laptop,
+# 10 Notebook, 11 Hand Held, 14 Sub Notebook, 30 Tablet, 31 Convertible,
+# 32 Detachable. Used only as a fallback -- hostnamectl already folds these
+# into a word, but it is not there on a live ISO without systemd running.
+_PORTABLE_TYPES = {"8", "9", "10", "11", "14", "30", "31", "32"}
 
 
 @cache
@@ -70,3 +77,41 @@ def condition_ok(condition: str | None) -> bool:
     if kind == "board":
         return board_matches(value)
     return True
+
+
+@cache
+def chassis() -> str:
+    """"laptop", "desktop", ... — hostnamectl'in kelimesi, yoksa DMI'dan.
+
+    Bos dize "bilinmiyor" demek; cagiran taraf bunu "masaustu" saymamali.
+    """
+    try:
+        out = subprocess.run(
+            ["hostnamectl", "chassis"], capture_output=True, text=True, timeout=10
+        )
+        word = out.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        word = ""
+    if word:
+        return word
+
+    try:
+        number = CHASSIS_TYPE.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+    if number in _PORTABLE_TYPES:
+        return "laptop"
+    return "desktop" if number else ""
+
+
+def is_laptop() -> bool | None:
+    """True/False; sasi tespit edilemezse None.
+
+    Uc durumu ayirmak onemli: "masaustu" ile "bilmiyorum" ayni sey degil.
+    Bilinmiyorken kullaniciyi uyarmak, sessizce dizustu ayari yazmaktan da
+    gorevi bosuna reddetmekten de iyidir.
+    """
+    word = chassis()
+    if not word:
+        return None
+    return word in {"laptop", "convertible", "detachable", "tablet", "handset"}
