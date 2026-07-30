@@ -11,6 +11,13 @@
 #
 # VM açıldıktan sonra canlı ortamda:
 #   curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash
+#
+# Ekran arka ucu DISPLAY_MODE ile değiştirilir. Varsayılan gtk bir grafik
+# oturumu gerektirir; makineye SSH ile bağlıysanız "gtk initialization failed"
+# alırsınız. O durumda:
+#   DISPLAY_MODE=curses ./run-vm.sh    # VGA konsolu doğrudan terminale çizer
+#   DISPLAY_MODE=none   ./run-vm.sh    # ekran yok; yalnızca SSH ile yönetilir
+# curses'ten çıkmak için: Esc+2 ile QEMU monitörüne geçip "quit"
 # ==========================================================
 set -euo pipefail
 
@@ -22,6 +29,7 @@ VARS="$DIR/OVMF_VARS.fd"
 DISK_SIZE="25G"
 RAM="4096"
 SSH_PORT="${SSH_PORT:-2222}"   # host portu -> guest 22 (SSH yönlendirmesi)
+DISPLAY_MODE="${DISPLAY_MODE:-gtk}"
 
 mkdir -p "$DIR"
 
@@ -62,9 +70,17 @@ ARGS=(
   -enable-kvm -cpu host -smp 4 -m "$RAM"
   -drive "file=$DISK,if=virtio,format=qcow2"
   -nic "user,model=virtio-net-pci,hostfwd=tcp::$SSH_PORT-:22"
-  -device virtio-vga
-  -display gtk,zoom-to-fit=on
 )
+
+case "$DISPLAY_MODE" in
+  gtk)    ARGS+=(-device virtio-vga -display gtk,zoom-to-fit=on) ;;
+  # curses draws the guest's text console straight into the terminal, which
+  # is the only thing that works over SSH. virtio-vga has no text mode the
+  # curses backend can read, so the emulated VGA card goes back to std.
+  curses) ARGS+=(-device VGA -display curses) ;;
+  none)   ARGS+=(-device virtio-vga -display none) ;;
+  *)      die "Bilinmeyen DISPLAY_MODE: $DISPLAY_MODE (gtk|curses|none)" ;;
+esac
 
 case "$MODE" in
   uefi|boot)
