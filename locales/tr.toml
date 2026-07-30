@@ -158,6 +158,9 @@ supergfx_note = "supergfxctl artık önerilmiyor; yalnızca VM geçişi veya dGP
 nvidia_hint = "NVIDIA hibrit dizüstünüz varsa 'NVIDIA Dizüstü Güç Yönetimi' görevini de çalıştırın."
 
 [nvidia_laptop]
+no_gpu_any = "NVIDIA GPU bulunamadi; bu gorev yalnizca NVIDIA kartli makineler icin."
+s2h_q = "Bu makine suspend-then-hibernate kullaniyor mu? (bos kalinca once askiya alip sonra hazirda bekletme)"
+sleep_done = "NVIDIA uyku birimleri etkin. Askiya alma/hazirda bekletmede VRAM diske yaziliyor."
 no_gpu = "NVIDIA GPU bulunamadı; bu görev yalnızca hibrit dizüstüler içindir."
 driver_missing = "nvidia-utils kurulu değil; önce Sürücüler > NVIDIA kategorisinden kurun."
 turing = "Turing (GTX 16xx / RTX 20xx) algılandı: NVreg_EnableGpuFirmware=0 eklenecek."
@@ -360,6 +363,8 @@ asus_tools = "ASUS ROG/TUF Araçları"
 asus_tools_desc = "[g14] deposu + asusctl, rog-control-center, power-profiles-daemon"
 nvidia_laptop_power = "NVIDIA Dizüstü Güç Yönetimi"
 nvidia_laptop_power_desc = "S0ix/runtime PM için modprobe.d + udev kuralları ve nvidia servisleri"
+nvidia_sleep = "NVIDIA Uyku Birimleri"
+nvidia_sleep_desc = "Askiya alma/hazirda bekletmede VRAM korumasi (masaustu dahil)"
 asus_supergfx = "supergfxctl (isteğe bağlı)"
 asus_supergfx_desc = "GPU modu değiştirme; yalnızca VM geçişi veya dGPU sorunları için"
 network_sharing = "Ağ Paylaşımı (Samba/Avahi)"

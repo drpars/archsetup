@@ -439,7 +439,11 @@ def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):
     assert "fbdev=0" in conf
     assert "NVreg_EnableGpuFirmware" not in conf
     assert 'ATTR{power/control}="auto"' in rules.read_text()
-    assert enabled == [*nvidia_laptop.SERVICES, nvidia_laptop.POWERD_SERVICE]
+    assert enabled == [
+        *nvidia_laptop.SLEEP_SERVICES,
+        nvidia_laptop.S2H_SERVICE,
+        nvidia_laptop.POWERD_SERVICE,
+    ]
     assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
     assert ["sudo", "udevadm", "control", "--reload-rules"] in runlog.calls
 
@@ -990,3 +994,41 @@ def test_an_older_copy_earlier_on_path_is_reported(tmp_path, monkeypatch, capsys
 
     assert coding_agents.install_claude_code() == 0
     assert str(npm_copy) in capsys.readouterr().out
+
+
+def test_sleep_services_task_leaves_out_the_laptop_only_bits(monkeypatch, tmp_path):
+    """Masaustu de bu gorevi calistirabilmeli.
+
+    Dizustu ayarlari (S0ix, DynamicPowerManagement) ve Dynamic Boost
+    (nvidia-powerd) buraya girmemeli; yoksa askiya alinan bir masaustunde
+    VRAM korumasi ancak anlamsiz ayarlari kabul ederek acilabilirdi.
+    """
+    enabled = []
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda name: True)
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda name: True)
+    monkeypatch.setattr(nvidia_laptop.services, "unit_exists", lambda unit: True)
+    monkeypatch.setattr(
+        nvidia_laptop.services, "enable", lambda unit: enabled.append(unit) or 0
+    )
+    monkeypatch.setattr(nvidia_laptop, "MODPROBE_CONF", tmp_path / "nvidia.conf")
+    monkeypatch.setattr(nvidia_laptop, "ask_yes", lambda prompt: False)
+
+    assert nvidia_laptop.enable_sleep_services() == 0
+
+    assert enabled == list(nvidia_laptop.SLEEP_SERVICES)
+    assert nvidia_laptop.POWERD_SERVICE not in enabled
+    assert not (tmp_path / "nvidia.conf").exists()
+
+
+def test_sleep_services_add_suspend_then_hibernate_when_asked(monkeypatch):
+    enabled = []
+    monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda name: True)
+    monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda name: True)
+    monkeypatch.setattr(nvidia_laptop.services, "unit_exists", lambda unit: True)
+    monkeypatch.setattr(
+        nvidia_laptop.services, "enable", lambda unit: enabled.append(unit) or 0
+    )
+    monkeypatch.setattr(nvidia_laptop, "ask_yes", lambda prompt: True)
+
+    assert nvidia_laptop.enable_sleep_services() == 0
+    assert nvidia_laptop.S2H_SERVICE in enabled

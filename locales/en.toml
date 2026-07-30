@@ -158,6 +158,9 @@ supergfx_note = "supergfxctl is no longer recommended; install it only for VM pa
 nvidia_hint = "On a hybrid NVIDIA laptop, also run the 'NVIDIA Laptop Power Management' task."
 
 [nvidia_laptop]
+no_gpu_any = "No NVIDIA GPU found; this task is only for machines with an NVIDIA card."
+s2h_q = "Does this machine use suspend-then-hibernate? (suspend first, hibernate later when idle)"
+sleep_done = "NVIDIA sleep units enabled. VRAM is written out on suspend and hibernate."
 no_gpu = "No NVIDIA GPU found; this task is only for hybrid laptops."
 driver_missing = "nvidia-utils is not installed; install it from Drivers > NVIDIA first."
 turing = "Turing (GTX 16xx / RTX 20xx) detected: NVreg_EnableGpuFirmware=0 will be added."
@@ -360,6 +363,8 @@ asus_tools = "ASUS ROG/TUF Tools"
 asus_tools_desc = "[g14] repository + asusctl, rog-control-center, power-profiles-daemon"
 nvidia_laptop_power = "NVIDIA Laptop Power Management"
 nvidia_laptop_power_desc = "modprobe.d + udev rules for S0ix/runtime PM and the nvidia services"
+nvidia_sleep = "NVIDIA Sleep Units"
+nvidia_sleep_desc = "Preserve VRAM across suspend and hibernate (desktops too)"
 asus_supergfx = "supergfxctl (optional)"
 asus_supergfx_desc = "GPU mode switching; only for VM passthrough or dGPU issues"
 network_sharing = "Network Sharing (Samba/Avahi)"

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from . import hardware, i18n, pacman, services
 from .pacman import run
+from .prompt import ask_yes
 from .sysedit import sudo_write
 
 t = i18n.t
@@ -29,13 +30,21 @@ t = i18n.t
 MODPROBE_CONF = Path("/etc/modprobe.d/nvidia.conf")
 UDEV_RULES = Path("/etc/udev/rules.d/80-nvidia-pm.rules")
 
-# Enabled plainly; nvidia-powerd additionally gets --now (see the guide).
-SERVICES = (
+# These three preserve VRAM across sleep and are NOT laptop-specific: any
+# machine that suspends wants them, desktops included. PreserveVideoMemory-
+# Allocations only declares the intent -- the thing that actually writes VRAM
+# out is nvidia-sleep.sh, and these units are what call it.
+SLEEP_SERVICES = (
     "nvidia-suspend.service",
     "nvidia-resume.service",
     "nvidia-hibernate.service",
-    "nvidia-suspend-then-hibernate.service",
 )
+
+# Only pulled in when the machine really uses suspend-then-hibernate; on a
+# host whose idle action is a plain `systemctl suspend` it never runs.
+S2H_SERVICE = "nvidia-suspend-then-hibernate.service"
+
+# Dynamic Boost -- laptop-only, so it stays in the laptop task.
 POWERD_SERVICE = "nvidia-powerd.service"
 
 TURING_CODENAME = re.compile(r"\bTU1\d\d", re.IGNORECASE)
@@ -124,11 +133,11 @@ def configure() -> int:
     udev_rc, udev_changed = _write(UDEV_RULES, UDEV_CONTENT)
     rc |= udev_rc
 
-    for service in SERVICES:
-        if services.unit_exists(service):
-            rc |= services.enable(service)
-        else:
-            print(t("nvidia_laptop.unit_missing", unit=service))
+    rc |= enable_sleep_services(ask_s2h=False)
+    if services.unit_exists(S2H_SERVICE):
+        rc |= services.enable(S2H_SERVICE)
+    else:
+        print(t("nvidia_laptop.unit_missing", unit=S2H_SERVICE))
     if services.unit_exists(POWERD_SERVICE):
         rc |= services.enable_now(POWERD_SERVICE)
     else:
@@ -141,4 +150,41 @@ def configure() -> int:
         rc |= run(["sudo", "udevadm", "control", "--reload-rules"])
 
     print(t("nvidia_laptop.done" if modprobe_changed else "nvidia_laptop.done_nochange"))
+    return rc
+
+
+def enable_sleep_services(ask_s2h: bool = True) -> int:
+    """VRAM'i uykuda koruyan birimleri ac -- dizustu/masaustu farketmez.
+
+    Bunlar archsetup'ta uzun sure yalnizca `nvidia-laptop-power` gorevinin
+    icinde aciliyordu; o gorev ise ayni anda S0ix ve DynamicPowerManagement
+    gibi **dizustune ozgu** secenekleri de yaziyor. Sonuc: duzenli askiya
+    alinan bir masaustunde VRAM korumasini acmanin tek yolu, o makineye
+    anlamsiz gelen dizustu ayarlarini da kabul etmekti. Bu yuzden ayrildi.
+
+    nvidia-powerd (Dynamic Boost) burada YOK: o gercekten dizustune ozgu.
+    """
+    if not hardware.gpu_matches("nvidia"):
+        print(t("nvidia_laptop.no_gpu_any"))
+        return 1
+    if not pacman.is_installed("nvidia-utils"):
+        print(t("nvidia_laptop.driver_missing"))
+        return 1
+
+    rc = 0
+    for service in SLEEP_SERVICES:
+        if services.unit_exists(service):
+            rc |= services.enable(service)
+        else:
+            print(t("nvidia_laptop.unit_missing", unit=service))
+
+    # suspend-then-hibernate ayri bir uyku bicimi. Kullanilmiyorsa birim hic
+    # calismaz; acmak zararsiz ama yanlis bir izlenim birakir, o yuzden
+    # sorulur -- makinenin bos kalinca ne yaptigini kullanici bilir.
+    if ask_s2h and services.unit_exists(S2H_SERVICE):
+        if ask_yes(t("nvidia_laptop.s2h_q")):
+            rc |= services.enable(S2H_SERVICE)
+
+    if rc == 0:
+        print(t("nvidia_laptop.sleep_done"))
     return rc

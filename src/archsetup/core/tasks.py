@@ -171,6 +171,12 @@ TASKS: tuple[Task, ...] = (
         group="drivers",
     ),
     Task(
+        "nvidia-sleep",
+        "task.nvidia_sleep",
+        nvidia_laptop.enable_sleep_services,
+        group="drivers",
+    ),
+    Task(
         "asus-supergfx",
         "task.asus_supergfx",
         asus.install_supergfx,
