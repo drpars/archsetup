@@ -19,6 +19,7 @@ from . import (
     coding_agents,
     coredump,
     dotfiles,
+    gitid,
     gpuconfig,
     hibernate,
     i18n,
@@ -237,6 +238,7 @@ TASKS: tuple[Task, ...] = (
     Task("ssh-harden", "task.ssh_harden", ssh.harden, group="ssh"),
     Task("ssh-identity", "task.ssh_identity", ssh.identity, group="ssh"),
     Task("ssh-rotate", "task.ssh_rotate", ssh.rotate, group="ssh"),
+    Task("git-identity", "task.git_identity", gitid.configure, group="ssh"),
     Task(
         "claude-code",
         "task.claude_code",

@@ -104,6 +104,21 @@ wallpapers_q = "Duvar kağıdı değişiklikleri uygulansın mı? Hedef: {target
 overwrite_q = "{path} zaten var, üzerine yazılsın mı?"
 done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında görünür."
 
+[gitid]
+git_missing = "git kurulu degil; once git paketini kurun."
+key_missing = "Bu makinenin GitHub anahtari yok: {path} — once 'SSH Kimligi ve Agent' gorevini calistirin."
+email_missing = "user.email tanimli degil. Imza dogrulamasi e-postaya gore eslesir; once: git config --global user.email <adres>"
+email_used = "Kullanilan kimlik: {email}"
+local_handwritten = "{path} elle yazilmis gorunuyor (archsetup isareti yok)."
+local_overwrite_q = "Uzerine yazilsin mi? (Yedegi alinir)"
+local_written = "Uretildi: {path}"
+backup = "Yedeklendi: {path}"
+signer_present = "Bu makinenin anahtari guven listesinde zaten var."
+signer_added = "Anahtar guven listesine eklendi: {path}"
+signer_email_differs = "Ayni anahtar farkli bir e-postayla kayitli ({found}); user.email ise {want}. Dogrulama eslesmez — satiri elle duzeltin."
+include_missing = "{path} icinde {local} include edilmiyor; imzalama ayarlari yuklenmez. Paylasilan dosya oldugu icin dokunulmadi."
+done = "Git makine kimligi hazir."
+
 [kmscon]
 tty_q = "KMSCON hangi TTY için ayarlansın?"
 tty_invalid = "Geçersiz TTY numarası (3-6 arası olmalı)."
@@ -341,6 +356,8 @@ codewhale = "Codewhale"
 codewhale_desc = "Resmi kurucu betiği (codewhale.net/install.sh) — ~/.local/bin"
 ssh_rotate = "SSH Anahtarını Yenile"
 ssh_rotate_desc = "Kayıp/sızıntı: eskisini arşivle, yenisini üret, silinecek parmak izini yaz"
+git_identity = "Git Makine Kimligi"
+git_identity_desc = "~/.gitconfig.local + allowed_signers uret (SSH ile commit imzalama)"
 
 [category]
 console = "Konsol Uygulamaları"

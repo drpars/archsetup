@@ -104,6 +104,21 @@ wallpapers_q = "Apply the wallpaper changes? Target: {target}"
 overwrite_q = "{path} already exists, overwrite it?"
 done = "SDDM theme installed. Visible on the next login screen."
 
+[gitid]
+git_missing = "git is not installed; install the git package first."
+key_missing = "This machine has no GitHub key: {path} — run the 'SSH Identity and Agent' task first."
+email_missing = "user.email is not set. Signature verification matches on the address; run: git config --global user.email <address>"
+email_used = "Identity in use: {email}"
+local_handwritten = "{path} looks hand-written (no archsetup marker)."
+local_overwrite_q = "Overwrite it? (A backup is kept)"
+local_written = "Generated: {path}"
+backup = "Backed up: {path}"
+signer_present = "This machine's key is already in the trust list."
+signer_added = "Key added to the trust list: {path}"
+signer_email_differs = "The same key is recorded under a different address ({found}); user.email is {want}. Verification will not match — fix the line by hand."
+include_missing = "{path} does not include {local}; the signing settings never load. It is a shared file, so it was left alone."
+done = "Git machine identity is ready."
+
 [kmscon]
 tty_q = "Which TTY should KMSCON be configured for?"
 tty_invalid = "Invalid TTY number (must be 3-6)."
@@ -341,6 +356,8 @@ codewhale = "Codewhale"
 codewhale_desc = "Official installer script (codewhale.net/install.sh) — ~/.local/bin"
 ssh_rotate = "Rotate SSH Key"
 ssh_rotate_desc = "Loss/leak: archive the old key, generate a new one, print what to remove"
+git_identity = "Git Machine Identity"
+git_identity_desc = "Generate ~/.gitconfig.local + allowed_signers (SSH commit signing)"
 
 [category]
 console = "Console Applications"

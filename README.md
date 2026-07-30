@@ -230,6 +230,10 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] SSH yönetimi: sunucu sertleştirme (drop-in + `sshd -t` doğrulaması ve
       geri alma), makine başına GitHub kimliği, `ssh-agent`, anahtar
       yenileme; kişisel envanter depo dışında (`~/.ssh/archsetup.toml`)
+- [x] Git makine kimliği: `~/.gitconfig.local` (SSH ile commit imzalama) ve
+      `~/.config/git/allowed_signers`. Kimlik her makinede aynı, ayırt edici
+      olan imzalayan anahtar. Güven listesine **eklenir**, yeniden üretilmez —
+      başka makinelerin anahtarı düşerse imzaları "unknown signer" olur
 - [ ] SSH: makine sıfırlama sonrası kalan iki elle adımı göreve dönüştürmek.
       `ssh-authorize` terminale yapıştırılan açık anahtarı `ssh-keygen -l`
       ile doğrular, envanterdeki alt ağdan `from="..."` kısıtını üretir ve
