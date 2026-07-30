@@ -259,6 +259,38 @@ def _target_bootloader():
 
 
 FALLBACK_PRESETS = "PRESETS=('default' 'fallback')"
+DEFAULT_ONLY_PRESETS = "PRESETS=('default')"
+
+# A fallback UKI is far larger than the normal one -- measured on a plain
+# linux-zen install, 214 MB against 33 MB -- because -S autodetect drops the
+# hardware filter and bundles every module and its firmware. One kernel plus
+# its fallback therefore wants roughly a quarter of a gigabyte, and two
+# kernels will not fit an ESP that was sized when 512 MB looked generous.
+FALLBACK_NEEDS_MB = 512
+
+
+def _esp_free_mb() -> int | None:
+    """Free megabytes on the target ESP, or None if it cannot be measured."""
+    try:
+        st = os.statvfs(MNT / "efi")
+    except OSError:
+        return None
+    return (st.f_bavail * st.f_frsize) // (1024 * 1024)
+
+
+def _want_fallback() -> bool:
+    """Whether to build a fallback UKI, asking only when space is tight.
+
+    Silently skipping it would take away the rescue image; silently building
+    it can fill the ESP and leave the *next* kernel update with nowhere to
+    write, which surfaces much later and much less clearly. So the decision
+    is only handed over when the numbers say it is a real decision.
+    """
+    free = _esp_free_mb()
+    if free is None or free >= FALLBACK_NEEDS_MB:
+        return True
+    print(t("inst.fallback_tight", free=free, needed=FALLBACK_NEEDS_MB))
+    return ask_yes(t("inst.fallback_anyway_q"))
 
 
 def _enable_fallback_preset(text: str) -> str:
@@ -276,15 +308,23 @@ def _enable_fallback_preset(text: str) -> str:
     and then activating the pair gives the same result for both, instead of
     leaving two assignments whose order silently decides the outcome.
     """
+    return _force_presets(text, FALLBACK_PRESETS)
+
+
+def _default_only_preset(text: str) -> str:
+    """Leave only the default preset — used when the ESP cannot hold both."""
+    return _force_presets(text, DEFAULT_ONLY_PRESETS)
+
+
+def _force_presets(text: str, wanted: str) -> str:
     text = re.sub(r"^(PRESETS=)", r"#\1", text, flags=re.MULTILINE)
     revived, count = re.subn(
-        r"^#(PRESETS=\('default' 'fallback'\))", r"\1", text, count=1,
-        flags=re.MULTILINE,
+        rf"^#({re.escape(wanted)})", r"\1", text, count=1, flags=re.MULTILINE
     )
     if count:
         return revived
-    # No commented pair to revive (a preset written by hand, say).
-    return f"{text.rstrip()}\n{FALLBACK_PRESETS}\n"
+    # No commented line to revive (a preset written by hand, say).
+    return f"{text.rstrip()}\n{wanted}\n"
 
 
 def gen_uki() -> int:
@@ -305,13 +345,16 @@ def gen_uki() -> int:
         encoding="utf-8",
     )
 
+    fallback = _want_fallback()
+
     text = preset.read_text(encoding="utf-8")
     text = re.sub(r"^#(ALL_config)", r"\1", text, flags=re.MULTILINE)
-    for name in ("default", "fallback"):
+    names = ("default", "fallback") if fallback else ("default",)
+    for name in names:
         text = re.sub(rf"^#({name}_uki)", r"\1", text, flags=re.MULTILINE)
         text = re.sub(rf"^#({name}_options)", r"\1", text, flags=re.MULTILINE)
         text = re.sub(rf"^({name}_image=)", r"#\1", text, flags=re.MULTILINE)
-    text = _enable_fallback_preset(text)
+    text = _enable_fallback_preset(text) if fallback else _default_only_preset(text)
     preset.write_text(text, encoding="utf-8")
 
     uki = default_uki_path(preset)

@@ -462,6 +462,8 @@ sb_no_uki = "İmzalanacak UKI bulunamadı; önce UKI Üret adımını çalışt�
 sb_verify = "sbctl verify raporu:"
 uki_now_q = "UKI şimdi üretilsin mi? (bu düzende açılabilir tek görüntü budur)"
 menu_force_q = "Önyükleme menüsü her açılışta tuş beklesin mi? (Hayır = 3 sn sonra otomatik açılır; sunucu/uzak makinede Hayır şart)"
+fallback_tight = "ESP'de {free} MB boş var; fallback UKI ile birlikte ~{needed} MB önerilir."
+fallback_anyway_q = "Fallback UKI yine de üretilsin mi? (Hayır = yalnızca normal imaj, kurtarma girdisi olmaz)"
 nvme_reset = "NVMe Sıfırlama (nvme format)"
 font_q = "Konsol yazı tipi boyutu:"
 net_copy = "Ağ Ayarlarını Kopyala (canlı ortamdan)"

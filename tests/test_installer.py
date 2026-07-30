@@ -650,6 +650,75 @@ def test_loader_menu_force_still_available(boot_env, monkeypatch):
     assert "timeout  menu-force" in (boot_env / "efi/loader/loader.conf").read_text()
 
 
+# --- fallback UKI vs ESP size ----------------------------------------------
+
+
+@pytest.fixture
+def uki_env(tmp_path, monkeypatch):
+    etc = tmp_path / "etc"
+    (etc / "mkinitcpio.d").mkdir(parents=True)
+    (etc / "kernel").mkdir()
+    (etc / "kernel" / "cmdline").write_text("root=PARTUUID=x rw\n")
+    (etc / "mkinitcpio.conf").write_text("HOOKS=(base udev block filesystems fsck)\n")
+    (tmp_path / "usr").mkdir()
+    preset = etc / "mkinitcpio.d" / "linux.preset"
+    preset.write_text(
+        'ALL_kver="/boot/vmlinuz-linux"\n'
+        "PRESETS=('default' 'fallback')\n"
+        'default_image="/boot/initramfs-linux.img"\n'
+        '#default_uki="/efi/EFI/Linux/arch-linux.efi"\n'
+        'fallback_image="/boot/initramfs-linux-fallback.img"\n'
+        '#fallback_uki="/efi/EFI/Linux/arch-linux-fallback.efi"\n'
+        '#fallback_options="-S autodetect"\n'
+    )
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "chroot_run", lambda a: 0)
+    return preset
+
+
+def test_fallback_skipped_when_the_esp_is_too_small(uki_env, monkeypatch):
+    """A fallback UKI measured 214 MB against the default's 33 MB, because
+    -S autodetect bundles every module and its firmware. Filling the ESP
+    would strand the *next* kernel update, which fails far from here."""
+    monkeypatch.setattr(chroot, "_esp_free_mb", lambda: 200)
+    monkeypatch.setattr(chroot, "ask_yes", lambda q: False)
+
+    assert chroot.gen_uki() == 0
+    text = uki_env.read_text()
+    assert "PRESETS=('default')" in text
+    assert "\nfallback_uki" not in text  # still commented out
+    assert 'default_uki="/efi/EFI/Linux/arch-linux.efi"' in text
+
+
+def test_fallback_kept_when_asked_for_despite_tight_space(uki_env, monkeypatch):
+    monkeypatch.setattr(chroot, "_esp_free_mb", lambda: 200)
+    monkeypatch.setattr(chroot, "ask_yes", lambda q: True)
+
+    assert chroot.gen_uki() == 0
+    assert "PRESETS=('default' 'fallback')" in uki_env.read_text()
+
+
+def test_roomy_esp_is_not_asked_about(uki_env, monkeypatch):
+    monkeypatch.setattr(chroot, "_esp_free_mb", lambda: 4096)
+    monkeypatch.setattr(
+        chroot, "ask_yes", lambda q: pytest.fail("yer varken sorulmamali")
+    )
+
+    assert chroot.gen_uki() == 0
+    assert "PRESETS=('default' 'fallback')" in uki_env.read_text()
+
+
+def test_unmeasurable_esp_keeps_the_fallback(uki_env, monkeypatch):
+    """Failing to stat the ESP is not a reason to drop the rescue image."""
+    monkeypatch.setattr(chroot, "_esp_free_mb", lambda: None)
+    monkeypatch.setattr(
+        chroot, "ask_yes", lambda q: pytest.fail("olculemiyorsa sorulmamali")
+    )
+
+    assert chroot.gen_uki() == 0
+    assert "PRESETS=('default' 'fallback')" in uki_env.read_text()
+
+
 # --- locale input ----------------------------------------------------------
 
 
