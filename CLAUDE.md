@@ -140,10 +140,14 @@ Filtreledikten sonra yeniden 0'a çekilmezse Enter hiçbir şey seçmez,
 odağı listeye taşır; oradan yazılan harfler hiçbir yere gitmediği için
 ekran donmuş gibi görünür.
 
-**`authorized_keys` üretilmez, yalnızca denetlenir.** `config.local` yanlış
-üretilirse dışarı bağlanamazsınız ve makinenin başındasınız; bozuk bir
-`from=` ise içeri bağlanmayı imkânsız kılar ve fiziksel erişim gerektirir.
-İki dosyanın hata maliyeti eşit değil.
+**`authorized_keys` üretilmez — eklenebilir, yeniden yazılamaz.**
+`config.local` yanlış üretilirse dışarı bağlanamazsınız ve makinenin
+başındasınız; bozuk bir `from=` ise içeri bağlanmayı imkânsız kılar ve
+fiziksel erişim gerektirir. İki dosyanın hata maliyeti eşit değil. Ekleme
+bu riski taşımaz — en kötü ihtimalle fazladan bir satır kalır — o yüzden
+`ssh-authorize` dosyanın sonuna yazar, önce yedekler ve mevcut satırlara
+dokunmaz. Aynı ayrım `allowed_signers` için de geçerli (bkz. `core/gitid.py`):
+o da bir güven listesi, yeniden üretmek başka makinelerin anahtarını düşürür.
 
 **AUR yardımcısının kendisi de AUR'da.** `pacman.install()` bir AUR
 paketi istendiğinde yardımcı yoksa artık `yay-bin`'i klonlayıp kurmayı

@@ -104,40 +104,64 @@ sayılır — "soramadık" ile "yok" birbirine karıştırılmaz.
 
 ### SSH yönetimi
 
-`Yapılandırma → SSH Yönetimi` altında beş görev var:
+`Yapılandırma → SSH Yönetimi` altında yedi görev var. Hepsi tek başına da
+çalışır: `./archsetup ssh-status` gibi.
 
-| Görev | Ne yapar |
-|---|---|
-| `ssh-status` | Salt okunur rapor: anahtarlar, yetkiler, sunucu, agent |
-| `ssh-harden` | Yalnızca anahtarla giriş, root kapalı; drop-in yaz ve doğrula |
-| `ssh-identity` | Makineye özel GitHub anahtarı, `config.local`, ssh-agent |
-| `ssh-rotate` | Anahtar kaybı/sızıntısı: eskisini arşivle, yenisini üret |
-| `git-identity` | `~/.gitconfig.local` + `allowed_signers`: SSH ile commit imzalama |
+| Görev | Ne yapar | Dokunduğu dosya |
+|---|---|---|
+| `ssh-status` | Salt okunur rapor: anahtarlar, yetkiler, sunucu, agent | — |
+| `ssh-identity` | Bu makinenin GitHub anahtarı, `config.local`, ssh-agent | `~/.ssh/config.local` |
+| `ssh-harden` | Yalnızca anahtarla giriş, root kapalı; yaz ve doğrula | `/etc/ssh/sshd_config.d/10-local.conf` |
+| `ssh-authorize` | Başka bir makinenin açık anahtarını **ekler** | `~/.ssh/authorized_keys` |
+| `ssh-forget` | Sıfırlanan makinenin bayat `known_hosts` kaydını siler | `~/.ssh/known_hosts` |
+| `ssh-rotate` | Anahtar kaybı/sızıntısı: eskisini arşivle, yenisini üret | `~/.ssh/github_*` |
+| `git-identity` | SSH ile commit imzalama | `~/.gitconfig.local`, `allowed_signers` |
 
-**Yeni makine kurulumu.** `~/.ssh` klasörünüzü kopyalayın, sonra:
+#### Önce kavramlar: hangi dosya ne işe yarar
 
-```bash
-./archsetup ssh-identity    # makineye ozel anahtar + agent
-./archsetup ssh-harden      # sunucu sertlestirme
-```
+SSH'ta karışması en kolay şey, **iki yönün ayrı dosyalarla yönetilmesi**.
+"Dışarı bağlanmak" ve "içeri bağlanılmasına izin vermek" birbirinden bağımsız:
 
-`ssh-identity` bu makine için `~/.ssh/github_<hostname>` anahtarı yoksa üretir
-(terminal varsa parolayı sorar) ve GitHub'a eklenecek satırı yazdırır. Klasörde
-başka makinelerin `github_*` anahtarı varken yenisini sessizce üretmez —
-hostname değiştiyse fark etmeden GitHub'a eklenmemiş bir anahtarla çalışmaya
-başlamayasınız diye önce sorar.
+| Dosya | Yön | Ne anlama gelir |
+|---|---|---|
+| `~/.ssh/id_*` / `github_*` | dışarı | **Özel** anahtarınız. Kimliğinizdir, makineden çıkmaz |
+| `~/.ssh/*.pub` | dışarı | **Açık** anahtar. Paylaşılmak içindir, gizli değildir |
+| `~/.ssh/config` | dışarı | "Şu host'a şu kullanıcı ve şu anahtarla bağlan" |
+| `~/.ssh/known_hosts` | dışarı | Daha önce bağlandığınız **sunucuların** kimliği |
+| `~/.ssh/authorized_keys` | **içeri** | Bu makineye girmesine izin verilen açık anahtarlar |
+| `/etc/ssh/sshd_config` | **içeri** | Sunucu (sshd) kuralları — kim, nasıl girebilir |
 
-**Kişisel envanter.** LAN alt ağınız ve host kısayollarınız bu depoya girmez;
-`~/.ssh/archsetup.toml` dosyasından okunur. Dosya yoksa iskeleti oluşturulur ve
-yalnızca genel ayarlar uygulanır. Varlığı aynı zamanda "bu klasör archsetup
-tarafından yönetiliyor" işaretidir; taşıdığı `format` numarası ileride düzen
-değişirse göç etmeyi mümkün kılar.
+Kritik ayrım: `authorized_keys` **açık** anahtar tutar, özel anahtar değil. Bir
+makineye erişim vermek, o makinenin `authorized_keys` dosyasına karşı tarafın
+`.pub` dosyasını eklemek demektir. Özel anahtar hiçbir zaman kopyalanmaz.
+
+#### İki dosyaya bilerek farklı davranılır
+
+Bu, aracın en önemli tasarım kararı ve her yerde tekrarlanır:
+
+**`config.local` üretilir.** Yanlış giderse *dışarı* bağlanamazsınız. Makinenin
+başındasınız, dosyayı açar düzeltirsiniz. Maliyeti düşük.
+
+**`authorized_keys` asla yeniden yazılmaz — yalnızca eklenir.** Bozulursa
+*içeri* bağlanamazsınız. Uzaktaki bir makineye bu olursa geri dönmek için
+fiziksel erişim gerekir. En sinsi hâli bozuk bir `from=` değeridir: anahtar
+doğrudur, kabul edilmez, hata mesajı da açıklayıcı değildir.
+
+Bu yüzden `ssh-authorize` dosyanın sonuna satır **ekler**; `ssh-harden` ise
+eksik `from=` kısıtlarını yalnızca **raporlar**, düzeltmez.
+
+#### Kişisel envanter — `~/.ssh/archsetup.toml`
+
+LAN alt ağınız ve host kısayollarınız bu depoya girmez; ayrı bir dosyadan
+okunur. Dosya yoksa iskeleti oluşturulur ve yalnızca genel ayarlar uygulanır.
+Varlığı aynı zamanda "bu klasör archsetup tarafından yönetiliyor" işaretidir;
+taşıdığı `format` numarası ileride düzen değişirse göç etmeyi mümkün kılar.
 
 ```toml
 format = 1
 
 [lan]
-subnet = "10.0.0.0/24"        # authorized_keys from="..." denetimi icin
+subnet = "10.0.0.0/24"        # authorized_keys from="..." kisiti icin
 
 [hosts.sunucu]
 hostname = "10.0.0.5"
@@ -146,15 +170,127 @@ key = "sunucu_ed25519"
 ```
 
 Buradan `~/.ssh/config.local` üretilir; sizin `~/.ssh/config` dosyanız yalnızca
-`Include` satırını ve `Host *` varsayılanlarını tutar. `Include` en üste yazılır,
-çünkü `ssh` ilk eşleşen değeri kullanır ve `Host *` en sonda kalmalıdır.
+`Include` satırını ve `Host *` varsayılanlarını tutar. `Include` **en üste**
+yazılır, çünkü `ssh` ilk eşleşen değeri kullanır ve `Host *` en sonda kalmalıdır.
 
-**`authorized_keys` yeniden yazılmaz.** İki dosyanın hata maliyeti eşit değil:
-`config.local` yanlış üretilirse dışarı bağlanamazsınız, makinenin başındasınız
-ve düzeltirsiniz. `authorized_keys` bozulursa içeri bağlanılamaz ve fiziksel
-erişim gerekebilir — bozuk bir `from=` değeri anahtarın hiçbir zaman
-eşleşmemesine yol açar. Bu yüzden `ssh-harden` yalnızca denetler ve eksik
-`from=` kısıtlarını raporlar; düzeltmeyi siz bilerek yaparsınız.
+#### Yeni makine kurulumu
+
+`~/.ssh` klasörünüzü kopyalayın, sonra sırayla:
+
+```bash
+./archsetup ssh-identity    # bu makinenin anahtari + agent
+./archsetup ssh-harden      # sunucu sertlestirme
+./archsetup git-identity    # commit imzalama (istege bagli)
+```
+
+`ssh-identity` bu makine için `~/.ssh/github_<hostname>` anahtarı yoksa üretir
+(terminal varsa parolayı sorar) ve GitHub'a eklenecek satırı yazdırır. Klasörde
+başka makinelerin `github_*` anahtarı varken yenisini **sessizce üretmez** —
+hostname değiştiyse, fark etmeden GitHub'a eklenmemiş bir anahtarla çalışmaya
+başlamayasınız diye önce sorar.
+
+#### İki makineyi birbirine bağlamak
+
+Masaüstünden dizüstüne bağlanmak istiyorsunuz diyelim. **Dizüstünde** (hedef):
+
+```bash
+./archsetup ssh-harden      # parola girisini kapat, sadece anahtar
+./archsetup ssh-authorize   # masaustunun .pub anahtarini yapistirin
+```
+
+`ssh-authorize` yapıştırdığınız satırı `ssh-keygen` ile doğrular, envanterdeki
+alt ağdan `from="..."` kısıtı üretmeyi teklif eder, dosyayı önce yedekler ve
+sonuna **ekler**. Mevcut satırlara dokunmaz.
+
+Doğrulamanın sınırını bilerek yazıyoruz: bu bir **biçim** denetimidir. Satır
+aktarılırken kırılmışsa yakalar (e-posta ve sohbet uygulamaları satır kırar,
+böyle bir satırı sshd sessizce atlar). Ama "geçerli ama **başka** bir anahtar"
+durumunu yakalayamaz — ed25519 anahtarında iç sağlama yoktur, gövdenin son
+karakterleri değişirse ortaya yine geçerli bir anahtar çıkar, sadece parmak izi
+başka olur. Tek gerçek denetim, görevin yazdırdığı parmak izini **kaynak
+makinede** karşılaştırmaktır:
+
+```bash
+ssh-keygen -lf ~/.ssh/github_panthera-arch.pub
+```
+
+**`from=` ve IPv6 tuzağı.** `from="192.168.1.0/24"` yalnızca IPv4 kapsar. Karşı
+makine hedefe **adıyla** bağlanırsa isim IPv6 link-local adrese (`fe80::...`)
+çözülebilir ve doğru anahtarla reddedilirsiniz:
+
+```
+authorized_keys:3: correct key but not from a permitted host
+  (host=fe80::..., required=192.168.1.0/24)
+error: Refused by key options
+```
+
+İki çözüm var: kısıtı IPv6'yı da kapsayacak şekilde genişletmek, ya da istemciyi
+IPv4'e sabitlemek. İkincisi seçildi — sunucu kısıtı dar kalıyor, ki asıl işi o.
+Üretilen `config.local` bu yüzden her host'a `AddressFamily inet` yazar.
+
+#### Makine sıfırlandığında: `ssh-forget`
+
+Bir makineyi yeniden kurduğunuzda sunucu anahtarı da değişir ve bağlanmaya
+çalıştığınızda şu çıkar:
+
+```
+@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@
+```
+
+Bu uyarı **gürültü değil**: aynı uyarı, araya giren biri olduğunda da çıkar.
+Makineyi siz sıfırladıysanız beklenen bir şeydir; sıfırlamadıysanız durup
+düşünmeniz gerekir. `ssh-forget` bu yüzden hiçbir zaman otomatik davranmaz —
+kaydı gösterir, uyarır ve açık onay ister; sonra `ssh-keygen -R` ile siler.
+Envanterdeki kısayol adını da gerçek adrese çevirir (`known_hosts` adresi tutar).
+
+#### `ssh-rotate` — anahtar kaybı veya sızıntısı
+
+Eski anahtarı `~/.ssh-arsiv/` altına taşır, yenisini üretir ve **GitHub'dan
+silinecek parmak izini** yazdırır. Yalnızca GitHub anahtarını kapsar: LAN
+anahtarlarını yenilemek karşı makinenin `authorized_keys` dosyasını da
+değiştirmeyi gerektirir, oraya erişim yok — yarım iş yapmaktansa dokunmuyor.
+
+#### `git-identity` — commit'i hangi makine yaptı
+
+Aynı hesaba iki makineden push ediyorsanız, commit'i hangisinin yaptığını
+ayırt etmenin yolu **imzalayan anahtardır**: `user.name` ve `user.email` her
+makinede aynı kalır. Görev iki dosya üretir:
+
+- `~/.gitconfig.local` — imzalama açık, anahtar bu makinenin `github_*.pub`'ı.
+  Paylaşılan `~/.gitconfig` yalnızca `[include]` taşır, ona dokunulmaz (dotfiles
+  deposuna symlink).
+- `~/.config/git/allowed_signers` — imzaları doğrularken güvenilen anahtar
+  listesi. **Üretilmez, eklenir:** yeniden üretmek diğer makinenin elle konmuş
+  anahtarını düşürürdü ve onun imzaları bir anda "unknown signer" olurdu.
+
+`user.email` uydurulmaz, `git config`'ten okunur — doğrulama e-postaya göre
+eşleşiyor. Tanımlı değilse görev hiçbir şey yazmadan durur.
+
+> **Uyarı — `allowed_signers` bir güven listesidir.** Sahibi doğrulanmamış bir
+> anahtar eklenirse o anahtarla imzalanan her commit sessizce "geçerli" sayılır.
+> Görev bu yüzden anahtarı tahmin etmez; yalnızca bu makinenin kendi `.pub`
+> dosyasını yazar.
+
+#### Sık karşılaşılan iki durum
+
+**`git commit` asılı kalıyor.** İmzalama anahtarınız parolalıysa ve agent'a
+yüklü değilse, git parolayı terminalden sorar; çıktının görünmediği bir yerde
+bu "donma" gibi görünür. Çözüm:
+
+```bash
+ssh-add ~/.ssh/github_<makine>          # anahtari agent'a yukle
+ssh-add -l                              # yuklu mu, dogrula
+```
+
+**Bir komut SSH oturumunda çalışmıyor, makine başında çalışıyor.** SSH
+oturumunun *seat*'i yoktur; logind cihaz erişimini (parlaklık, güç yönetimi)
+yalnızca seat'i olan etkin oturuma verir. Hangi durumda olduğunuza bakın:
+
+```bash
+loginctl show-session "$XDG_SESSION_ID" -p Type -p Seat -p Active
+```
+
+`Seat=` boşsa sonucu grafik oturumuna genellemeyin.
 
 ## Dizin yapısı
 
@@ -175,7 +311,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-214 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+224 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -212,7 +348,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (214 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (224 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
       networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
       keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,
@@ -237,17 +373,11 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       `~/.config/git/allowed_signers`. Kimlik her makinede aynı, ayırt edici
       olan imzalayan anahtar. Güven listesine **eklenir**, yeniden üretilmez —
       başka makinelerin anahtarı düşerse imzaları "unknown signer" olur
-- [ ] SSH: makine sıfırlama sonrası kalan iki elle adımı göreve dönüştürmek.
-      `ssh-authorize` terminale yapıştırılan açık anahtarı `ssh-keygen -l`
-      ile doğrular, envanterdeki alt ağdan `from="..."` kısıtını üretir ve
-      `authorized_keys`'e **ekler** — yeniden yazmaz, önce yedekler. (Ekleme
-      güvenlidir, kilitlenme riski dosyayı yeniden üretmekten gelir; bu görev
-      yazılırsa CLAUDE.md'deki "authorized_keys üretilmez" maddesi
-      "eklenebilir, üretilemez" diye inceltilmeli.) `ssh-forget` ise
-      sıfırlanan bir makinenin bayat `known_hosts` kaydını `ssh-keygen -R`
-      ile siler; envanterdeki host'lardan seçilir ve **her zaman açık onay
-      ister** — "REMOTE HOST IDENTIFICATION HAS CHANGED" bir ortadaki-adam
-      kontrolüdür, otomatik susturulacak bir gürültü değil.
+- [x] SSH: `ssh-authorize` yapıştırılan açık anahtarı doğrular, envanterdeki
+      alt ağdan `from="..."` kısıtı üretir ve `authorized_keys`'e **ekler** —
+      yeniden yazmaz, önce yedekler. `ssh-forget` sıfırlanan bir makinenin
+      bayat `known_hosts` kaydını `ssh-keygen -R` ile siler, her zaman açık
+      onay ister
 - [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).
