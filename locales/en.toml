@@ -80,6 +80,8 @@ title = "System"
 desc = "Swap, core dumps and bootloader"
 
 [dotfiles]
+wallpaper_link_none = "No images inside {path}; the wallpaper link was not created."
+wallpaper_link_set = "Wallpaper link created: {link} -> {target}"
 menu_desc = "Copy, symlink or validate (drpars/dotfiles)"
 xdg_install_q = "The XDG user directories (Pictures, Documents...) are missing. Install xdg-user-dirs and create them?"
 xdg_creating = "Creating the XDG user directories (xdg-user-dirs-update)..."
@@ -102,6 +104,10 @@ wallpapers_empty = "No folders inside {path}; the repository is not in the expec
 wallpapers_q = "Apply the wallpaper changes? Target: {target}"
 
 [sddm]
+avatar_source_missing = "No avatar source (Pictures/{path}); the login screen keeps the default icon."
+avatar_script_missing = "The theme has no change_avatar.sh: {path}"
+avatar_q = "Install the login screen avatar? {source} -> {target}"
+avatar_done = "Avatar installed: {path}"
 overwrite_q = "{path} already exists, overwrite it?"
 done = "SDDM theme installed. Visible on the next login screen."
 

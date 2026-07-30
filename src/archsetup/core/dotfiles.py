@@ -25,6 +25,11 @@ REPO_BASE = "https://github.com/drpars"
 DOTFILES_DIR = Path.home() / ".dotfiles"
 WALLPAPER_REPO_DIR = Path.home() / ".cache" / "archsetup" / "Wallpaper"
 
+# hyprpaper.conf ve hyprlock.conf ikisi de bu yolu okur. Depoda degil,
+# durum dosyasi: secilen duvar kagidi makineye ait, dotfiles'a degil.
+WALLPAPER_LINK = Path.home() / ".local" / "state" / "wallpaper"
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
+
 
 # Bolum -> (depodaki yol, sistemdeki hedef).
 #
@@ -264,7 +269,37 @@ def install_wallpapers() -> int:
         target = pictures / source.name
         target.mkdir(parents=True, exist_ok=True)
         rc |= run(_rsync_wallpapers(source, target, dry=False))
-    return rc
+    return rc | _ensure_wallpaper_link(pictures / "Wallpaper")
+
+
+def _ensure_wallpaper_link(wallpaper_dir: Path) -> int:
+    """~/.local/state/wallpaper — hyprpaper ve hyprlock'un okudugu yer.
+
+    wallselect her secimde bu baglantiyi yeniden yazar, ama sifirdan bir
+    kurulumda kimse onu bir kez olsun kurmuyor: hyprlock'ta
+    ``ignore_empty = true`` oldugu icin cokme de olmuyor, arka plan sadece
+    bos kaliyor -- sessiz ve teshis edilmesi zor.
+
+    Zaten calisan bir baglantiya DOKUNULMAZ; o kullanicinin secimidir.
+    """
+    if WALLPAPER_LINK.is_symlink() and WALLPAPER_LINK.exists():
+        return 0
+
+    images = sorted(
+        path
+        for path in wallpaper_dir.glob("*")
+        if path.suffix.lower() in IMAGE_SUFFIXES and path.is_file()
+    )
+    if not images:
+        print(t("dotfiles.wallpaper_link_none", path=wallpaper_dir))
+        return 0
+
+    WALLPAPER_LINK.parent.mkdir(parents=True, exist_ok=True)
+    if WALLPAPER_LINK.is_symlink():  # kirik baglanti
+        WALLPAPER_LINK.unlink()
+    os.symlink(images[0], WALLPAPER_LINK)
+    print(t("dotfiles.wallpaper_link_set", link=WALLPAPER_LINK, target=images[0]))
+    return 0
 
 
 def install_nvim() -> int:

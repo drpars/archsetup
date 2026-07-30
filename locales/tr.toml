@@ -80,6 +80,8 @@ title = "Sistem"
 desc = "Swap, çekirdek dökümü ve önyükleyici"
 
 [dotfiles]
+wallpaper_link_none = "{path} icinde resim yok; duvar kagidi baglantisi kurulmadi."
+wallpaper_link_set = "Duvar kagidi baglantisi kuruldu: {link} -> {target}"
 menu_desc = "Kopyala, sembolik bağla veya doğrula (drpars/dotfiles)"
 xdg_install_q = "XDG kullanıcı klasörleri (Resimler, Belgeler...) yok. xdg-user-dirs kurulup oluşturulsun mu?"
 xdg_creating = "XDG kullanıcı klasörleri oluşturuluyor (xdg-user-dirs-update)..."
@@ -102,6 +104,10 @@ wallpapers_empty = "{path} içinde klasör yok; depo beklenen düzende değil."
 wallpapers_q = "Duvar kağıdı değişiklikleri uygulansın mı? Hedef: {target}"
 
 [sddm]
+avatar_source_missing = "Avatar kaynagi yok (Resimler/{path}); giris ekrani varsayilan simgede kalir."
+avatar_script_missing = "Temanin change_avatar.sh betigi yok: {path}"
+avatar_q = "Giris ekrani avatari kurulsun mu? {source} -> {target}"
+avatar_done = "Avatar yerlestirildi: {path}"
 overwrite_q = "{path} zaten var, üzerine yazılsın mı?"
 done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında görünür."
 

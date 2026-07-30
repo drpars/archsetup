@@ -1,6 +1,7 @@
 """Post-install tasks: dotfiles, sddm, kmscon, network, asus, virt, waydroid."""
 
 import json
+import os
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
@@ -135,6 +136,47 @@ def test_wallpapers_land_flat_and_spare_local_only_folders(dot_env, monkeypatch)
     assert not (pics / "Wallpaper" / ".git").exists()
 
 
+def test_wallpaper_link_is_created_when_missing(dot_env, monkeypatch):
+    wall_dir = dot_env / "Pictures" / "Wallpaper"
+    wall_dir.mkdir(parents=True)
+    (wall_dir / "b.jpg").write_text("img")
+    (wall_dir / "a.png").write_text("img")
+    link = dot_env / "state" / "wallpaper"
+    monkeypatch.setattr(dotfiles, "WALLPAPER_LINK", link)
+
+    assert dotfiles._ensure_wallpaper_link(wall_dir) == 0
+    assert link.is_symlink()
+    assert Path(os.readlink(link)).name == "a.png"
+
+
+def test_existing_wallpaper_choice_is_left_alone(dot_env, monkeypatch):
+    """Calisan baglanti kullanicinin secimi; wallselect onu yaziyor."""
+    wall_dir = dot_env / "Pictures" / "Wallpaper"
+    wall_dir.mkdir(parents=True)
+    (wall_dir / "a.png").write_text("img")
+    (wall_dir / "secilen.jpg").write_text("img")
+    link = dot_env / "state" / "wallpaper"
+    link.parent.mkdir()
+    os.symlink(wall_dir / "secilen.jpg", link)
+    monkeypatch.setattr(dotfiles, "WALLPAPER_LINK", link)
+
+    assert dotfiles._ensure_wallpaper_link(wall_dir) == 0
+    assert Path(os.readlink(link)).name == "secilen.jpg"
+
+
+def test_broken_wallpaper_link_is_replaced(dot_env, monkeypatch):
+    wall_dir = dot_env / "Pictures" / "Wallpaper"
+    wall_dir.mkdir(parents=True)
+    (wall_dir / "a.png").write_text("img")
+    link = dot_env / "state" / "wallpaper"
+    link.parent.mkdir()
+    os.symlink(wall_dir / "silinmis.jpg", link)
+    monkeypatch.setattr(dotfiles, "WALLPAPER_LINK", link)
+
+    assert dotfiles._ensure_wallpaper_link(wall_dir) == 0
+    assert Path(os.readlink(link)).name == "a.png"
+
+
 def test_wallpapers_refuses_an_unexpected_repo_layout(dot_env, monkeypatch):
     """Kokunde klasor yoksa duz dosyalari Resimler'e sacmak yerine dur."""
     wall = dot_env / "wall"
@@ -153,12 +195,55 @@ def test_sddm_silent(tmp_path, monkeypatch, fake_write):
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: True)
     monkeypatch.setattr(sddm.pacman, "install", lambda repo, aur: 0)
     monkeypatch.setattr(sddm, "SDDM_CONF", tmp_path / "sddm.conf")
+    monkeypatch.setattr(sddm, "install_avatar", lambda: 0)
 
     assert sddm.install_silent() == 0
     assert "Current=silent" in (tmp_path / "sddm.conf").read_text()
 
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: False)
     assert sddm.install_silent() == 1
+
+
+@pytest.fixture
+def avatar_env(tmp_path, monkeypatch, runlog):
+    pictures = tmp_path / "Resimler"
+    (pictures / "Icons").mkdir(parents=True)
+    theme = tmp_path / "themes" / "silent"
+    theme.mkdir(parents=True)
+
+    monkeypatch.setattr(sddm.dotfiles, "_xdg_dir", lambda name, fb: pictures)
+    monkeypatch.setattr(sddm, "CHANGE_AVATAR", theme / "change_avatar.sh")
+    monkeypatch.setattr(sddm, "FACES_DIR", tmp_path / "faces")
+    monkeypatch.setattr(sddm, "run", runlog)
+    monkeypatch.setattr(sddm.shutil, "which", lambda name: "/usr/bin/mogrify")
+    monkeypatch.setattr(sddm, "ask_yes", lambda prompt: True)
+    return SimpleNamespace(pictures=pictures, theme=theme, runlog=runlog)
+
+
+def test_avatar_calls_the_theme_script(avatar_env):
+    (avatar_env.pictures / sddm.AVATAR_RELATIVE).write_bytes(b"png")
+    (avatar_env.theme / "change_avatar.sh").write_text("#!/bin/bash\n")
+
+    assert sddm.install_avatar() == 0
+
+    called = avatar_env.runlog.calls[-1]
+    assert called[0] == "bash"
+    assert called[1].endswith("change_avatar.sh")
+
+
+def test_avatar_without_a_source_is_not_an_error(avatar_env):
+    """Kaynak resim kisiye ozel; yoksa kurulum durmaz, avatar kurulmaz."""
+    (avatar_env.theme / "change_avatar.sh").write_text("#!/bin/bash\n")
+
+    assert sddm.install_avatar() == 0
+    assert avatar_env.runlog.calls == []
+
+
+def test_avatar_without_the_theme_script_is_not_an_error(avatar_env):
+    (avatar_env.pictures / sddm.AVATAR_RELATIVE).write_bytes(b"png")
+
+    assert sddm.install_avatar() == 0
+    assert avatar_env.runlog.calls == []
 
 
 def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):

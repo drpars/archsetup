@@ -201,7 +201,9 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Yapılandırma görevleri: dotfiles (kopyala/bağla/doğrula, rsync yedekli),
       swap/hibernation (resume parametreleri her önyükleyicide), Neovim
       dotfiles kur/kaldır, bat önbelleği
-- [x] SDDM teması (Silent), duvar kağıtları, kmscon
+- [x] SDDM teması (Silent) + giriş ekranı avatarı, duvar kağıtları, kmscon
+- [x] Sıfırdan kurulumda `~/.local/state/wallpaper` bağlantısı: hyprpaper ve
+      hyprlock oradan okuyor, `wallselect` ise ancak ilk seçimde yazıyor
 - [x] Ağ paylaşımı: Samba (usershare, sambashare grubu) + Avahi + firewalld
 - [x] Kalan uygulama kategorileri: yazı tipleri, tema motorları, temalar,
       oyun başlatıcılar, sanallaştırma (virt-config görevi), OpenRazer,
