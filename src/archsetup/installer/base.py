@@ -7,7 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..core import i18n
+from ..core import i18n, mirrors
 from ..core.pacman import run
 from ..core.prompt import ask_yes
 from . import disk
@@ -33,10 +33,13 @@ def run_reflector() -> int:
     rc = run(["pacman", "-Sy", "--needed", "--noconfirm", "reflector"])
     if rc != 0:
         return rc
-    return run(
-        ["reflector", "--verbose", "--protocol", "https", "--latest", "10",
-         "--sort", "rate", "--save", "/etc/pacman.d/mirrorlist"]
-    )
+    try:
+        country = input(f"{t('inst.reflector_country_q')} ").strip()
+    except EOFError:
+        country = ""
+    # Not thorough here: timing every mirror costs more than the faster
+    # mirror saves over a single pacstrap. See core.mirrors.
+    return mirrors.rank(run, "/etc/pacman.d/mirrorlist", country)
 
 
 def _set_parallel(path: Path, count: int) -> bool:

@@ -24,6 +24,7 @@ from . import (
     i18n,
     iwd,
     kmscon,
+    mirrors,
     network,
     nvidia_laptop,
     pacman,
@@ -102,10 +103,9 @@ def reflector_mirrors() -> int:
         run(["sudo", "cp", str(MIRRORLIST), f"{MIRRORLIST}.bak"])
         print(t("msg.reflector_backup", path=f"{MIRRORLIST}.bak"))
 
-    args = ["--protocol", "https", "--latest", "10", "--sort", "rate"]
-    if country:
-        args += ["--country", country]
-    return run(["sudo", "reflector", "--verbose", *args, "--save", str(MIRRORLIST)])
+    # Thorough here: this is run deliberately, and often before a large
+    # update, so timing the candidates earns its cost back.
+    return mirrors.rank(run, str(MIRRORLIST), country, thorough=True, sudo=True)
 
 
 def install_yay() -> int:
