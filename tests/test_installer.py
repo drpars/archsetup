@@ -617,3 +617,22 @@ def test_declined_fix_blocks_the_bootloader(monkeypatch, esp_env):
     state.bootdev = "/dev/sda1"
     monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
     assert bootloaders._require_efi() is False
+
+
+# --- locale input ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("typed", ["tr_TR", "tr_TR.UTF-8", "tr_TR.utf8", "tr_TR.UTF8"])
+def test_locale_accepts_the_full_name_too(tmp_path, monkeypatch, typed):
+    """The prompt says .UTF-8 is appended, but typing it is the natural
+    thing to do -- and it used to build tr_TR.UTF-8.UTF-8 and hard-fail."""
+    etc = tmp_path / "etc"
+    etc.mkdir()
+    (tmp_path / "usr").mkdir()
+    (etc / "locale.gen").write_text("#en_US.UTF-8 UTF-8\n#tr_TR.UTF-8 UTF-8\n")
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "chroot_run", lambda a: 0)
+
+    assert chroot.set_locale(typed) == 0
+    assert "\ntr_TR.UTF-8 UTF-8" in (etc / "locale.gen").read_text()
+    assert (etc / "locale.conf").read_text().startswith("LANG=tr_TR.UTF-8\n")

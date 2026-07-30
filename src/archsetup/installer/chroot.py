@@ -104,6 +104,11 @@ def set_locale(locale: str | None = None) -> int:
             input(f"{t('inst.locale_q')} [{DEFAULT_LOCALE}]: ").strip()
             or DEFAULT_LOCALE
         )
+    # The prompt says .UTF-8 is appended, but typing the full name is the
+    # natural thing to do -- and it used to build "tr_TR.UTF-8.UTF-8", which
+    # matches nothing in locale.gen and fails the step outright. Accept both
+    # spellings instead of being right about whose fault it was.
+    locale = re.sub(r"\.utf-?8$", "", locale, flags=re.IGNORECASE)
     (MNT / "etc/locale.conf").write_text(
         f"LANG={locale}.UTF-8\nLC_COLLATE=C\n", encoding="utf-8"
     )
