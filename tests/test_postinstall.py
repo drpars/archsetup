@@ -35,13 +35,21 @@ def dot_env(tmp_path, monkeypatch):
     (repo / "config" / "kitty" / "kitty.conf").write_text("font_size 12\n")
     (repo / "home").mkdir()
     (repo / "home" / ".zshrc").write_text("alias ll='ls -la'\n")
+    (repo / "local" / "share" / "applications").mkdir(parents=True)
+    (repo / "local" / "share" / "applications" / "nvim.desktop").write_text("[Desktop Entry]\n")
+    (repo / "local" / "share" / "color-schemes").mkdir()
     backup = tmp_path / "backup"
     backup.mkdir()
 
     monkeypatch.setattr(dotfiles, "DOTFILES_DIR", repo)
     monkeypatch.setattr(
-        dotfiles, "section_target",
-        lambda s: {"config": home / ".config", "home": home}[s],
+        dotfiles,
+        "SECTIONS",
+        {
+            "config": ("config", home / ".config"),
+            "home": ("home", home),
+            "local": ("local/share", home / ".local" / "share"),
+        },
     )
     monkeypatch.setattr(dotfiles, "_backup_dir", lambda: backup)
     return tmp_path
@@ -50,7 +58,24 @@ def dot_env(tmp_path, monkeypatch):
 def test_list_items(dot_env):
     assert dotfiles.list_items("config") == ["kitty"]
     assert dotfiles.list_items("home") == [".zshrc"]
-    assert dotfiles.list_items("nonexistent" if False else "config")
+
+
+def test_local_section_starts_below_share(dot_env):
+    """Ogeler share/ degil, onun icindekiler olmali.
+
+    Tek oge "share" olsaydi onu baglamak ~/.local/share'in tamamini --
+    her uygulamanin verisini -- depodaki iki klasorle degistirirdi.
+    """
+    assert dotfiles.list_items("local") == ["applications", "color-schemes"]
+    assert dotfiles.section_target("local").name == "share"
+
+
+def test_local_items_are_linked_into_local_share(dot_env):
+    assert dotfiles.symlink_items("local", ["applications"]) == 0
+
+    linked = dot_env / "home" / ".local" / "share" / "applications"
+    assert linked.is_symlink()
+    assert (linked / "nvim.desktop").is_file()
 
 
 def test_symlink_backs_up_and_validates(dot_env):

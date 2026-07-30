@@ -1,6 +1,7 @@
 """Dotfiles management: clone/pull, copy with rsync backups, symlink, validate.
 
-The repo lives directly in ~/.dotfiles with config/ and home/ sections.
+The repo lives directly in ~/.dotfiles; SECTIONS below says which of its
+top-level folders are installed and where.
 Copy mode mirrors items with rsync (previous versions saved under
 ~/Documents/dotfiles_yedek/<timestamp>); symlink mode backs up existing
 targets and creates links atomically (temp link + rename).
@@ -25,8 +26,33 @@ DOTFILES_DIR = Path.home() / ".dotfiles"
 WALLPAPER_REPO_DIR = Path.home() / ".cache" / "archsetup" / "Wallpaper"
 
 
+# Bolum -> (depodaki yol, sistemdeki hedef).
+#
+# Bolum adi klasor adiyla ayni olmak zorunda degil: local/ dogrudan
+# eslenirse tek oge "share" olurdu ve onu baglamak ~/.local/share'in
+# TAMAMINI -- her uygulamanin verisini -- depodaki uc klasorle degistirirdi.
+# Bir seviye asagidan baslayinca ogeler applications/, color-schemes/,
+# icons/ oluyor; secim de geri alinabilir kaliyor.
+#
+# Depodaki her ust klasor bir bolum degildir, bilerek:
+#   browser/  Firefox profil dizini rastgele adli, sabit hedef yok
+#   sddm/     /etc altina gider, root ister -- core/sddm.py'nin isi
+#   windows/  baska bir isletim sistemi
+#   docs/     belge, kurulacak bir sey degil
+#   claude/   kendi install.sh'i var
+SECTIONS: dict[str, tuple[str, Path]] = {
+    "config": ("config", Path.home() / ".config"),
+    "home": ("home", Path.home()),
+    "local": ("local/share", Path.home() / ".local" / "share"),
+}
+
+
 def section_target(section: str) -> Path:
-    return {"config": Path.home() / ".config", "home": Path.home()}[section]
+    return SECTIONS[section][1]
+
+
+def section_source(section: str) -> Path:
+    return DOTFILES_DIR / SECTIONS[section][0]
 
 
 def ensure_repo(name: str, target: Path) -> int:
@@ -43,7 +69,7 @@ def ensure_dotfiles_repo() -> int:
 
 
 def list_items(section: str) -> list[str]:
-    base = DOTFILES_DIR / section
+    base = section_source(section)
     if not base.is_dir():
         return []
     return sorted(p.name for p in base.iterdir())
@@ -120,7 +146,7 @@ def copy_items(section: str, items: list[str]) -> int:
 
     for item in items:
         print(f"─── {item} ───")
-        run(_rsync_cmd(DOTFILES_DIR / section / item, target_base / item, backup, True))
+        run(_rsync_cmd(section_source(section) / item, target_base / item, backup, True))
     if not ask_yes(t("dotfiles.apply_q", backup=backup)):
         print(t("msg.cancelled"))
         return 0
@@ -131,7 +157,7 @@ def copy_items(section: str, items: list[str]) -> int:
         if target.is_symlink():
             print(t("dotfiles.removing_link", target=target))
             target.unlink()
-        rc |= run(_rsync_cmd(DOTFILES_DIR / section / item, target, backup, False))
+        rc |= run(_rsync_cmd(section_source(section) / item, target, backup, False))
     return rc
 
 
@@ -140,7 +166,7 @@ def symlink_items(section: str, items: list[str]) -> int:
     backup = _backup_dir()
 
     for item in items:
-        source = DOTFILES_DIR / section / item
+        source = section_source(section) / item
         target = target_base / item
         if target.exists() or target.is_symlink():
             print(t("dotfiles.backing_up", target=target))

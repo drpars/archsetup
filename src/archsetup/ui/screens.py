@@ -240,6 +240,12 @@ def make_dotfiles_menu() -> MenuScreen:
             str(dotfiles.section_target("home")),
             lambda screen: open_section(screen, "home"),
         ),
+        MenuItem(
+            "local",
+            t("dotfiles.section_local"),
+            str(dotfiles.section_target("local")),
+            lambda screen: open_section(screen, "local"),
+        ),
     ]
     # nvim ve duvar kağıdı görevleri de core/dotfiles.py'den gelir; onları
     # üst menüde bırakmak aynı alanı iki seviyeye bölüyordu.
