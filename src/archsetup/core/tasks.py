@@ -238,6 +238,8 @@ TASKS: tuple[Task, ...] = (
     Task("ssh-harden", "task.ssh_harden", ssh.harden, group="ssh"),
     Task("ssh-identity", "task.ssh_identity", ssh.identity, group="ssh"),
     Task("ssh-rotate", "task.ssh_rotate", ssh.rotate, group="ssh"),
+    Task("ssh-authorize", "task.ssh_authorize", ssh.authorize, group="ssh"),
+    Task("ssh-forget", "task.ssh_forget", ssh.forget, group="ssh"),
     Task("git-identity", "task.git_identity", gitid.configure, group="ssh"),
     Task(
         "claude-code",

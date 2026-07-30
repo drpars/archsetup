@@ -20,8 +20,10 @@ from __future__ import annotations
 import getpass
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from datetime import date
 from pathlib import Path
@@ -64,6 +66,18 @@ _CONFLICT_RE = re.compile(
 # from="..." icine yazilmadan once dogrulanir: bozuk bir deger sessiz
 # kilitlenme demektir.
 _CIDR_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$")
+
+_KEY_PREFIXES = ("ssh-", "ecdsa-", "sk-")
+
+# from="..." IPv4 yazildiginda, hedefe ADIYLA baglanan bir istemci IPv6
+# link-local'e (fe80::...) cozulup reddedilir -- dogru anahtarla, anlasilmaz
+# bir hatayla:
+#     authorized_keys:N: correct key but not from a permitted host
+#       (host=fe80::..., required=192.168.137.0/24)
+# Iki cozum var: kisiti IPv6'yi da kapsayacak sekilde genisletmek, ya da
+# istemciyi IPv4'e sabitlemek. Ikincisi secildi -- sunucu kisiti dar kaliyor,
+# ki asil isi o.
+CLIENT_ADDRESS_FAMILY = "inet"
 
 # Gercek bir Include YONERGESI aranir. Duz "config.local" alt dizgi aramasi,
 # dosyadaki bir YORUM satirinda gectiginde de eslesir -- bizim yazdigimiz
@@ -217,6 +231,24 @@ def authorized_entries() -> list[tuple[str, str]]:
                 entries.append((" ".join(fields[:index]), comment))
                 break
     return entries
+
+
+def authorized_bodies() -> set[str]:
+    """authorized_keys'teki anahtar govdeleri.
+
+    Ayni anahtarin ikinci kez eklenmesini gorebilmek icin gerekli: yorum
+    ve secenekler degisebilir, anahtarin kendisi degismez.
+    """
+    if not AUTHORIZED_KEYS.is_file():
+        return set()
+    bodies = set()
+    for line in AUTHORIZED_KEYS.read_text(encoding="utf-8").splitlines():
+        fields = line.split()
+        for index, field in enumerate(fields):
+            if field.startswith(_KEY_PREFIXES) and index + 1 < len(fields):
+                bodies.add(fields[index + 1])
+                break
+    return bodies
 
 
 def _interactive() -> bool:
@@ -404,7 +436,12 @@ def _write_config_local() -> None:
         hostname = spec.get("hostname")
         if not hostname:
             continue
-        lines += ["", f"Host {name}", f"    HostName {hostname}"]
+        lines += [
+            "",
+            f"Host {name}",
+            f"    HostName {hostname}",
+            f"    AddressFamily {CLIENT_ADDRESS_FAMILY}",
+        ]
         if spec.get("user"):
             lines.append(f"    User {spec['user']}")
         if spec.get("key"):
@@ -607,4 +644,178 @@ def rotate() -> int:
     rc = _ensure_github_key(allow_new=True)
     if rc == 0:
         print(t("ssh.rotate_remove_old", fp=old_fp))
+    return rc
+
+
+# --------------------------------------------------------------------------
+# Görev: yetkili anahtar ekleme (yeniden yazma değil, EKLEME)
+# --------------------------------------------------------------------------
+
+
+def _validate_key(line: str) -> str | None:
+    """Yapistirilan satiri ssh-keygen'e dogrulat, parmak izini dondur.
+
+    Gozle "anahtar gibi duruyor" yetmez: e-posta istemcisinden gecerken
+    satir kirilmis, bir karakter dusmus ya da base64 bozulmus olabilir.
+    Boyle bir satir authorized_keys'e girerse sshd dosyayi okurken o satiri
+    atlar -- hata mesaji yok, sadece "neden giremiyorum" var.
+
+    SINIRI: bu yalnizca BICIM denetimi. "Gecerli ama baska bir anahtar"
+    durumunu yakalayamaz -- ed25519 anahtarinda ic saglama yoktur, govdenin
+    son karakterleri degistirilirse ortaya yine gecerli bir anahtar cikar,
+    sadece parmak izi baska olur (olculdu). Tek gercek denetim parmak izini
+    kaynak makinedekiyle karsilastirmaktir; gorev bu yuzden eklemeden once
+    parmak izini yazdirip onay istiyor.
+    """
+    with tempfile.NamedTemporaryFile("w", suffix=".pub", delete=False) as fh:
+        fh.write(line + "\n")
+        temp = Path(fh.name)
+    try:
+        out = subprocess.run(
+            ["ssh-keygen", "-lf", str(temp)], capture_output=True, text=True
+        )
+    finally:
+        temp.unlink(missing_ok=True)
+    if out.returncode != 0:
+        return None
+    parts = out.stdout.split()
+    return parts[1] if len(parts) > 1 else None
+
+
+def _split_key(raw: str) -> tuple[str, str, str] | None:
+    """(tur, govde, yorum) — satirda secenek varsa reddeder.
+
+    Yapistirilan satirda zaten ``from=...`` ya da ``command=...`` varsa
+    bizimkiyle birlestirmek iki kisitin hangisinin kazandigini belirsiz
+    kilar; kullanicinin ne yaptigini bildigi bir satiri da bozmayalim.
+    """
+    fields = raw.split()
+    if not fields or not fields[0].startswith(_KEY_PREFIXES) or len(fields) < 2:
+        return None
+    return fields[0], fields[1], " ".join(fields[2:])
+
+
+def authorize() -> int:
+    """Baska bir makinenin acik anahtarini authorized_keys'e EKLE.
+
+    Dosya asla yeniden uretilmez (bkz. modul basligi). Ekleme guvenlidir:
+    en kotu ihtimalle fazladan bir satir kalir. Kilitlenme riski dosyayi
+    yeniden yazmaktan gelir, eklemekten degil.
+    """
+    if not SSH_DIR.is_dir():
+        print(t("ssh.no_dir", path=SSH_DIR))
+        return 1
+    if not _interactive():
+        print(t("ssh.authorize_needs_tty"))
+        return 1
+
+    print(t("ssh.authorize_paste"))
+    try:
+        raw = input("> ").strip()
+    except EOFError:
+        raw = ""
+    if not raw:
+        print(t("msg.cancelled"))
+        return 1
+
+    parsed = _split_key(raw)
+    if parsed is None:
+        print(t("ssh.authorize_not_a_key"))
+        return 1
+    keytype, body, comment = parsed
+
+    fp = _validate_key(f"{keytype} {body} {comment}".strip())
+    if fp is None:
+        print(t("ssh.authorize_invalid"))
+        return 1
+
+    if body in authorized_bodies():
+        print(t("ssh.authorize_duplicate", fp=fp))
+        return 0
+
+    options = ""
+    subnet = lan_subnet()
+    if subnet:
+        if ask_yes(t("ssh.authorize_from_q", subnet=subnet)):
+            options = f'from="{subnet}" '
+            print(t("ssh.authorize_ipv6_note", family=CLIENT_ADDRESS_FAMILY))
+    else:
+        print(t("ssh.authorize_no_subnet"))
+
+    print(t("ssh.authorize_confirm", fp=fp, comment=comment or "-", options=options or "-"))
+    print(t("ssh.authorize_compare"))
+    if not ask_yes(t("ssh.authorize_q")):
+        print(t("msg.cancelled"))
+        return 0
+
+    if AUTHORIZED_KEYS.is_file():
+        backup = AUTHORIZED_KEYS.with_name(
+            f"authorized_keys.yedek-{date.today().isoformat()}"
+        )
+        if not backup.exists():
+            shutil.copy2(AUTHORIZED_KEYS, backup)
+            print(t("ssh.backup_made", path=backup))
+        text = AUTHORIZED_KEYS.read_text(encoding="utf-8")
+        if text and not text.endswith("\n"):
+            text += "\n"
+    else:
+        text = ""
+
+    AUTHORIZED_KEYS.write_text(
+        f"{text}{options}{keytype} {body} {comment}".rstrip() + "\n", encoding="utf-8"
+    )
+    AUTHORIZED_KEYS.chmod(0o600)
+    print(t("ssh.authorize_added", path=AUTHORIZED_KEYS, fp=fp))
+    return 0
+
+
+# --------------------------------------------------------------------------
+# Görev: bayat known_hosts kaydını silme
+# --------------------------------------------------------------------------
+
+
+def forget() -> int:
+    """Sifirlanan bir makinenin known_hosts kaydini sil.
+
+    "REMOTE HOST IDENTIFICATION HAS CHANGED" bir ortadaki-adam kontrolu,
+    otomatik susturulacak bir gurultu degil. Bu yuzden gorev her zaman acik
+    onay ister ve once o makineyi gercekten sizin sifirladiginizi sorar.
+    """
+    if not _interactive():
+        print(t("ssh.forget_needs_tty"))
+        return 1
+
+    inv = read_inventory() or {}
+    hosts = sorted(inv.get("hosts", {}))
+    if hosts:
+        print(t("ssh.forget_hosts", names=", ".join(hosts)))
+
+    try:
+        target = input(f"{t('ssh.forget_q')} ").strip()
+    except EOFError:
+        target = ""
+    if not target:
+        print(t("msg.cancelled"))
+        return 0
+
+    # Envanterdeki ad bir kisayol olabilir; known_hosts gercek adresi tutar.
+    spec = inv.get("hosts", {}).get(target, {})
+    hostname = spec.get("hostname", target)
+
+    found = subprocess.run(
+        ["ssh-keygen", "-F", hostname], capture_output=True, text=True
+    )
+    if found.returncode != 0 or not found.stdout.strip():
+        print(t("ssh.forget_not_found", host=hostname))
+        return 0
+    print(found.stdout.strip())
+
+    print(t("ssh.forget_warning", host=hostname))
+    if not ask_yes(t("ssh.forget_confirm_q", host=hostname)):
+        print(t("msg.cancelled"))
+        return 0
+
+    rc = run(["ssh-keygen", "-R", hostname])
+    if rc == 0:
+        print(t("ssh.forget_done", host=hostname))
     return rc

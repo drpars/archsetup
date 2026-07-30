@@ -1,5 +1,7 @@
 """SSH module: inventory, generated config, hardening and rotation."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from archsetup.core import ssh
@@ -398,3 +400,133 @@ def test_rotate_is_cancellable(ssh_env, monkeypatch, capsys):
     assert ssh.rotate() == 0
     assert key.exists()
     capsys.readouterr()
+
+
+# --------------------------------------------------------------------------
+# ssh-authorize: EKLER, yeniden yazmaz
+# --------------------------------------------------------------------------
+
+KEY_LINE = (
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleAuthorizeKeyAAAAAAAAAAAA masaustu"
+)
+KEY_BODY = KEY_LINE.split()[1]
+
+
+@pytest.fixture
+def authorize_env(ssh_env, monkeypatch):
+    monkeypatch.setattr(ssh, "_interactive", lambda: True)
+    monkeypatch.setattr(ssh, "_validate_key", lambda line: "SHA256:sahte")
+    monkeypatch.setattr(ssh, "ask_yes", lambda prompt: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": KEY_LINE)
+    return ssh_env
+
+
+def test_authorize_appends_and_keeps_existing_lines(authorize_env):
+    keys = authorize_env / "authorized_keys"
+    keys.write_text("ssh-ed25519 AAAAOnceden var eski-makine\n", encoding="utf-8")
+    _write_inventory(authorize_env, 'format = 1\n[lan]\nsubnet = "192.168.1.0/24"\n')
+
+    assert ssh.authorize() == 0
+
+    text = keys.read_text(encoding="utf-8")
+    assert "AAAAOnceden" in text, "mevcut satır silinmiş"
+    assert KEY_BODY in text
+    assert 'from="192.168.1.0/24"' in text
+
+
+def test_authorize_backs_up_before_touching_the_file(authorize_env):
+    keys = authorize_env / "authorized_keys"
+    keys.write_text("ssh-ed25519 AAAAOnceden var eski-makine\n", encoding="utf-8")
+
+    assert ssh.authorize() == 0
+
+    backups = list(authorize_env.glob("authorized_keys.yedek-*"))
+    assert len(backups) == 1
+    assert "AAAAOnceden" in backups[0].read_text(encoding="utf-8")
+
+
+def test_authorize_refuses_to_add_the_same_key_twice(authorize_env):
+    keys = authorize_env / "authorized_keys"
+    keys.write_text(KEY_LINE + "\n", encoding="utf-8")
+
+    assert ssh.authorize() == 0
+    assert keys.read_text(encoding="utf-8").count(KEY_BODY) == 1
+
+
+def test_authorize_rejects_a_line_that_is_not_a_key(authorize_env, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda prompt="": "merhaba dunya")
+
+    assert ssh.authorize() == 1
+    assert not (authorize_env / "authorized_keys").exists()
+
+
+def test_authorize_rejects_a_line_that_already_carries_options(authorize_env, monkeypatch):
+    """Iki kisitin hangisinin kazandigi belirsiz kalmasin."""
+    monkeypatch.setattr(
+        "builtins.input", lambda prompt="": f'from="10.0.0.0/8" {KEY_LINE}'
+    )
+
+    assert ssh.authorize() == 1
+
+
+def test_authorize_stops_when_ssh_keygen_cannot_read_the_key(authorize_env, monkeypatch):
+    monkeypatch.setattr(ssh, "_validate_key", lambda line: None)
+
+    assert ssh.authorize() == 1
+    assert not (authorize_env / "authorized_keys").exists()
+
+
+def test_authorize_adds_without_a_restriction_when_no_subnet(authorize_env):
+    assert ssh.authorize() == 0
+
+    text = (authorize_env / "authorized_keys").read_text(encoding="utf-8")
+    assert text.startswith("ssh-ed25519 ")
+
+
+def test_generated_host_entry_pins_ipv4(ssh_env, capsys):
+    """from= yalnizca IPv4 kapsiyor; istemci IPv6'ya kaymamali."""
+    _write_inventory(
+        ssh_env, 'format = 1\n[hosts.masaustu]\nhostname = "192.168.1.82"\n'
+    )
+    ssh._write_config_local()
+
+    text = (ssh_env / "config.local").read_text(encoding="utf-8")
+    assert "AddressFamily inet" in text
+
+
+# --------------------------------------------------------------------------
+# ssh-forget: her zaman acik onay
+# --------------------------------------------------------------------------
+
+
+def test_forget_never_runs_without_confirmation(ssh_env, monkeypatch, runlog):
+    monkeypatch.setattr(ssh, "_interactive", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "masaustu")
+    monkeypatch.setattr(ssh, "run", runlog)
+    monkeypatch.setattr(ssh, "ask_yes", lambda prompt: False)
+    monkeypatch.setattr(
+        ssh.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout="192.168.1.82 ssh-ed25519 AAA\n"),
+    )
+
+    assert ssh.forget() == 0
+    assert runlog.calls == []
+
+
+def test_forget_resolves_the_inventory_name_to_its_address(ssh_env, monkeypatch, runlog):
+    _write_inventory(
+        ssh_env, 'format = 1\n[hosts.masaustu]\nhostname = "192.168.1.82"\n'
+    )
+    monkeypatch.setattr(ssh, "_interactive", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "masaustu")
+    monkeypatch.setattr(ssh, "run", runlog)
+    monkeypatch.setattr(ssh, "ask_yes", lambda prompt: True)
+    monkeypatch.setattr(
+        ssh.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=0, stdout="192.168.1.82 ssh-ed25519 AAA\n"),
+    )
+
+    assert ssh.forget() == 0
+    assert runlog.calls == [["ssh-keygen", "-R", "192.168.1.82"]]
