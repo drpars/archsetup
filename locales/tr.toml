@@ -21,6 +21,14 @@ selected_count = "{sel}/{total} seçili"
 [lang]
 select_title = "Dil Seçimi / Language Selection"
 
+[overview]
+intro = "archsetup, bu makinelerin Arch kurulumunu ve kurulum sonrası bakımını yapan bir araçtır. İki kipte çalışır:"
+mode_installer = "Canlı ISO'da (root olarak): diskten kullanıcı hesabına kadar kurulumun kendisi."
+mode_postinstall = "Kurulu sistemde: aşağıdaki bakım ve yapılandırma görevleri."
+tasks_intro = "Görevler — menüden seçilebilir ya da doğrudan `archsetup <görev-id>` ile çalıştırılabilir:"
+footer_count = "Toplam {count} görev. Menüyü açmak için argümansız çalıştırın: archsetup"
+footer_list = "Betikler için düz liste: archsetup --list"
+
 [menu.main]
 title = "Ana Menü"
 update = "Sistem Güncelleme"
@@ -33,10 +41,8 @@ desktops = "Masaüstü Ortamları"
 desktops_desc = "Hyprland, Plasma, GNOME ve giriş yöneticileri"
 config = "Yapılandırma"
 config_desc = "Önyükleyici, çekirdek parametreleri ve sistem ayarları"
-theme = "Tema"
-theme_desc = "Açık / koyu tema seçimi"
-language = "Dil / Language"
-language_desc = "Arayüz dilini değiştir"
+settings = "Ayarlar"
+settings_desc = "Aracın kendi ayarları — dil ve tema"
 quit = "Çıkış"
 quit_desc = "Uygulamadan çık"
 
@@ -304,6 +310,13 @@ sddm_desc = "Qt giriş yöneticisi (Plasma önerilen)"
 sddm-git_desc = "SDDM geliştirme sürümü (AUR)"
 lxdm_desc = "LXDE giriş yöneticisi"
 lightdm_desc = "Hafif giriş yöneticisi (GTK karşılayıcı ile)"
+
+[menu.settings]
+title = "Ayarlar"
+theme = "Tema"
+theme_desc = "Açık / koyu tema seçimi"
+language = "Dil / Language"
+language_desc = "Arayüz dilini değiştir"
 
 [menu.theme]
 title = "Tema"

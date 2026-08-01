@@ -21,6 +21,14 @@ selected_count = "{sel}/{total} selected"
 [lang]
 select_title = "Dil Seçimi / Language Selection"
 
+[overview]
+intro = "archsetup installs Arch on these machines and maintains them afterwards. It runs in two modes:"
+mode_installer = "On the live ISO (as root): the installation itself, from partitions to the user account."
+mode_postinstall = "On an installed system: the maintenance and configuration tasks below."
+tasks_intro = "Tasks -- pick one from the menus, or run it directly with `archsetup <task-id>`:"
+footer_count = "{count} tasks in total. Run with no arguments to open the menu: archsetup"
+footer_list = "Flat list for scripts: archsetup --list"
+
 [menu.main]
 title = "Main Menu"
 update = "System Update"
@@ -33,10 +41,8 @@ desktops = "Desktop Environments"
 desktops_desc = "Hyprland, Plasma, GNOME and display managers"
 config = "Configuration"
 config_desc = "Bootloader, kernel parameters and system settings"
-theme = "Theme"
-theme_desc = "Light / dark theme selection"
-language = "Language / Dil"
-language_desc = "Change interface language"
+settings = "Settings"
+settings_desc = "The tool's own settings -- language and theme"
 quit = "Quit"
 quit_desc = "Exit the application"
 
@@ -304,6 +310,13 @@ sddm_desc = "Qt display manager (recommended for Plasma)"
 sddm-git_desc = "SDDM development version (AUR)"
 lxdm_desc = "LXDE display manager"
 lightdm_desc = "Lightweight display manager (with GTK greeter)"
+
+[menu.settings]
+title = "Settings"
+theme = "Theme"
+theme_desc = "Light / dark theme selection"
+language = "Language / Dil"
+language_desc = "Change interface language"
 
 [menu.theme]
 title = "Theme"

@@ -61,10 +61,23 @@ Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 ### Fonksiyon modu (TUI olmadan tek görev)
 
 ```bash
-./archsetup --list          # görevleri listele
+./archsetup --overview      # araç ne yapar + gruplanmış görev kataloğu
+./archsetup --list          # görevleri listele (düz, greplenebilir)
 ./archsetup system-update   # tek görevi çalıştır
 ./archsetup --lang en       # arayüz dili
 ```
+
+İki liste bilerek ayrı: `--list` betiklere ve tamamlamaya bakan düz
+`id başlık` satırları üretir; `--overview` ise menülerdeki gruplamayı ve her
+görevin tek cümlelik açıklamasını arayüz dilinde gösterir. İkisi de görev
+tablosundan ve locale dosyalarından üretilir, yani elle yazılmış bir listenin
+aksine gerçeğin gerisinde kalamazlar.
+
+### Ayarlar ve görevler ayrı şeylerdir
+
+Ana menüdeki maddeler **makineyi** değiştirir. Aracın kendi ayarları — dil ve
+tema — **Ayarlar** menüsündedir ve `~/.config/archsetup/config.toml`'da tutulur.
+Kural basit: `config.toml`'a yazılan şey ayardır, geri kalan görevdir.
 
 ### Paket listelerini denetleme
 
@@ -311,7 +324,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-232 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+240 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -355,7 +368,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (232 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (240 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
       networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
       keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,

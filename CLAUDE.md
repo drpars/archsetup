@@ -8,7 +8,8 @@ koda bakarak görülemeyecek kurallar ve zor yoldan öğrenilmiş tuzaklar var.
 
 ```bash
 .venv/bin/pytest              # tum test paketi
-./archsetup --list            # gorev kimlikleri
+./archsetup --overview        # arac ne yapar + gruplanmis gorev katalogu
+./archsetup --list            # gorev kimlikleri (duz, greplenebilir)
 ./archsetup <gorev-id>        # TUI olmadan tek gorev
 ./archsetup --lang en         # arayuz dili
 ```
@@ -33,7 +34,15 @@ kullanın.
 **Görev grupları serbest metin.** `group="netwrok"` yazarsanız görev
 arayüzden sessizce kaybolur, hiçbir yerde hata çıkmaz.
 `test_every_task_group_is_reachable` bunu yakalıyor — yeni grup eklerken
-`screens.CONFIG_SUBMENUS`'a da ekleyin.
+`screens.CONFIG_SUBMENUS`'a **ve** `overview.GROUP_ORDER`'a da ekleyin.
+
+**Ayar mı görev mi: `config.toml`'a yazılan şey ayardır.** Ayarlar menüsü
+(dil, tema) yalnızca aracın kendi davranışını değiştirir ve
+`~/.config/archsetup/config.toml`'da kalır; makineye dokunan her şey
+görevdir ve kendi menüsünde durur. Bu çizgi olmadan Ayarlar zamanla
+"sığmayan maddelerin" çöplüğüne döner. Ayrıca bir ayar sessizce etkisiz
+kalmamalı: önkoşulu sağlanmıyorsa durup söylemeli, sessizce eski davranışa
+dönmemeli — yoksa kullanıcı açık sandığı bir şeyle çalışır.
 
 ## Mimari
 

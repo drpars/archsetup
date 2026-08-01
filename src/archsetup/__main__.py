@@ -1,6 +1,7 @@
 """Command line entry point.
 
     archsetup                   interactive TUI
+    archsetup --overview        what the tool is and what each task does
     archsetup --list            list headless tasks
     archsetup <task-id>         run a single task without the TUI
     archsetup --lang en         override the interface language
@@ -51,11 +52,31 @@ def _fix_terminal_env() -> None:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    # -h is parsed before the language config is read, so this text stays
+    # English; --overview is the localized one.
     parser = argparse.ArgumentParser(
         prog="archsetup",
-        description="Interactive Arch Linux install & post-install tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Interactive Arch Linux install & post-install tool.\n"
+            "On the live ISO it installs the system; on an installed system\n"
+            "it offers the maintenance and configuration tasks."
+        ),
+        epilog=(
+            "examples:\n"
+            "  archsetup                 open the task menu\n"
+            "  archsetup --overview      what each task does, in your language\n"
+            "  archsetup --list          flat 'id title' lines, for scripts\n"
+            "  archsetup ssh-status      run one task without the menu\n"
+            "\n"
+            "Tasks change the machine. The tool's own settings -- language and\n"
+            "theme -- live in the Settings menu and persist in\n"
+            "~/.config/archsetup/config.toml."
+        ),
     )
     parser.add_argument("task", nargs="?", help="task id to run headlessly")
+    parser.add_argument("--overview", action="store_true",
+                        help="describe the tool and its tasks, grouped")
     parser.add_argument("--list", action="store_true", dest="list_tasks",
                         help="list available tasks")
     parser.add_argument("--check-packages", action="store_true",
@@ -131,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
     t = i18n.t
 
     from .core import tasks
+
+    if args.overview:
+        # Read-only and root-free, like --check-packages: safe anywhere.
+        from .core import overview
+
+        return overview.run()
 
     if args.check_packages:
         # Deliberately before the installer/root branches: this only reads the

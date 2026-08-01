@@ -453,6 +453,31 @@ def make_theme_menu() -> MenuScreen:
     return MenuScreen(t("menu.theme.title"), items)
 
 
+def make_settings_menu() -> MenuScreen:
+    """archsetup'ın kendi ayarları — makineye dokunan hiçbir şey burada değil.
+
+    Ana menüdeki diğer her madde makineyi değiştiriyor; dil ve tema yalnızca
+    aracın kendisini değiştiriyor ve ikisi de ~/.config/archsetup/config.toml'a
+    yazılıyor. Ayrımın kuralı da bu: config.toml'a yazılan şey ayardır, geri
+    kalan görevdir.
+    """
+    items = [
+        MenuItem(
+            "theme",
+            t("menu.settings.theme"),
+            t("menu.settings.theme_desc"),
+            lambda screen: screen.app.push_screen(make_theme_menu()),
+        ),
+        MenuItem(
+            "language",
+            t("menu.settings.language"),
+            t("menu.settings.language_desc"),
+            lambda screen: screen.app.push_screen(LanguageScreen()),
+        ),
+    ]
+    return MenuScreen(t("menu.settings.title"), items)
+
+
 class PickScreen(Screen):
     """Filterable single-choice list (keymaps, locales, timezones...).
 
@@ -748,16 +773,10 @@ def make_main_menu() -> MenuScreen:
             lambda screen: screen.app.push_screen(make_config_menu()),
         ),
         MenuItem(
-            "theme",
-            t("menu.main.theme"),
-            t("menu.main.theme_desc"),
-            lambda screen: screen.app.push_screen(make_theme_menu()),
-        ),
-        MenuItem(
-            "language",
-            t("menu.main.language"),
-            t("menu.main.language_desc"),
-            lambda screen: screen.app.push_screen(LanguageScreen()),
+            "settings",
+            t("menu.main.settings"),
+            t("menu.main.settings_desc"),
+            lambda screen: screen.app.push_screen(make_settings_menu()),
         ),
         MenuItem(
             "quit",

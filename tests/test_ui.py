@@ -19,8 +19,23 @@ async def test_main_menu_structure():
         assert isinstance(app.screen, screens.MainMenuScreen)
         assert list(app.screen._items) == [
             "update", "apps", "drivers", "desktops", "config",
-            "theme", "language", "quit",
+            "settings", "quit",
         ]
+
+
+async def test_settings_menu_holds_theme_and_language():
+    """Ana menü yalnızca makineyi değiştiren maddeleri taşır.
+
+    Dil ve tema aracın kendi ayarları (config.toml'a yazılıyor), o yüzden
+    ana menüde değil Ayarlar'ın altındalar.
+    """
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 5  # Ayarlar
+        await pilot.press("enter")
+        await pilot.pause()
+        assert list(app.screen._items) == ["theme", "language"]
 
 
 async def test_navigation_and_package_screen():
