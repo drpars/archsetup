@@ -96,9 +96,10 @@ id = "hyprland"
   [[category.packages]]
   name = "cliphist"
 
+  # Bound to Print / SHIFT+Print / CTRL+Print in the dotfiles, each piping
+  # into swappy. Without the package all three keys die silently.
   [[category.packages]]
-  name = "waypaper"
-  aur = true
+  name = "hyprshot"
 
   [[category.packages]]
   name = "swappy"
