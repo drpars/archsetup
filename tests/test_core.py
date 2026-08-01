@@ -113,3 +113,57 @@ def test_condition_parsing(monkeypatch):
     assert not hardware.condition_ok("gpu:nvidia")
     assert hardware.condition_ok("cpu:intel")
     assert hardware.condition_ok("unknown:kind")
+
+
+def test_aur_helper_is_never_silenced(monkeypatch):
+    """AUR yardımcısına --noconfirm geçilmez.
+
+    Yardımcının PKGBUILD diff istemi, zehirlenmiş bir paketle bu makine
+    arasındaki tek şey. "Kurulum akıcı olsun" diye eklenecek tek bir bayrak
+    onu sessizce kapatır; bu test o bayrağı bekliyor.
+    """
+    from archsetup.core import pacman
+
+    calls = []
+    monkeypatch.setattr(pacman, "run", lambda cmd, **kw: calls.append(cmd) or 0)
+    monkeypatch.setattr(pacman, "ensure_aur_helper", lambda: "yay")
+
+    pacman.install(["repo-pkg"], ["aur-pkg"])
+
+    aur_cmd = next(cmd for cmd in calls if cmd[0] == "yay")
+    assert "--noconfirm" not in aur_cmd
+
+
+def test_no_source_line_silences_an_aur_helper():
+    """Yukarıdaki test yalnızca install()'ı görüyor; bu tarama tüm kaynağı.
+
+    Sınırı açık olsun: satır bazlı arama, komutu birden çok satıra yayan
+    bir çağrıyı kaçırır. Yine de bayrağı elle yazan birinin en olası
+    yaptığı şey tek satırlık bir ekleme.
+    """
+    from pathlib import Path
+
+    from archsetup.core.pacman import AUR_HELPERS
+
+    def silences_a_helper(line: str) -> bool:
+        # Tırnaklı dizge aranıyor: kuralı anlatan yorum ve docstring satırları
+        # bayrağı düz metin olarak yazıyor ve ilk hâli onlara takılıyordu.
+        if '"--noconfirm"' not in line:
+            return False
+        # Yardımcının adı çağrı yerinde çoğunlukla bir değişken ("helper"),
+        # sabit değil; yalnızca sabitleri aramak en olası ihlali kaçırırdı.
+        return "helper" in line or any(f'"{h}"' in line for h in AUR_HELPERS)
+
+    assert silences_a_helper('run([helper, "-S", "--needed", "--noconfirm"])')
+    assert silences_a_helper('run(["yay", "-S", "--noconfirm", pkg])')
+    assert not silences_a_helper('run(["pacman", "-S", "--noconfirm", pkg])')
+    assert not silences_a_helper("# the helper is never given --noconfirm")
+
+    src = Path(__file__).resolve().parents[1] / "src"
+    offenders = [
+        f"{path.name}:{no}"
+        for path in src.rglob("*.py")
+        for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if silences_a_helper(line)
+    ]
+    assert offenders == []

@@ -73,6 +73,16 @@ def ensure_aur_helper() -> str | None:
 
 
 def install(repo_pkgs: list[str], aur_pkgs: list[str]) -> int:
+    """Repo packages and AUR packages in two separate transactions.
+
+    The AUR helper is never given --noconfirm, and that is a rule rather
+    than an oversight: its PKGBUILD diff prompt is the only thing standing
+    between a poisoned package and this machine. The 2026 "Atomic Arch"
+    campaign took over orphaned AUR packages and injected an infostealer
+    into the PKGBUILD; reading the diff before building was what caught
+    it. Adding the flag to make installs flow better would silently
+    switch that off, so test_aur_helper_is_never_silenced watches for it.
+    """
     rc = 0
     if repo_pkgs:
         rc |= run(["sudo", "pacman", "-S", "--needed", *repo_pkgs])

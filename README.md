@@ -324,7 +324,7 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
-240 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
+242 test: i18n (TR/EN anahtar eşitliği dahil), veri dosyaları, önyükleyici
 soyutlaması, GPU/hibernation yapılandırması, kurulum sonrası görevler,
 kurucu mantığı ve Textual arayüz gezinmesi. Kurucu modun uçtan uca testi
 için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
@@ -368,7 +368,7 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (240 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi (242 test) ve QEMU test düzeneği (`tests/qemu/`)
 - [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
       networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
       keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,

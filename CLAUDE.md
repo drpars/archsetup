@@ -36,6 +36,20 @@ arayüzden sessizce kaybolur, hiçbir yerde hata çıkmaz.
 `test_every_task_group_is_reachable` bunu yakalıyor — yeni grup eklerken
 `screens.CONFIG_SUBMENUS`'a **ve** `overview.GROUP_ORDER`'a da ekleyin.
 
+**Yeni paket eklerken önce resmi depoya bakılır.** `aur = true` yazmadan
+önce `pacman -Sp <ad>` denenir; resmi depoda karşılığı varsa o kullanılır.
+Sebebi zevk değil: AUR paketleri imzasız PKGBUILD'lerden derlenir ve
+2026'daki "Atomic Arch" kampanyası sahipsiz AUR paketlerini devralarak
+zehirledi. Her AUR girdisi kalıcı bir yüzey; resmi depo karşılığı olan bir
+paket için o yüzeyi açmak bedavaya risk almaktır. (`hyprshot` `extra`'da,
+`swww` yerine `awww` de öyle bulundu.) Mevcut girdiler `--check-packages
+--aur` ile izleniyor.
+
+**AUR yardımcısına `--noconfirm` geçilmez.** PKGBUILD diff istemi, kurulum
+anındaki tek gerçek savunma. `test_aur_helper_is_never_silenced` ve kaynak
+taraması bunu koruyor — resmi depo `pacman` çağrılarında bayrak serbest,
+yalnızca yardımcıda yasak.
+
 **Ayar mı görev mi: `config.toml`'a yazılan şey ayardır.** Ayarlar menüsü
 (dil, tema) yalnızca aracın kendi davranışını değiştirir ve
 `~/.config/archsetup/config.toml`'da kalır; makineye dokunan her şey
