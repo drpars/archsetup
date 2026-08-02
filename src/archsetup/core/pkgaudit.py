@@ -234,7 +234,8 @@ def _print_group(header_key: str, rows: list[str]) -> None:
     print()
 
 
-def report(findings: list[Finding], sync_dir: Path | None = None) -> int:
+def report(findings: list[Finding], sync_dir: Path | None = None,
+           aur_requested: bool = False) -> int:
     """Print the problems and return an exit code (non-zero if any are fatal)."""
     def of(*statuses):
         return [f for f in findings if f.status in statuses]
@@ -244,6 +245,7 @@ def report(findings: list[Finding], sync_dir: Path | None = None) -> int:
     provided = of(PROVIDED)
     in_repo = of(AUR_IN_REPO)
     unchecked = of(AUR_UNCHECKED)
+    aur_entries = of(AUR_OK, AUR_MISSING, AUR_IN_REPO, AUR_UNCHECKED)
     flagged = [f for f in findings if f.notes]
 
     # Repo and AUR packages go to pacman and to the helper as two separate
@@ -288,14 +290,27 @@ def report(findings: list[Finding], sync_dir: Path | None = None) -> int:
             [t("pkgaudit.stale_row", repo=name, days=age) for name, age in stale],
         )
 
+    # The AUR clause has to say which of the three states this run was in.
+    # A fixed "(unchecked)" label read as "the AUR was skipped" even on a run
+    # that had just queried it and printed its findings a few lines above.
+    if not aur_entries:
+        aur_clause = ""
+    elif unchecked:
+        aur_clause = t("pkgaudit.summary_aur_unchecked", count=len(unchecked))
+    else:
+        aur_clause = t("pkgaudit.summary_aur_checked", count=len(aur_entries))
+
     print(t(
         "pkgaudit.summary",
         total=len(findings),
         missing=len(missing) + len(aur_missing),
         provided=len(provided),
-        aur=len(unchecked),
+        aur=aur_clause,
     ))
-    if unchecked:
+    # Only worth suggesting when --aur was not asked for. After a failed
+    # lookup the run already said the AUR was unreachable, and telling it to
+    # pass the flag it just passed reads as if the flag had been ignored.
+    if unchecked and not aur_requested:
         print(t("pkgaudit.aur_hint"))
     return 1 if (missing or aur_missing) else 0
 
@@ -304,4 +319,4 @@ def run(aur: bool = False) -> int:
     findings = audit(aur=aur)
     if aur and any(f.status == AUR_UNCHECKED for f in findings):
         print(t("pkgaudit.aur_unreachable"))
-    return report(findings)
+    return report(findings, aur_requested=aur)

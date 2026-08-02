@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from archsetup.core import pkgaudit
+from archsetup.core import i18n, pkgaudit
 
 
 # name -> (exists exactly, is a group, what -Sddp resolves it to or None)
@@ -280,3 +280,50 @@ def test_dead_aur_name_does_not_claim_the_repo_packages_too(tmp_path, capsys,
     out = capsys.readouterr().out
     assert "gone-pkg" in out
     assert "plocate" not in out
+
+
+# --- what the summary line claims -------------------------------------------
+
+
+def test_summary_says_the_aur_was_checked_when_it_was(tmp_path, capsys, fake_aur):
+    """The count used to be printed under a fixed "(unchecked)" label, so a
+    run that had just queried the AUR -- and listed its findings a few lines
+    above -- still ended with "0 AUR (unchecked)" and read like a skip."""
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git", "orphaned-pkg"))
+    pkgaudit.report(pkgaudit.audit(tmp_path, aur=True), sync_dir=tmp_path,
+                    aur_requested=True)
+
+    out = capsys.readouterr().out
+    assert i18n.t("pkgaudit.summary_aur_checked", count=2) in out
+    assert i18n.t("pkgaudit.summary_aur_unchecked", count=0) not in out
+
+
+def test_summary_counts_the_aur_entries_left_unchecked(tmp_path, capsys):
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git", "orphaned-pkg"))
+    pkgaudit.report(pkgaudit.audit(tmp_path), sync_dir=tmp_path)
+
+    out = capsys.readouterr().out
+    assert i18n.t("pkgaudit.summary_aur_unchecked", count=2) in out
+    assert i18n.t("pkgaudit.aur_hint") in out
+
+
+def test_unreachable_aur_does_not_suggest_the_flag_it_was_given(tmp_path, capsys,
+                                                                monkeypatch):
+    """--aur was passed and the lookup failed. Printing "to check the AUR
+    too, pass --aur" on top of that reads as if the flag were ignored."""
+    monkeypatch.setattr(pkgaudit, "aur_info", lambda names: None)
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git"))
+    pkgaudit.report(pkgaudit.audit(tmp_path, aur=True), sync_dir=tmp_path,
+                    aur_requested=True)
+
+    assert i18n.t("pkgaudit.aur_hint") not in capsys.readouterr().out
+
+
+def test_summary_leaves_out_the_aur_clause_when_there_are_no_aur_entries(
+        tmp_path, capsys):
+    _write(tmp_path, "a.toml", '[[category]]\nid = "demo"\n'
+                               '  [[category.packages]]\n  name = "plocate"\n')
+    pkgaudit.report(pkgaudit.audit(tmp_path), sync_dir=tmp_path)
+
+    out = capsys.readouterr().out
+    assert "AUR" not in out
