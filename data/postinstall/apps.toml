@@ -239,6 +239,12 @@ id = "internet"
   name = "transmission-qt"
   default = false
 
+  [[category.packages]]
+  name = "rustdesk-bin"
+  aur = true
+  default = false
+  note = { tr = "Uzak masaüstü; resmi hazır ikili (rustdesk derleniyor)", en = "Remote desktop; official prebuilt binary (rustdesk builds from source)" }
+
 [[category]]
 id = "common"
 
