@@ -50,6 +50,16 @@ AGENT_UNIT = "ssh-agent.socket"
 INVENTORY_FORMAT = 1
 INCLUDE_LINE = "Include ~/.ssh/config.local"
 
+# Kimlik anahtari olan kod barindirma servisleri. Anahtar adi host'un ilk
+# etiketinden turer: github.com -> ~/.ssh/github_<makine>.
+#
+# Birden fazla servise AYNI acik anahtari koymak, iki hesabi anahtar uzerinden
+# birbirine baglar: github.com/<kullanici>.keys ve codeberg.org/<kullanici>.keys
+# ikisi de HERKESE ACIK uc noktalar (olculdu). Bu yuzden her servisin kendi
+# anahtari var ve config.local her birini kendi Host blogunda sabitler.
+PRIMARY_FORGE = "github.com"
+FORGES = (PRIMARY_FORGE, "codeberg.org")
+
 # Ana sshd_config'te bu anahtarların "no" hâli drop-in'imizle çakışır.
 # Include en üstte olduğu ve OpenSSH'ta ilk okunan değer kazandığı için
 # drop-in zaten kazanır; yine de kafa karıştırmasın diye yorumlanır.
@@ -123,8 +133,13 @@ def board() -> str:
         return "?"
 
 
+def forge_key(host: str) -> Path:
+    """``~/.ssh/<servis>_<makine>`` — ör. codeberg.org → codeberg_<makine>."""
+    return SSH_DIR / f"{host.split('.')[0]}_{machine_id()}"
+
+
 def github_key() -> Path:
-    return SSH_DIR / f"github_{machine_id()}"
+    return forge_key(PRIMARY_FORGE)
 
 
 def _pub(key: Path) -> Path:
@@ -423,13 +438,25 @@ def _write_config_local() -> None:
     lines = [
         f"# ~/.ssh/config.local — archsetup tarafindan '{machine}' icin uretildi",
         f"# ({date.today().isoformat()}). Elle duzenlemeyin; yeniden yazilir.",
-        "",
-        "Host github.com",
-        "    HostName github.com",
-        "    User git",
-        f"    IdentityFile ~/.ssh/github_{machine}",
-        "    IdentitiesOnly yes",
     ]
+
+    # Birincil servisin blogu kosulsuz yazilir: anahtarini bu gorev uretiyor,
+    # yani birazdan var olacak. Digerlerinin anahtari disaridan gelir (her
+    # servise ayri anahtar karari), o yuzden yalnizca anahtar diskteyken
+    # yazilir -- olmayan bir IdentityFile'i IdentitiesOnly ile sabitlemek,
+    # o host'a baglanmayi tumden imkansiz kilardi.
+    for host in FORGES:
+        key = forge_key(host)
+        if host != PRIMARY_FORGE and not key.is_file():
+            continue
+        lines += [
+            "",
+            f"Host {host}",
+            f"    HostName {host}",
+            "    User git",
+            f"    IdentityFile ~/.ssh/{key.name}",
+            "    IdentitiesOnly yes",
+        ]
 
     inv = read_inventory() or {}
     for name, spec in sorted(inv.get("hosts", {}).items()):

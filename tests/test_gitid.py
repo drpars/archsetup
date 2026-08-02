@@ -45,6 +45,44 @@ def test_generates_both_files(git_env, capsys):
     assert f"kisi@example.com ssh-ed25519 {KEY_A}" in signers
 
 
+def test_every_forge_key_lands_in_the_trust_list(git_env):
+    """Imzalayan anahtar tek, guvenilen anahtarlar birden fazla olabilir.
+
+    Depoya ozel bir signingkey (ornegin Codeberg anahtari) ile imzalanan
+    commit, o anahtar listede yoksa "unknown signer" gorunur — belirti
+    imzalamanin bozuk oldugunu dusundurur, oysa eksik olan guven listesidir.
+    """
+    (git_env / ".ssh" / "codeberg_testmakine.pub").write_text(
+        f"ssh-ed25519 {KEY_B} codeberg testmakine\n", encoding="utf-8"
+    )
+
+    assert gitid.configure() == 0
+
+    signers = (git_env / ".config/git/allowed_signers").read_text(encoding="utf-8")
+    assert KEY_A in signers
+    assert KEY_B in signers
+    # signingkey tek kalir: depo bazli imzalayan anahtari depo kendi
+    # .git/config'inde secer.
+    local = (git_env / ".gitconfig.local").read_text(encoding="utf-8")
+    assert "signingkey = ~/.ssh/github_testmakine.pub" in local
+
+
+def test_two_new_keys_leave_a_backup_of_the_state_before_both(git_env):
+    """Yedek "onceki hal" olmali, "birinci anahtar eklendikten sonraki hal" degil."""
+    signers = git_env / ".config/git/allowed_signers"
+    signers.parent.mkdir(parents=True)
+    signers.write_text("# eski liste\n", encoding="utf-8")
+    (git_env / ".ssh" / "codeberg_testmakine.pub").write_text(
+        f"ssh-ed25519 {KEY_B} codeberg testmakine\n", encoding="utf-8"
+    )
+
+    assert gitid.configure() == 0
+
+    backup = (git_env / ".config/git/allowed_signers.bak").read_text(encoding="utf-8")
+    assert KEY_A not in backup
+    assert KEY_B not in backup
+
+
 def test_other_machines_keys_are_never_dropped(git_env):
     """allowed_signers bir güven listesi: yeniden üretilmez, eklenir."""
     signers = git_env / ".config/git/allowed_signers"

@@ -16,9 +16,16 @@ burada üretilir.
     kurulumdan gelmiş olabilir ve yeniden üretmek onları sessizce düşürür —
     o makinelerin imzaları bir anda "unknown signer" olur.
 
-Anahtar tahmin edilmez: yalnız bu makinenin ``~/.ssh/github_<makine>.pub``
-dosyası yazılır. Sahibi doğrulanmamış bir anahtar güven listesine girerse
-onunla imzalanan her commit sessizce "geçerli" sayılırdı.
+Anahtar tahmin edilmez: yalnız bu makinenin kendi anahtarları yazılır
+(``core/ssh.py``'deki ``FORGES`` listesi — ``github_<makine>.pub``,
+``codeberg_<makine>.pub``). Sahibi doğrulanmamış bir anahtar güven listesine
+girerse onunla imzalanan her commit sessizce "geçerli" sayılırdı.
+
+Birden fazla servisin anahtarı olabilir çünkü her servis için ayrı anahtar
+üretiliyor. ``user.signingkey`` yine de tektir ve birincil servisin anahtarını
+gösterir; başka bir anahtarla imzalayan depo bunu kendi ``.git/config``'inde
+geçersiz kılar. Güven listesi ise hepsini içermelidir — eksik olan anahtarla
+imzalanmış commit "unknown signer" görünür.
 """
 
 from __future__ import annotations
@@ -56,10 +63,10 @@ def _git_email() -> str:
     return out.stdout.strip()
 
 
-def _pub_path() -> Path:
-    """github_<makine>.pub — with_suffix kullanilmaz, FQDN'li bir makine
+def _pub_path(host: str = ssh.PRIMARY_FORGE) -> Path:
+    """<servis>_<makine>.pub — with_suffix kullanilmaz, FQDN'li bir makine
     adinda nokta uzanti sanilir (bkz. core/ssh.py'deki ayni tuzak)."""
-    key = ssh.github_key()
+    key = ssh.forge_key(host)
     return key.with_name(key.name + ".pub")
 
 
@@ -67,15 +74,34 @@ def _backup_path(path: Path) -> Path:
     return path.with_name(path.name + ".bak")
 
 
-def _public_key() -> tuple[str, str] | None:
-    """(anahtar-turu, govde) — bu makinenin GitHub açık anahtarı."""
-    pub = _pub_path()
+def _read_pub(pub: Path) -> tuple[str, str] | None:
+    """(anahtar-turu, govde) — okunamayan ya da bozuk dosyada None."""
     if not pub.is_file():
         return None
     fields = pub.read_text(encoding="utf-8").split()
     if len(fields) < 2 or not fields[0].startswith(_KEY_PREFIXES):
         return None
     return fields[0], fields[1]
+
+
+def _public_key() -> tuple[str, str] | None:
+    """Birincil servisin (GitHub) açık anahtarı — imzalayan anahtar budur."""
+    return _read_pub(_pub_path())
+
+
+def _forge_keys() -> list[tuple[str, str, str]]:
+    """Güven listesine girecek (servis, anahtar-turu, govde) üçlüleri.
+
+    Bozuk ya da eksik ``.pub`` dosyaları sessizce atlanır: birincil anahtarın
+    varlığını ``configure()`` zaten ayrıca denetliyor, geri kalanlar isteğe
+    bağlı — bu makinede o servisin anahtarı hiç olmayabilir.
+    """
+    entries = []
+    for host in ssh.FORGES:
+        parsed = _read_pub(_pub_path(host))
+        if parsed is not None:
+            entries.append((host, *parsed))
+    return entries
 
 
 def gitconfig_local(machine: str) -> str:
@@ -149,7 +175,13 @@ def _write_gitconfig_local(machine: str) -> int:
     return 0
 
 
-def _merge_allowed_signers(email: str, keytype: str, body: str) -> int:
+def _merge_allowed_signers(email: str, keys: list[tuple[str, str, str]]) -> int:
+    """Bu makinenin anahtarlarını güven listesine EKLE.
+
+    Dosya tek seferde okunur ve tek seferde yazılır. Anahtar başına yazmak,
+    iki anahtar birden eklenirken ikinci yedeğin birincinin satırını da
+    içermesine yol açardı — yedek artık "önceki hâl" olmazdı.
+    """
     ALLOWED_SIGNERS.parent.mkdir(parents=True, exist_ok=True)
 
     header = (
@@ -165,14 +197,20 @@ def _merge_allowed_signers(email: str, keytype: str, body: str) -> int:
     )
 
     existing = signer_bodies(text)
-    if body in existing:
-        if existing[body] != email:
-            # Ayni anahtar baska bir e-postayla kayitli. Dokunmuyoruz ama
-            # sessiz kalinirsa dogrulama "no principal matched" der ve
-            # sebebi gorunmez olur.
-            print(t("gitid.signer_email_differs", found=existing[body], want=email))
-        else:
-            print(t("gitid.signer_present"))
+    missing = []
+    for host, keytype, body in keys:
+        if body in existing:
+            if existing[body] != email:
+                # Ayni anahtar baska bir e-postayla kayitli. Dokunmuyoruz ama
+                # sessiz kalinirsa dogrulama "no principal matched" der ve
+                # sebebi gorunmez olur.
+                print(t("gitid.signer_email_differs", found=existing[body], want=email))
+            else:
+                print(t("gitid.signer_present", name=host))
+            continue
+        missing.append((host, keytype, body))
+
+    if not missing:
         return 0
 
     if ALLOWED_SIGNERS.is_file():
@@ -182,8 +220,10 @@ def _merge_allowed_signers(email: str, keytype: str, body: str) -> int:
 
     if not text.endswith("\n"):
         text += "\n"
-    ALLOWED_SIGNERS.write_text(f"{text}{email} {keytype} {body}\n", encoding="utf-8")
-    print(t("gitid.signer_added", path=ALLOWED_SIGNERS))
+    added = "".join(f"{email} {keytype} {body}\n" for _, keytype, body in missing)
+    ALLOWED_SIGNERS.write_text(text + added, encoding="utf-8")
+    for host, _, _ in missing:
+        print(t("gitid.signer_added", name=host, path=ALLOWED_SIGNERS))
     return 0
 
 
@@ -224,8 +264,7 @@ def configure() -> int:
     if rc != 0:
         return rc
 
-    keytype, body = key
-    rc = _merge_allowed_signers(email, keytype, body)
+    rc = _merge_allowed_signers(email, _forge_keys())
     _check_include()
     if rc == 0:
         print(t("gitid.done"))

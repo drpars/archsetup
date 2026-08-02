@@ -208,6 +208,27 @@ def test_config_local_has_github_identity(ssh_env, capsys):
     capsys.readouterr()
 
 
+def test_second_forge_block_appears_only_with_its_key(ssh_env, capsys):
+    """codeberg.org blogu anahtari olmayan makineye yazilmamali.
+
+    IdentityFile + IdentitiesOnly ile var olmayan bir anahtari sabitlemek,
+    o host'a baglanmayi tumden imkansiz kilar. Anahtar disaridan geldigi
+    icin (her servise ayri anahtar) varligi kosul.
+    """
+    ssh._write_config_local()
+    assert "Host codeberg.org" not in (ssh_env / "config.local").read_text(
+        encoding="utf-8"
+    )
+
+    (ssh_env / "codeberg_testmakine").write_text("x", encoding="utf-8")
+    ssh._write_config_local()
+    text = (ssh_env / "config.local").read_text(encoding="utf-8")
+    assert "Host codeberg.org" in text
+    assert "IdentityFile ~/.ssh/codeberg_testmakine" in text
+    assert "Host github.com" in text  # birincil blok yerinde kaldi
+    capsys.readouterr()
+
+
 def test_config_local_includes_inventory_hosts(ssh_env, capsys):
     _write_inventory(
         ssh_env,
