@@ -40,6 +40,13 @@ id = "extras"
   [[category.packages]]
   name = "git"
 
+  # Not opsiyonel: sürümlenen bir pre-commit hook'u (core.hooksPath) gitleaks
+  # çağırıyorsa, paketin olmadığı makinede commit "sızıntı var" gibi değil
+  # anlaşılmaz bir hook hatasıyla düşer.
+  [[category.packages]]
+  name = "gitleaks"
+  note = { tr = "Commit öncesi sır/anahtar taraması", en = "Scan for secrets and keys before commit" }
+
   [[category.packages]]
   name = "neovim"
 

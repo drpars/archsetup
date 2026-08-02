@@ -74,6 +74,10 @@ id = "console"
   note = { tr = "Git için terminal arayüzü", en = "Terminal UI for git" }
 
   [[category.packages]]
+  name = "github-cli"
+  note = { tr = "GitHub komut satırı (anahtar, depo, PR)", en = "GitHub command line (keys, repos, PRs)" }
+
+  [[category.packages]]
   name = "pkgfile"
 
 [[category]]
