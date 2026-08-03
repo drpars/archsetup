@@ -21,7 +21,9 @@ from archsetup.core import (
     network,
     nvidia_laptop,
     sddm,
+    sysedit,
     tasks,
+    vfio,
     virt,
     waydroid,
 )
@@ -423,7 +425,8 @@ def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(nvidia_laptop, "MODPROBE_CONF", modprobe)
     monkeypatch.setattr(nvidia_laptop, "UDEV_RULES", rules)
     monkeypatch.setattr(nvidia_laptop, "run", runlog)
-    monkeypatch.setattr(nvidia_laptop, "sudo_write", fake_write)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
     monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
     # Sasi gercek makineden okunmamali: CI konteynerinde hostnamectl yok,
     # orada gorev "bilinmiyor" dalina dusup soru sorardi.
@@ -464,20 +467,114 @@ def test_nvidia_laptop_turing_adds_firmware_option(monkeypatch):
     assert "NVreg_EnableGpuFirmware=0" in nvidia_laptop.modprobe_content()
 
 
-def test_nvidia_laptop_backs_up_differing_file(tmp_path, monkeypatch, fake_write, runlog):
+def test_write_with_backup_backs_up_differing_file(tmp_path, monkeypatch, fake_write, runlog):
     modprobe = tmp_path / "nvidia.conf"
     modprobe.write_text("options nvidia_drm modeset=1 fbdev=1\n")
-    monkeypatch.setattr(nvidia_laptop, "run", runlog)
-    monkeypatch.setattr(nvidia_laptop, "sudo_write", fake_write)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
 
-    rc, changed = nvidia_laptop._write(modprobe, "new content\n")
+    rc, changed = sysedit.write_with_backup(modprobe, "new content\n")
     assert (rc, changed) == (0, True)
     assert ["sudo", "cp", str(modprobe), f"{modprobe}.bak"] in runlog.calls
 
     # İkinci çağrı: içerik aynı, yazma da yedekleme de yok
     runlog.calls.clear()
-    assert nvidia_laptop._write(modprobe, "new content\n") == (0, False)
+    assert sysedit.write_with_backup(modprobe, "new content\n") == (0, False)
     assert runlog.calls == []
+
+
+@pytest.fixture
+def drm_sysfs(tmp_path, monkeypatch):
+    """Fake /sys/class/drm. Card numbers are deliberately not 0 and 1."""
+
+    def build(cards):
+        root = tmp_path / "drm"
+        root.mkdir(exist_ok=True)
+        for name, vendor, slot in cards:
+            device = root / name / "device"
+            device.mkdir(parents=True)
+            (device / "vendor").write_text(f"{vendor}\n")
+            (device / "uevent").write_text(
+                f"DRIVER=x\nPCI_SLOT_NAME={slot}\nPCI_ID=x\n"
+            )
+            # Connector entries live next to the cards and have no device node;
+            # a glob that swallowed them would produce duplicate matches.
+            (root / f"{name}-DP-1").mkdir()
+        monkeypatch.setattr(vfio, "DRM_CLASS", root)
+        return root
+
+    return build
+
+
+def test_vfio_cards_reads_slots_and_skips_connectors(drm_sysfs):
+    drm_sysfs(
+        [("card1", "0x10de", "0000:01:00.0"), ("card2", "0x1002", "0000:05:00.0")]
+    )
+    assert vfio.cards() == [
+        ("card1", "0x10de", "0000:01:00.0"),
+        ("card2", "0x1002", "0000:05:00.0"),
+    ]
+
+
+def test_vfio_writes_rule_for_detected_igpu(
+    tmp_path, monkeypatch, drm_sysfs, fake_write, runlog
+):
+    drm_sysfs(
+        [("card1", "0x10de", "0000:01:00.0"), ("card2", "0x1002", "0000:05:00.0")]
+    )
+    rules = tmp_path / "70-vfio-igpu.rules"
+    link = tmp_path / "amd-igpu"
+    link.symlink_to(tmp_path / "card2")
+    monkeypatch.setattr(vfio, "UDEV_RULES", rules)
+    monkeypatch.setattr(vfio, "DEV_LINK", link)
+    monkeypatch.setattr(vfio, "run", runlog)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+
+    assert vfio.install_udev_rule() == 0
+    rule = rules.read_text()
+    # PCI adresi makineden okunur; kural ne kart numarasi ne de ":" tasiyan
+    # bir yol icermeli -- AQ_DRM_DEVICES listeyi ":" ile ayiriyor.
+    assert 'KERNELS=="0000:05:00.0"' in rule
+    assert 'SYMLINK+="dri/amd-igpu"' in rule
+    assert "0000:01:00.0" not in rule
+    assert ":" not in vfio.SYMLINK
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in runlog.calls
+    assert [
+        "sudo",
+        "udevadm",
+        "trigger",
+        "--settle",
+        "--subsystem-match=drm",
+    ] in runlog.calls
+
+
+def test_vfio_refuses_machine_without_igpu(tmp_path, monkeypatch, drm_sysfs):
+    """Masaustunde (tek NVIDIA karti) kural yazilmaz -- baglanacak kart yok."""
+    drm_sysfs([("card1", "0x10de", "0000:01:00.0")])
+    rules = tmp_path / "70-vfio-igpu.rules"
+    monkeypatch.setattr(vfio, "UDEV_RULES", rules)
+
+    assert vfio.install_udev_rule() == 1
+    assert not rules.exists()
+
+
+def test_vfio_reports_failure_when_symlink_does_not_appear(
+    tmp_path, monkeypatch, drm_sysfs, fake_write, runlog
+):
+    drm_sysfs(
+        [("card1", "0x10de", "0000:01:00.0"), ("card2", "0x1002", "0000:05:00.0")]
+    )
+    rules = tmp_path / "70-vfio-igpu.rules"
+    monkeypatch.setattr(vfio, "UDEV_RULES", rules)
+    monkeypatch.setattr(vfio, "DEV_LINK", tmp_path / "yok")
+    monkeypatch.setattr(vfio, "run", runlog)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+
+    # Kural diske yazildi ama udev uygulamadi: "tamam" demek yalan olurdu.
+    assert vfio.install_udev_rule() != 0
+    assert rules.exists()
 
 
 def test_nvidia_laptop_requires_driver(monkeypatch):

@@ -31,6 +31,7 @@ from . import (
     pacman,
     sddm,
     ssh,
+    vfio,
     virt,
     waydroid,
 )
@@ -221,6 +222,12 @@ TASKS: tuple[Task, ...] = (
         group="network",
     ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
+    Task(
+        "vfio-igpu-symlink",
+        "task.vfio_igpu_symlink",
+        vfio.install_udev_rule,
+        group="virt",
+    ),
     Task(
         "waydroid-setup",
         "task.waydroid_setup",

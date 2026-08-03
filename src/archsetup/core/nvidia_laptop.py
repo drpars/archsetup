@@ -20,10 +20,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import hardware, i18n, pacman, services
+from . import hardware, i18n, pacman, services, sysedit
 from .pacman import run
 from .prompt import ask_yes
-from .sysedit import sudo_write
 
 t = i18n.t
 
@@ -95,30 +94,6 @@ def modprobe_content() -> str:
     return MODPROBE_TEMPLATE.format(nvidia_options=options)
 
 
-def _write(path: Path, content: str) -> tuple[int, bool]:
-    """Write `content` to `path`, backing up a differing existing file.
-
-    Returns (exit code, changed).
-    """
-    try:
-        current = path.read_text(encoding="utf-8")
-    except OSError:
-        current = None
-
-    if current == content:
-        print(t("nvidia_laptop.unchanged", path=path))
-        return 0, False
-
-    rc = 0
-    if current is not None:
-        backup = path.with_suffix(path.suffix + ".bak")
-        print(t("nvidia_laptop.backup", path=path, backup=backup))
-        rc |= run(["sudo", "cp", str(path), str(backup)])
-
-    rc |= sudo_write(path, content)
-    return rc, True
-
-
 def configure() -> int:
     if not hardware.gpu_matches("nvidia"):
         print(t("nvidia_laptop.no_gpu"))
@@ -131,8 +106,8 @@ def configure() -> int:
 
     print(t("nvidia_laptop.turing" if is_turing() else "nvidia_laptop.ampere"))
 
-    rc, modprobe_changed = _write(MODPROBE_CONF, modprobe_content())
-    udev_rc, udev_changed = _write(UDEV_RULES, UDEV_CONTENT)
+    rc, modprobe_changed = sysedit.write_with_backup(MODPROBE_CONF, modprobe_content())
+    udev_rc, udev_changed = sysedit.write_with_backup(UDEV_RULES, UDEV_CONTENT)
     rc |= udev_rc
 
     rc |= enable_sleep_services(ask_s2h=False)

@@ -175,11 +175,13 @@ no_gpu = "No NVIDIA GPU found; this task is only for hybrid laptops."
 driver_missing = "nvidia-utils is not installed; install it from Drivers > NVIDIA first."
 turing = "Turing (GTX 16xx / RTX 20xx) detected: NVreg_EnableGpuFirmware=0 will be added."
 ampere = "Ampere or newer detected: the GPU firmware option will not be added."
-unchanged = "{path} is already up to date."
-backup = "{path} differs; backing it up as {backup}."
 unit_missing = "{unit} not found; skipping."
 done = "NVIDIA power management configured. Reboot for the changes to take effect."
 done_nochange = "NVIDIA power management was already configured; services verified."
+
+[sysedit]
+unchanged = "{path} is already up to date."
+backup = "{path} differs; backing it up as {backup}."
 
 [audio]
 other_board = "This preset is voiced for the ASUS ROG Strix {board} speakers; on another machine it is only a starting point."
@@ -229,6 +231,14 @@ aur_needs_check = "--aur only works together with --check-packages."
 already = "{path} already configured."
 libvirt_missing = "libvirt is not installed; install it from Applications > Virtualization first."
 done = "libvirt configured. Log out and back in for group membership."
+
+[vfio]
+no_dgpu = "No NVIDIA card found. This task is for hybrid machines that hand the discrete card to a VM."
+no_igpu = "Did not find exactly one AMD integrated GPU ({count} found). Without a second card to keep the display alive once the discrete one is handed over, this symlink has nothing to point at; it is not installed on single-GPU machines."
+found = "Integrated GPU: {card} ({slot}). The rule is written for this PCI address."
+link_ok = "Symlink ready: {link} -> {target}"
+link_missing = "{link} did not appear. The rule is on disk and applies from the next boot; reboot to make it effective now."
+next_step = "The rule alone changes nothing: pointing Hyprland at {link} takes AQ_DRM_DEVICES and the ICD variables, which live in dotfiles."
 
 [waydroid]
 missing = "waydroid is not installed; install it from Applications > Common Applications first."
@@ -395,6 +405,8 @@ wait_online_timeout = "Shorten Network Wait"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (cuts the 120 s boot delay)"
 virt_config = "Virt-Manager Configuration"
 virt_config_desc = "libvirt socket/user settings, groups, socket activation"
+vfio_igpu_symlink = "VFIO: Integrated GPU Symlink"
+vfio_igpu_symlink_desc = "udev rule giving the card that keeps the display a stable name (/dev/dri/amd-igpu)"
 waydroid_setup = "Waydroid Binder Setup"
 waydroid_setup_desc = "binder_linux module (skipped when built into the kernel) + service"
 ssh_status = "SSH Status"

@@ -175,11 +175,13 @@ no_gpu = "NVIDIA GPU bulunamadı; bu görev yalnızca hibrit dizüstüler içind
 driver_missing = "nvidia-utils kurulu değil; önce Sürücüler > NVIDIA kategorisinden kurun."
 turing = "Turing (GTX 16xx / RTX 20xx) algılandı: NVreg_EnableGpuFirmware=0 eklenecek."
 ampere = "Ampere veya daha yeni algılandı: GPU firmware ayarı eklenmeyecek."
-unchanged = "{path} zaten güncel."
-backup = "{path} farklı; yedeği {backup} olarak alınıyor."
 unit_missing = "{unit} bulunamadı; atlanıyor."
 done = "NVIDIA güç yönetimi yapılandırıldı. Değişikliklerin geçerli olması için yeniden başlatın."
 done_nochange = "NVIDIA güç yönetimi zaten yapılandırılmış; servisler kontrol edildi."
+
+[sysedit]
+unchanged = "{path} zaten güncel."
+backup = "{path} farklı; yedeği {backup} olarak alınıyor."
 
 [audio]
 other_board = "Bu preset ASUS ROG Strix {board} hoparlörlerine göre ayarlandı; başka bir makinede yalnızca başlangıç noktasıdır."
@@ -229,6 +231,14 @@ aur_needs_check = "--aur yalnızca --check-packages ile birlikte kullanılır."
 already = "{path} zaten yapılandırılmış."
 libvirt_missing = "libvirt kurulu değil; önce Uygulamalar > Sanallaştırma kategorisinden kurun."
 done = "libvirt yapılandırıldı. Grup üyeliği için oturumu kapatıp açın."
+
+[vfio]
+no_dgpu = "NVIDIA kartı bulunamadı. Bu görev, ayrık kartı bir sanal makineye devreden hibrit makineler içindir."
+no_igpu = "Tek bir AMD tümleşik GPU bulunamadı ({count} tane). Ayrık kart devredilince ekranı sürecek ikinci bir kart yoksa bu bağlantının karşılığı yok; tek kartlı makinede kurulmaz."
+found = "Tümleşik GPU: {card} ({slot}). Kural bu PCI adresine yazılıyor."
+link_ok = "Bağlantı hazır: {link} -> {target}"
+link_missing = "{link} oluşmadı. Kural diske yazıldı ve sonraki açılışta geçerli; şimdi etkili olması için yeniden başlatın."
+next_step = "Kural tek başına hiçbir şeyi değiştirmez: Hyprland'in {link} kullanması için AQ_DRM_DEVICES ve ICD değişkenleri dotfiles tarafında ayarlanır."
 
 [waydroid]
 missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
@@ -395,6 +405,8 @@ wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (120 sn boot gecikmesini keser)"
 virt_config = "Virt-Manager Yapılandırması"
 virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, soket aktivasyonu"
+vfio_igpu_symlink = "VFIO: Tümleşik GPU Bağlantısı"
+vfio_igpu_symlink_desc = "GPU devrinde ekranı süren karta değişmez bir ad veren udev kuralı (/dev/dri/amd-igpu)"
 waydroid_setup = "Waydroid Binder Kurulumu"
 waydroid_setup_desc = "binder_linux modülü (çekirdekte yerleşikse atlanır) + servis"
 ssh_status = "SSH Durumu"
