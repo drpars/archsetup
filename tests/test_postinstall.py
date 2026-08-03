@@ -793,7 +793,6 @@ def lg_paths(tmp_path, monkeypatch, fake_write, runlog, drm_connectors):
         rules=tmp_path / "rules.d" / "99-kvmfr.rules",
         qemu_conf=tmp_path / "qemu.conf",
         node=tmp_path / "kvmfr0",
-        params=tmp_path / "static_size_mb",
         calls=runlog.calls,
         installed=[],
     )
@@ -803,7 +802,7 @@ def lg_paths(tmp_path, monkeypatch, fake_write, runlog, drm_connectors):
     monkeypatch.setattr(looking_glass, "UDEV_RULES", paths.rules)
     monkeypatch.setattr(looking_glass, "QEMU_CONF", paths.qemu_conf)
     monkeypatch.setattr(looking_glass, "DEV_NODE", paths.node)
-    monkeypatch.setattr(looking_glass, "MODULE_PARAMS", paths.params)
+    monkeypatch.setattr(looking_glass, "loaded_size_mb", lambda: None)
     monkeypatch.setattr(looking_glass, "run", runlog)
     monkeypatch.setattr(looking_glass.pacman, "is_installed", lambda name: True)
     monkeypatch.setattr(looking_glass.pacman, "query", lambda cmd: [])
@@ -864,13 +863,32 @@ def test_lg_refuses_when_qemu_left_a_plain_file_at_the_node(lg_paths):
     assert not lg_paths.rules.exists()
 
 
-def test_lg_says_a_loaded_module_will_not_take_the_new_size(lg_paths):
+def test_lg_getsize_ioctl_matches_the_module_header():
+    """_IO('u', 0x44), module/kvmfr.h.
+
+    Bir harf hatası istisna atmaz: boyut sonsuza dek "bilinmiyor" döner ve
+    aşağıdaki denetim bir kez bile çalışmaz. Canlı cihaza karşı doğrulandı.
+    """
+    assert looking_glass.KVMFR_GETSIZE == 0x7544
+
+
+def test_lg_says_a_loaded_module_will_not_take_the_new_size(lg_paths, monkeypatch):
     """Yüklü modül parametreyi yeniden okumaz; 'tamam' demek yalan olur."""
-    lg_paths.params.write_text("32\n")
+    monkeypatch.setattr(looking_glass, "loaded_size_mb", lambda: 32)
 
     assert looking_glass.install() != 0
     assert "static_size_mb=64" in lg_paths.modprobe.read_text()
     # No modprobe attempt: it would return 0 and change nothing.
+    assert ["sudo", "modprobe", "kvmfr"] not in lg_paths.calls
+
+
+def test_lg_is_quiet_when_the_loaded_size_is_already_right(lg_paths, monkeypatch):
+    monkeypatch.setattr(looking_glass, "loaded_size_mb", lambda: 64)
+    # A test tree cannot hold a real character device; what matters is that
+    # both places asking about the node get the same answer.
+    monkeypatch.setattr(looking_glass, "node_is_device", lambda: True)
+
+    assert looking_glass.install() == 0
     assert ["sudo", "modprobe", "kvmfr"] not in lg_paths.calls
 
 

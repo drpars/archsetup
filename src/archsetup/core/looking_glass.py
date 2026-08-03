@@ -34,6 +34,7 @@ refused instead of guessed at.
 
 from __future__ import annotations
 
+import fcntl
 import getpass
 import math
 import os
@@ -51,7 +52,11 @@ MODULE_PKG = "looking-glass-module-dkms"
 
 DRM_CLASS = Path("/sys/class/drm")
 MODULES_DIR = Path("/usr/lib/modules")
-MODULE_PARAMS = Path("/sys/module/kvmfr/parameters/static_size_mb")
+
+# _IO('u', 0x44) from the module's own kvmfr.h; it answers with the byte size
+# the device was created with. Frozen in a test, because a wrong number here
+# would not raise -- it would quietly report "size unknown" for ever.
+KVMFR_GETSIZE = ord("u") << 8 | 0x44
 
 MODULES_LOAD = Path("/etc/modules-load.d/kvmfr.conf")
 MODPROBE = Path("/etc/modprobe.d/kvmfr.conf")
@@ -83,8 +88,9 @@ kvmfr
 MODPROBE_TEMPLATE = """\
 # Written by archsetup (task: looking-glass). The size follows the resolution
 # being streamed, so it is read off this machine rather than baked in:
-# {basis}. Raising it past what the guest needs buys no speed -- it only takes
-# that RAM away from the host for good.
+#   {basis}
+# Raising it past what the guest needs buys no speed -- it only takes that RAM
+# away from the host for good.
 options kvmfr static_size_mb={mb}
 """
 
@@ -254,11 +260,42 @@ def _ask_size(default: int | None) -> int | None:
     return default
 
 
-def _loaded_size() -> int | None:
+def node_is_device() -> bool:
+    """True when /dev/kvmfr0 is the character device the module created.
+
+    One predicate for both questions the task asks about that path -- whether
+    something else is squatting on it before we start, and whether the module
+    produced it in the end -- so the two can never disagree.
+    """
     try:
-        return int(MODULE_PARAMS.read_text(encoding="utf-8").strip())
-    except (OSError, ValueError):
+        return stat.S_ISCHR(os.stat(DEV_NODE).st_mode)
+    except OSError:
+        return False
+
+
+def loaded_size_mb() -> int | None:
+    """MiB the running module actually gave the device, None when unknown.
+
+    Not read from /sys/module/kvmfr/parameters: the module declares
+    static_size_mb with permission 0000, so the kernel publishes no sysfs entry
+    for it and that directory does not exist at all. Measured on this machine
+    -- the obvious check would have returned "unknown" every single time and
+    the guard below would never once have fired.
+
+    The device answers instead, which is better anyway: it reports the size in
+    force rather than the size someone wrote in a file. The udev rule this task
+    installs is what makes it openable without root.
+    """
+    try:
+        fd = os.open(DEV_NODE, os.O_RDWR)
+    except OSError:
         return None
+    try:
+        return fcntl.ioctl(fd, KVMFR_GETSIZE) // 1024 // 1024
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
 
 
 def install() -> int:
@@ -271,7 +308,7 @@ def install() -> int:
     # module is loaded, and from then on the module cannot own that name. The
     # symptom otherwise is a client that fails to open a device that appears to
     # be right there.
-    if DEV_NODE.exists() and not stat.S_ISCHR(os.stat(DEV_NODE).st_mode):
+    if DEV_NODE.exists() and not node_is_device():
         print(t("lg.node_not_a_device", node=DEV_NODE))
         return 1
 
@@ -290,7 +327,7 @@ def install() -> int:
         width, height = mode
         size = required_mb(width, height)
         basis = (
-            f"{width}x{height} x {BPP} bytes x 2 frames, + {OVERHEAD_MIB} MiB,"
+            f"{width}x{height} x {BPP} bytes x 2 frames + {OVERHEAD_MIB} MiB,"
             " rounded up to a power of two"
         )
         print(t("lg.size_from_display", width=width, height=height, mb=size))
@@ -324,14 +361,14 @@ def install() -> int:
     # not reapply the parameter and will not complain either. The file changing
     # is not the question -- only whether the value in force is the wanted one,
     # or a rewritten comment would raise a false alarm.
-    loaded = _loaded_size()
+    loaded = loaded_size_mb()
     if loaded is None:
         rc |= run(["sudo", "modprobe", "kvmfr"])
     elif loaded != size:
         print(t("lg.reload_needed", loaded=loaded, wanted=size))
         rc |= 1
 
-    if DEV_NODE.is_char_device():
+    if node_is_device():
         print(t("lg.node_ok", node=DEV_NODE, mb=size))
     else:
         print(t("lg.node_missing", node=DEV_NODE))
