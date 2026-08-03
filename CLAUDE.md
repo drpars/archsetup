@@ -70,6 +70,7 @@ Hazır yardımcılar; yenisini yazmadan önce bunlara bakın:
 | İş | Kullanılacak |
 |---|---|
 | root dosyasına yazmak | `sysedit.sudo_write()` (kullanıcı olarak oku, sudo tee ile yaz) |
+| yedekleyerek yazmak | `sysedit.write_with_backup()` → `(rc, changed)`; aynıysa dokunmaz, `changed` pahalı ardıl adımı (mkinitcpio -P, udevadm reload) koşullar |
 | komut çalıştırmak | `pacman.run()` (komutu ekrana basar) |
 | evet/hayır sormak | `prompt.ask_yes()` |
 | sistem servisi | `services.enable()` / `enable_now()` / `is_active()` |
