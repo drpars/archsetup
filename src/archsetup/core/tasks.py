@@ -25,6 +25,7 @@ from . import (
     i18n,
     iwd,
     kmscon,
+    looking_glass,
     mirrors,
     network,
     nvidia_laptop,
@@ -232,6 +233,12 @@ TASKS: tuple[Task, ...] = (
         "vfio-handover-hook",
         "task.vfio_handover_hook",
         vfio.install_handover_hook,
+        group="virt",
+    ),
+    Task(
+        "looking-glass",
+        "task.looking_glass",
+        looking_glass.install,
         group="virt",
     ),
     Task(

@@ -19,6 +19,7 @@ from archsetup.core import (
     hardware,
     gpuconfig,
     kmscon,
+    looking_glass,
     network,
     nvidia_laptop,
     sddm,
@@ -686,6 +687,208 @@ def test_vfio_hook_refuses_a_shared_iommu_group(pci_sysfs, hook_paths):
     assert vfio.install_handover_hook() == 1
     assert not hook_paths.conf.exists()
     assert not hook_paths.hook.exists()
+
+
+# libvirt's own commented sample, copied verbatim from /etc/libvirt/qemu.conf.
+# Uncommenting *this* is the point: naming the key replaces libvirt's built-in
+# list, so a list written from memory would quietly take /dev/null and friends
+# away from every VM on the machine.
+QEMU_CONF_SAMPLE = """\
+# This is the basic set of devices allowed / required by
+# all virtual machines.
+#
+#cgroup_device_acl = [
+#    "/dev/null", "/dev/full", "/dev/zero",
+#    "/dev/random", "/dev/urandom",
+#    "/dev/ptmx", "/dev/userfaultfd"
+#]
+#
+
+# Some other setting
+#nvram = []
+"""
+
+
+@pytest.mark.parametrize(
+    "resolution,expected",
+    # The four rows of the "Common Values" table in the Looking Glass B7 docs.
+    # A typo in the formula stays invisible otherwise: every wrong answer is
+    # still a plausible-looking power of two.
+    [((1920, 1080), 32), ((1920, 1200), 32), ((2560, 1440), 64), ((3840, 2160), 128)],
+)
+def test_lg_size_matches_the_documented_table(resolution, expected):
+    assert looking_glass.required_mb(*resolution) == expected
+
+
+@pytest.fixture
+def drm_connectors(tmp_path, monkeypatch):
+    """Fake /sys/class/drm connectors with status and mode lists."""
+
+    def build(connectors):
+        root = tmp_path / "drm-connectors"
+        root.mkdir(exist_ok=True)
+        for name, status, modes in connectors:
+            connector = root / name
+            connector.mkdir()
+            (connector / "status").write_text(f"{status}\n")
+            (connector / "modes").write_text("".join(f"{m}\n" for m in modes))
+        monkeypatch.setattr(looking_glass, "DRM_CLASS", root)
+        return root
+
+    return build
+
+
+def test_lg_reads_the_preferred_mode_of_connected_outputs_only(drm_connectors):
+    drm_connectors(
+        [
+            # First line is the preferred mode; the rest are fallbacks nobody
+            # will run the guest at.
+            ("card1-eDP-1", "connected", ["2560x1440", "1920x1080"]),
+            # A disconnected 4K output would otherwise buy 128 MB for a screen
+            # that is not there.
+            ("card1-DP-2", "disconnected", ["3840x2160"]),
+        ]
+    )
+    assert looking_glass.connected_modes() == [(2560, 1440)]
+    assert looking_glass.largest_mode() == (2560, 1440)
+
+
+def test_lg_acl_uncomments_libvirt_own_sample(tmp_path):
+    updated = looking_glass.acl_with_kvmfr(QEMU_CONF_SAMPLE)
+    assert updated is not None
+    assert 'cgroup_device_acl = [\n    "/dev/kvmfr0",\n' in updated
+    # Everything libvirt shipped in the sample survives -- that is the whole
+    # reason for editing rather than generating the block.
+    for device in ("/dev/null", "/dev/full", "/dev/zero", "/dev/userfaultfd"):
+        assert device in updated
+    assert "#cgroup_device_acl" not in updated
+    assert looking_glass.acl_allows_kvmfr(QEMU_CONF_SAMPLE) is False
+    assert looking_glass.acl_allows_kvmfr(updated) is True
+
+
+def test_lg_acl_refuses_an_active_key_it_cannot_parse():
+    """Ayrıştırılamayan etkin anahtara ikincisi eklenmez."""
+    text = 'cgroup_device_acl = ["/dev/null", "/dev/kvm"]\n' + QEMU_CONF_SAMPLE
+    # Uncommenting the sample here would leave two active assignments and let
+    # file order decide the result -- the mkinitcpio PRESETS bug again.
+    assert looking_glass.acl_with_kvmfr(text) is None
+    assert looking_glass.acl_allows_kvmfr(text) is False
+
+
+def test_lg_client_release_drops_epoch_and_pkgrel(monkeypatch):
+    """Misafir tarafının indirme adresi kurulu sürümden türetiliyor."""
+    monkeypatch.setattr(
+        looking_glass.pacman, "query", lambda cmd: ["looking-glass", "2:B7-7"]
+    )
+    assert looking_glass.client_release() == "B7"
+
+
+@pytest.fixture
+def lg_paths(tmp_path, monkeypatch, fake_write, runlog, drm_connectors):
+    """Point the Looking Glass task at tmp_path and stub out sudo/pacman."""
+    drm_connectors([("card1-eDP-1", "connected", ["2560x1440"])])
+    paths = SimpleNamespace(
+        modprobe=tmp_path / "modprobe.d" / "kvmfr.conf",
+        modules_load=tmp_path / "modules-load.d" / "kvmfr.conf",
+        rules=tmp_path / "rules.d" / "99-kvmfr.rules",
+        qemu_conf=tmp_path / "qemu.conf",
+        node=tmp_path / "kvmfr0",
+        params=tmp_path / "static_size_mb",
+        calls=runlog.calls,
+        installed=[],
+    )
+    paths.qemu_conf.write_text(QEMU_CONF_SAMPLE)
+    monkeypatch.setattr(looking_glass, "MODPROBE", paths.modprobe)
+    monkeypatch.setattr(looking_glass, "MODULES_LOAD", paths.modules_load)
+    monkeypatch.setattr(looking_glass, "UDEV_RULES", paths.rules)
+    monkeypatch.setattr(looking_glass, "QEMU_CONF", paths.qemu_conf)
+    monkeypatch.setattr(looking_glass, "DEV_NODE", paths.node)
+    monkeypatch.setattr(looking_glass, "MODULE_PARAMS", paths.params)
+    monkeypatch.setattr(looking_glass, "run", runlog)
+    monkeypatch.setattr(looking_glass.pacman, "is_installed", lambda name: True)
+    monkeypatch.setattr(looking_glass.pacman, "query", lambda cmd: [])
+    monkeypatch.setattr(
+        looking_glass,
+        "kernel_headers",
+        lambda: ("linux-g14-headers", True),
+    )
+    monkeypatch.setattr(
+        looking_glass.pacman,
+        "install",
+        lambda repo, aur: paths.installed.extend(repo + aur) or 0,
+    )
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    # Headless: the size prompt takes the calculated value.
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    return paths
+
+
+def test_lg_writes_the_four_things_the_packages_leave_out(lg_paths):
+    # Non-zero because no real module can create /dev/kvmfr0 under tmp_path;
+    # what is being checked here is what landed on disk on the way there.
+    assert looking_glass.install() != 0
+
+    assert lg_paths.installed == [
+        "looking-glass",
+        "looking-glass-module-dkms",
+    ]
+    # 2560x1440 -> 64 MB, read off the machine rather than baked into a file.
+    assert "options kvmfr static_size_mb=64" in lg_paths.modprobe.read_text()
+    assert "2560x1440" in lg_paths.modprobe.read_text()
+    assert lg_paths.modules_load.read_text().rstrip().endswith("kvmfr")
+
+    rule = lg_paths.rules.read_text()
+    assert 'SUBSYSTEM=="kvmfr"' in rule
+    assert 'GROUP="kvm", MODE="0660"' in rule
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in lg_paths.calls
+
+    # And the one qemu would still be denied by even with the rule in place.
+    assert looking_glass.acl_allows_kvmfr(lg_paths.qemu_conf.read_text())
+    assert [
+        "sudo",
+        "systemctl",
+        "try-restart",
+        "libvirtd.service",
+    ] in lg_paths.calls
+
+
+def test_lg_refuses_when_qemu_left_a_plain_file_at_the_node(lg_paths):
+    """QEMU, modül yüklenmeden VM açılırsa /dev/kvmfr0'ı düz dosya yapar."""
+    lg_paths.node.write_text("")
+
+    assert looking_glass.install() == 1
+    # Nothing is written on top of a broken node: the fix is deleting it, and
+    # a task that "succeeded" would hide that.
+    assert not lg_paths.modprobe.exists()
+    assert not lg_paths.rules.exists()
+
+
+def test_lg_says_a_loaded_module_will_not_take_the_new_size(lg_paths):
+    """Yüklü modül parametreyi yeniden okumaz; 'tamam' demek yalan olur."""
+    lg_paths.params.write_text("32\n")
+
+    assert looking_glass.install() != 0
+    assert "static_size_mb=64" in lg_paths.modprobe.read_text()
+    # No modprobe attempt: it would return 0 and change nothing.
+    assert ["sudo", "modprobe", "kvmfr"] not in lg_paths.calls
+
+
+def test_lg_leaves_an_already_allowed_acl_alone(lg_paths):
+    lg_paths.qemu_conf.write_text(
+        looking_glass.acl_with_kvmfr(QEMU_CONF_SAMPLE) or ""
+    )
+    before = lg_paths.qemu_conf.read_text()
+
+    looking_glass.install()
+
+    assert lg_paths.qemu_conf.read_text() == before
+    assert [
+        "sudo",
+        "systemctl",
+        "try-restart",
+        "libvirtd.service",
+    ] not in lg_paths.calls
 
 
 def test_vfio_hook_refuses_without_an_iommu_group(pci_sysfs, hook_paths):
