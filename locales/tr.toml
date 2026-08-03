@@ -595,6 +595,7 @@ sddm_missing = "SDDM kurulu değil. Önce Görüntü Yöneticisi menüsünden sd
 plugdev_hint = "OpenRazer için kullanıcıyı plugdev grubuna ekleyin: sudo gpasswd -a $USER plugdev"
 virt_config_hint = "Kurulumdan sonra Yapılandırma menüsündeki 'Virt-Manager Yapılandırması' görevini çalıştırın."
 waydroid_hint = "Binder modülü için Yapılandırma menüsündeki 'Waydroid Binder Kurulumu' görevini çalıştırın."
+virtio_win_hint = "ISO buraya kuruldu: /var/lib/libvirt/images/virtio-win.iso — Windows kurulumunda diski görmek için ikinci bir CD-ROM olarak takın."
 file_missing = "Dosya bulunamadı: {path}"
 aur_missing = "AUR yardımcısı (yay/paru) kurulu değil; AUR paketleri onsuz kurulamaz."
 aur_install_q = "yay-bin şimdi AUR'dan derlenip kurulsun mu?"

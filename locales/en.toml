@@ -595,6 +595,7 @@ sddm_missing = "SDDM is not installed. Install sddm from the Display Manager men
 plugdev_hint = "For OpenRazer, add your user to the plugdev group: sudo gpasswd -a $USER plugdev"
 virt_config_hint = "After installing, run 'Virt-Manager Configuration' in the Configuration menu."
 waydroid_hint = "For the binder module, run 'Waydroid Binder Setup' in the Configuration menu."
+virtio_win_hint = "The ISO landed in /var/lib/libvirt/images/virtio-win.iso — attach it as a second CD-ROM so Windows setup can see the disk."
 file_missing = "File not found: {path}"
 aur_missing = "No AUR helper (yay/paru) is installed; AUR packages cannot be built without one."
 aur_install_q = "Build and install yay-bin from the AUR now?"

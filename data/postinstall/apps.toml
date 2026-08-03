@@ -604,6 +604,25 @@ id = "virtualization"
   note = { tr = "Host ↔ misafir klasör paylaşımı", en = "Host to guest folder sharing" }
   default = false
 
+  # A Windows guest cannot see a virtio disk during setup, so the installer
+  # shows an empty drive list until these drivers are loaded from an attached
+  # ISO. The package is nothing but the ISO: no build, no install script, just
+  # install -Dm644 into /var/lib/libvirt/images, where the directory is 0755
+  # and the file 0644 -- readable by the user qemu runs as, with no task to
+  # write. That is why this is a catalogue entry and not one.
+  #
+  # Off by default because it is a 753 MiB download that only a Windows guest
+  # ever needs. The version is pinned in the PKGBUILD (_ver=0.1.285), so the
+  # ISO only moves when the maintainer moves it; today it matches upstream's
+  # stable-virtio. If it ever goes stale, the direct download is at
+  # https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/
+  [[category.packages]]
+  name = "virtio-win"
+  aur = true
+  default = false
+  post_msg = "msg.virtio_win_hint"
+  note = { tr = "Windows misafirler için virtio sürücü ISO'su (753 MB)", en = "virtio driver ISO for Windows guests (753 MB)" }
+
   # bridge-utils is gone from the repos: brctl was superseded by iproute2 and
   # libvirt manages bridges over netlink. Listing it aborted the whole
   # virtualization install with "target not found".
