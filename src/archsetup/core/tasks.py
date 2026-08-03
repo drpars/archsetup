@@ -229,6 +229,12 @@ TASKS: tuple[Task, ...] = (
         group="virt",
     ),
     Task(
+        "vfio-handover-hook",
+        "task.vfio_handover_hook",
+        vfio.install_handover_hook,
+        group="virt",
+    ),
+    Task(
         "waydroid-setup",
         "task.waydroid_setup",
         waydroid.setup,

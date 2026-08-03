@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -575,6 +576,232 @@ def test_vfio_reports_failure_when_symlink_does_not_appear(
     # Kural diske yazildi ama udev uygulamadi: "tamam" demek yalan olurdu.
     assert vfio.install_udev_rule() != 0
     assert rules.exists()
+
+
+@pytest.fixture
+def pci_sysfs(tmp_path, monkeypatch):
+    """Fake /sys/bus/pci/devices, including the iommu_group symlink."""
+
+    def build(devices, groups):
+        root = tmp_path / "pci"
+        root.mkdir(exist_ok=True)
+        group_root = tmp_path / "iommu_groups"
+        for number, members in groups.items():
+            members_dir = group_root / str(number) / "devices"
+            members_dir.mkdir(parents=True)
+            for member in members:
+                (members_dir / member).mkdir()
+        for slot, (vendor, klass, group) in devices.items():
+            device = root / slot
+            device.mkdir()
+            (device / "vendor").write_text(f"{vendor}\n")
+            (device / "class").write_text(f"{klass}\n")
+            if group is not None:
+                (device / "iommu_group").symlink_to(group_root / str(group))
+        monkeypatch.setattr(vfio, "PCI_DEVICES", root)
+        return root
+
+    return build
+
+
+@pytest.fixture
+def hook_paths(tmp_path, monkeypatch, fake_write, runlog):
+    """Point the handover-hook task at tmp_path and stub out libvirt/sudo."""
+    hook = tmp_path / "hooks" / "qemu.d" / vfio.HOOK_NAME
+    conf = tmp_path / "hooks" / "vfio.conf"
+    monkeypatch.setattr(vfio, "HOOK_DIR", hook.parent)
+    monkeypatch.setattr(vfio, "HOOK", hook)
+    monkeypatch.setattr(vfio, "VFIO_CONF", conf)
+    monkeypatch.setattr(vfio.pacman, "is_installed", lambda name: True)
+    monkeypatch.setattr(vfio, "run", runlog)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    return SimpleNamespace(hook=hook, conf=conf, calls=runlog.calls)
+
+
+# The card's own functions: exactly what this laptop's group 13 holds.
+DGPU_GROUP = {
+    "0000:01:00.0": ("0x10de", "0x030000", 13),
+    "0000:01:00.1": ("0x10de", "0x040300", 13),
+    "0000:05:00.0": ("0x1002", "0x030000", 20),
+}
+
+
+def test_vfio_hook_writes_devices_read_off_the_machine(pci_sysfs, hook_paths):
+    pci_sysfs(
+        DGPU_GROUP,
+        {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]},
+    )
+
+    assert vfio.install_handover_hook() == 0
+
+    # Both functions of the card, and only those: the audio function has to
+    # move with the VGA one or the guest gets half a device.
+    conf = hook_paths.conf.read_text()
+    assert 'VFIO_DEVICES="0000:01:00.0 0000:01:00.1"' in conf
+    assert "0000:05:00.0" not in conf
+
+    assert hook_paths.hook.read_text() == vfio.HOOK_ASSET.read_text()
+    # libvirt skips a non-executable hook without a word, and reads its hook
+    # directory only at startup -- both have to be handled by the install.
+    assert ["sudo", "chmod", "0755", str(hook_paths.hook)] in hook_paths.calls
+    assert [
+        "sudo",
+        "systemctl",
+        "try-restart",
+        "libvirtd.service",
+    ] in hook_paths.calls
+
+
+def test_vfio_hook_is_idempotent_and_skips_the_restart(pci_sysfs, hook_paths):
+    pci_sysfs(
+        DGPU_GROUP,
+        {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]},
+    )
+    assert vfio.install_handover_hook() == 0
+    hook_paths.hook.chmod(0o755)
+    hook_paths.calls.clear()
+
+    assert vfio.install_handover_hook() == 0
+    # Nothing moved, so nothing that costs anything runs: no restart of a
+    # daemon that may be serving a running VM, no rewrite.
+    assert ["sudo", "systemctl", "try-restart", "libvirtd.service"] not in (
+        hook_paths.calls
+    )
+    assert ["sudo", "chmod", "0755", str(hook_paths.hook)] not in hook_paths.calls
+
+
+def test_vfio_hook_refuses_a_shared_iommu_group(pci_sysfs, hook_paths):
+    """Grupta yabanci aygit varsa passthrough zaten calismaz -- yazma."""
+    devices = dict(DGPU_GROUP)
+    devices["0000:02:00.0"] = ("0x1022", "0x0c0330", 13)  # a USB controller
+    pci_sysfs(
+        devices,
+        {
+            13: ["0000:01:00.0", "0000:01:00.1", "0000:02:00.0"],
+            20: ["0000:05:00.0"],
+        },
+    )
+
+    assert vfio.install_handover_hook() == 1
+    assert not hook_paths.conf.exists()
+    assert not hook_paths.hook.exists()
+
+
+def test_vfio_hook_refuses_without_an_iommu_group(pci_sysfs, hook_paths):
+    pci_sysfs({"0000:01:00.0": ("0x10de", "0x030000", None)}, {})
+
+    assert vfio.install_handover_hook() == 1
+    assert not hook_paths.conf.exists()
+
+
+def test_vfio_hook_refuses_machine_without_dgpu(pci_sysfs, hook_paths):
+    pci_sysfs({"0000:05:00.0": ("0x1002", "0x030000", 20)}, {20: ["0000:05:00.0"]})
+
+    assert vfio.install_handover_hook() == 1
+    assert not hook_paths.conf.exists()
+
+
+def test_vfio_hook_needs_libvirt(pci_sysfs, hook_paths, monkeypatch):
+    pci_sysfs(DGPU_GROUP, {13: ["0000:01:00.0", "0000:01:00.1"]})
+    monkeypatch.setattr(vfio.pacman, "is_installed", lambda name: False)
+
+    assert vfio.install_handover_hook() == 1
+    assert not hook_paths.hook.exists()
+
+
+# --- the shell gate --------------------------------------------------------
+#
+# The hook decides whether to touch the driver binding by reading the domain
+# XML libvirt puts on its stdin. That decision is the one part of this work
+# that cannot be checked by reading it: a gate that never fires is
+# indistinguishable from a hook that was never installed. So it is exercised
+# for real, with bash, against XML shaped like libvirt's own output.
+
+CLAIMING_DOMAIN = """\
+<domain type='kvm'>
+  <name>win11</name>
+  <devices>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+      </source>
+      <address type='pci' domain='0x0000' bus='0x05' slot='0x00' function='0x0'/>
+    </hostdev>
+  </devices>
+</domain>
+"""
+
+# The trap: the *guest* address of an unrelated device sits at 01:00.0 while
+# the only card actually asked for is a different one. Matching addresses
+# anywhere in the XML fires here -- and that is a handover for a guest that
+# never wanted the card. The wrapped attributes are copied from libvirt's own
+# manual, which splits a long <address/> across lines.
+DECOY_DOMAIN = """\
+<domain type='kvm'>
+  <devices>
+    <disk type='file' device='disk'>
+      <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+    </disk>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source writeFiltering='no'>
+        <address domain='0x0000' bus='0x06' slot='0x12' function='0x1'/>
+      </source>
+      <address type='pci' domain='0x0000' bus='0x00'
+               slot='0x02' function='0x0'/>
+    </hostdev>
+  </devices>
+</domain>
+"""
+
+WRAPPED_DOMAIN = """\
+<domain type='kvm'><devices><hostdev mode='subsystem'
+  type='pci' managed='yes'><source><address domain='0x0000'
+  bus='0x1' slot='0x0'
+  function='0x1'/></source></hostdev></devices></domain>
+"""
+
+
+def _run_gate(tmp_path, xml, devices='"0000:01:00.0 0000:01:00.1"'):
+    conf = tmp_path / "vfio.conf"
+    conf.write_text(f"VFIO_DEVICES={devices}\n")
+    return subprocess.run(
+        ["bash", str(vfio.HOOK_ASSET)],
+        input=xml,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "VFIO_CONF": str(conf),
+            "VFIO_HOOK_CHECK": "1",
+        },
+    )
+
+
+def test_hook_gate_fires_for_a_guest_that_asks_for_the_card(tmp_path):
+    out = _run_gate(tmp_path, CLAIMING_DOMAIN)
+    assert out.returncode == 0
+    assert "0000:01:00.0" in out.stdout
+
+
+def test_hook_gate_ignores_a_guest_side_address(tmp_path):
+    out = _run_gate(tmp_path, DECOY_DOMAIN)
+    assert out.returncode == 1
+    # Only the host address of the hostdev source counts.
+    assert "0000:06:12.1" in out.stdout
+
+
+def test_hook_gate_reads_attributes_split_across_lines(tmp_path):
+    out = _run_gate(tmp_path, WRAPPED_DOMAIN)
+    assert out.returncode == 0
+    # Short hex forms too: libvirt writes 0x1, the config says 01.
+    assert "0000:01:00.1" in out.stdout
+
+
+def test_hook_refuses_a_malformed_config(tmp_path):
+    out = _run_gate(tmp_path, CLAIMING_DOMAIN, devices='"not-an-address"')
+    assert out.returncode == 1
+    assert "not a PCI address" in out.stderr
 
 
 def test_nvidia_laptop_requires_driver(monkeypatch):

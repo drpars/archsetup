@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+# libvirt qemu hook drop-in. Installed by archsetup (task: vfio-handover-hook).
+#
+# Hands the discrete GPU to a guest that asks for it: unload the nvidia stack,
+# bind the card to vfio-pci before the VM starts, give it back when the VM is
+# gone. The machine-specific part -- which PCI addresses -- is not in here; it
+# is read from vfio.conf, which archsetup generates from the host's own IOMMU
+# group.
+#
+# WHY A DROP-IN, NOT /etc/libvirt/hooks/qemu: since libvirt 6.5.0 every script
+# in <driver>.d/ runs after the main script, in alphabetical order. So this file
+# needs no dispatcher of its own and does not clobber a main hook someone else
+# owns.
+#
+# WHAT LIBVIRT GUARANTEES (from /usr/share/doc/libvirt/html/hooks.html):
+#   qemu <guest> <op> <sub-op> <extra>   -- argv, run as root, domain XML on stdin
+# * prepare/begin: a non-zero exit means the guest is not started. That is
+#   wanted here: better no VM than a guest booting against a card the host
+#   still drives.
+# * Hooks run synchronously -- libvirt waits, so every sleep and timeout below
+#   is added to the guest's start time. Worst case here is ~40 s.
+# * On a non-zero exit libvirt logs the return code *and* this script's stderr.
+#   That is why failures go to stderr as well as to the log file: someone whose
+#   VM refused to start reads libvirtd's log, not a file they never heard of.
+# * A hook must never call back into libvirt (virsh included) -- the daemon is
+#   already waiting on this process.
+# * The script must exist when libvirtd starts; added to a running host it is
+#   ignored until the daemon next starts. archsetup try-restarts libvirtd.
+#
+# THE ONE RULE THIS ENCODES
+# Writing a PCI address to unbind / driver_override / drivers_probe while the
+# nvidia modules are loaded and something still holds /dev/nvidia0 sends the
+# nvidia remove() path spinning in the kernel (state R); kill -9 does not clear
+# it, only a reboot does. That happened twice. Every write below therefore sits
+# behind unload_nvidia(), which refuses to return success while
+# `lsmod | grep ^nvidia` matches anything.
+#
+# NOT IN SCOPE
+# The compositor half. Hyprland must already be pinned to the integrated GPU
+# before it starts (AQ_DRM_DEVICES plus the EGL/GLX/Vulkan ICD pins; the stable
+# name comes from archsetup's vfio-igpu-symlink task, the variables from
+# dotfiles). A Hyprland that ever opened /dev/nvidia0 makes the unload
+# structurally impossible -- this hook then fails at unload and says so, rather
+# than wedging the machine.
+
+set -uo pipefail
+
+# Overridable so the gate can be checked against a real domain without root and
+# without touching the installed configuration -- see VFIO_HOOK_CHECK below.
+: "${VFIO_CONF:=/etc/libvirt/hooks/vfio.conf}"
+
+[ -r "$VFIO_CONF" ] || exit 0
+# shellcheck source=/dev/null
+. "$VFIO_CONF"
+
+: "${VFIO_DEVICES:=}"
+: "${NVIDIA_MODULES:=nvidia_drm nvidia_modeset nvidia_uvm nvidia}"
+: "${NVIDIA_SERVICES:=nvidia-powerd}"
+: "${VFIO_LOG:=/var/log/vfio-hook.log}"
+
+# Verification mode (see below) has to be runnable by the user who defined the
+# domain, and /var/log is not theirs to write.
+[ -n "${VFIO_HOOK_CHECK:-}" ] && VFIO_LOG=/dev/null
+
+GUEST=${1:-}
+OP=${2:-}
+SUBOP=${3:-}
+
+log() {
+    printf '%s [%s %s/%s] %s\n' \
+        "$(date -Is)" "$GUEST" "$OP" "$SUBOP" "$*" >>"$VFIO_LOG"
+}
+
+die() {
+    log "$*"
+    printf 'vfio-hook: %s\n' "$*" >&2
+    exit 1
+}
+
+[ -n "$VFIO_DEVICES" ] || { log "vfio.conf lists no devices; nothing to do"; exit 0; }
+
+# --- address handling ------------------------------------------------------
+#
+# Everything is compared in one canonical form (0000:01:00.0) so that a
+# hand-edited vfio.conf written as "01:00.0" and libvirt's hex attributes
+# describe the same device.
+
+_hex_ok() { [[ $1 =~ ^(0[xX])?[0-9a-fA-F]{1,4}$ ]]; }
+
+# _attr <name> <tag> -- attribute by name, so tag attribute order never matters.
+_attr() {
+    printf '%s\n' "$2" | sed -n "s/.*[[:space:]]$1=['\"]\([^'\"]*\)['\"].*/\1/p"
+}
+
+# canon <domain> <bus> <slot> <function> -- empty output means "not an address".
+# The values reach $(( )) only after _hex_ok, because arithmetic expansion
+# evaluates its argument as an expression and would run a command substitution
+# hidden inside it.
+canon() {
+    local d=${1:-0} b=${2:-} s=${3:-} f=${4:-}
+    _hex_ok "$d" && _hex_ok "$b" && _hex_ok "$s" && _hex_ok "$f" || return 1
+    printf '%04x:%02x:%02x.%x' "$((d))" "$((b))" "$((s))" "$((f))"
+}
+
+# 0000:01:00.0 / 01:00.0 -> canonical form
+canon_addr() {
+    local rest=$1 dom=0 bus tail
+    case $rest in
+        *:*:*) dom=${rest%%:*}; rest=${rest#*:} ;;
+    esac
+    bus=${rest%%:*}
+    tail=${rest#*:}
+    canon "$dom" "$bus" "${tail%%.*}" "${tail##*.}"
+}
+
+DEVICES=""
+for _dev in $VFIO_DEVICES; do
+    _canon=$(canon_addr "$_dev") || die "vfio.conf: '$_dev' is not a PCI address"
+    DEVICES="${DEVICES:+$DEVICES }$_canon"
+done
+
+# --- the gate --------------------------------------------------------------
+#
+# Gate on the domain XML rather than on a list of guest names. A name list goes
+# stale silently the day a VM is renamed or a second one is defined: the hook
+# would either run for a guest that wants no GPU, or skip the one that does.
+#
+# Two things make a naive grep over the XML wrong, both visible in libvirt's own
+# manual (formatdomain.html):
+#
+#   <hostdev mode='subsystem' type='pci' managed='yes'>
+#     <source>
+#       <address domain='0x0000' bus='0x06' slot='0x12' function='0x1'/>  <-- host
+#     </source>
+#     <address type='pci' domain='0x0000' bus='0x00'
+#              slot='0x02' function='0x0'/>                               <-- guest
+#   </hostdev>
+#
+# 1. The second <address/> is the *guest* slot. Matching it would fire for a
+#    guest that merely happens to put some unrelated device on bus 0x01.
+# 2. libvirt wraps long elements, so attributes of one tag can land on separate
+#    lines -- a line-oriented match misses them.
+#
+# Hence: normalise to one tag per line, track hostdev/source nesting, and read
+# attributes by name rather than by position.
+hostdev_addresses() {
+    local line in_hostdev=0 in_source=0 addr
+    tr '\n' ' ' | sed 's/>/>\n/g' | while IFS= read -r line; do
+        case $line in
+            *"</hostdev"*) in_hostdev=0; in_source=0 ;;
+            *"<hostdev"*)
+                in_hostdev=0
+                case $line in *"type='pci'"* | *'type="pci"'*) in_hostdev=1 ;; esac
+                ;;
+            *"</source"*) in_source=0 ;;
+            *"<source"*) [ "$in_hostdev" = 1 ] && in_source=1 ;;
+            *"<address"*)
+                [ "$in_hostdev" = 1 ] && [ "$in_source" = 1 ] || continue
+                addr=$(canon \
+                    "$(_attr domain "$line")" "$(_attr bus "$line")" \
+                    "$(_attr slot "$line")" "$(_attr function "$line")") || continue
+                printf '%s\n' "$addr"
+                ;;
+        esac
+    done
+}
+
+# Prints the addresses it saw either way: a gate that never fires looks exactly
+# like a hook that was never installed, and the log is the only place that can
+# tell those apart.
+claims_dgpu() {
+    local xml=$1 seen dev
+    seen=$(printf '%s' "$xml" | hostdev_addresses | sort -u | tr '\n' ' ')
+    for dev in $DEVICES; do
+        case " $seen " in
+            *" $dev "*)
+                log "guest claims $dev (hostdev addresses: ${seen:-none})"
+                return 0
+                ;;
+        esac
+    done
+    log "guest claims none of [$DEVICES] (hostdev addresses: ${seen:-none})"
+    return 1
+}
+
+# Verification mode. The gate above is the part that cannot be proven by
+# reading it, so it is runnable on its own against a real domain:
+#
+#   virsh dumpxml <guest> | VFIO_HOOK_CHECK=1 /etc/libvirt/hooks/qemu.d/50-vfio-handover
+#
+# Reads stdin, reports the decision, touches nothing. Exit 0 = would hand the
+# card over, 1 = would leave the driver binding alone.
+if [ -n "${VFIO_HOOK_CHECK:-}" ]; then
+    _xml=$(cat)
+    _seen=$(printf '%s' "$_xml" | hostdev_addresses | sort -u | tr '\n' ' ')
+    printf 'configured: %s\n' "$DEVICES"
+    printf 'hostdev:    %s\n' "${_seen:-(none)}"
+    if claims_dgpu "$_xml"; then
+        printf 'result:     handover\n'
+        exit 0
+    fi
+    printf 'result:     no handover\n'
+    exit 1
+fi
+
+# Only the two edges of the guest's life matter: prepare/begin runs before any
+# resource is claimed, release/end after the domain is gone. Every other call
+# (start, started, stopped, migrate...) leaves the driver binding alone.
+case "$OP/$SUBOP" in
+    prepare/begin | release/end) ;;
+    *) exit 0 ;;
+esac
+
+driver_of() {
+    local link="/sys/bus/pci/devices/$1/driver"
+    [ -e "$link" ] && basename "$(readlink -f "$link")" || echo "(none)"
+}
+
+nvidia_loaded() { lsmod | grep -q '^nvidia'; }
+
+# The gate the whole script rests on. Returns non-zero -- and logs who is to
+# blame -- rather than letting the caller near the PCI driver core.
+unload_nvidia() {
+    local svc mod
+    for svc in $NVIDIA_SERVICES; do
+        systemctl stop "$svc" 2>/dev/null
+    done
+    # shellcheck disable=SC2086  # deliberately split: it is a list of modules
+    modprobe -r $NVIDIA_MODULES 2>&1 | while IFS= read -r line; do log "modprobe: $line"; done
+    sleep 1
+    nvidia_loaded || { log "all nvidia modules unloaded"; return 0; }
+
+    log "FAIL: nvidia modules still loaded"
+    for mod in $NVIDIA_MODULES; do
+        [ -d "/sys/module/$mod" ] && log "  $mod refcnt=$(cat "/sys/module/$mod/refcnt" 2>/dev/null)"
+    done
+    # The usual culprit is a PRIME-offloaded process (a game, or a browser
+    # started with __NV_PRIME_RENDER_OFFLOAD) that has to be closed first.
+    log "  holders: $(fuser -v /dev/nvidia* 2>&1 | tr '\n' ' ')"
+    return 1
+}
+
+reload_nvidia() {
+    local svc
+    modprobe nvidia_drm 2>&1 | while IFS= read -r line; do log "modprobe: $line"; done
+    for svc in $NVIDIA_SERVICES; do
+        systemctl start "$svc" 2>/dev/null
+    done
+}
+
+bind_vfio() {
+    local dev cur rc=0
+    modprobe vfio-pci || { log "FAIL: vfio-pci will not load"; return 1; }
+    for dev in $DEVICES; do
+        cur=$(driver_of "$dev")
+        if [ "$cur" != "(none)" ] && [ "$cur" != "vfio-pci" ]; then
+            # Safe: no nvidia module is loaded at this point, so the worst
+            # driver we can be detaching is snd_hda_intel on the audio function.
+            timeout 20 tee "/sys/bus/pci/drivers/$cur/unbind" <<<"$dev" >/dev/null 2>&1 \
+                || log "unbind of $dev from $cur timed out"
+        fi
+        echo vfio-pci > "/sys/bus/pci/devices/$dev/driver_override"
+        timeout 20 tee /sys/bus/pci/drivers_probe <<<"$dev" >/dev/null 2>&1
+    done
+    for dev in $DEVICES; do
+        cur=$(driver_of "$dev")
+        log "$dev -> $cur"
+        [ "$cur" = "vfio-pci" ] || rc=1
+    done
+    return $rc
+}
+
+release_vfio() {
+    local dev
+    # Order matters and is the reverse of bind: clear the override and unbind
+    # from vfio-pci *before* the nvidia modules come back, so nothing is ever
+    # asked to detach a card nvidia has re-attached to.
+    for dev in $DEVICES; do
+        echo > "/sys/bus/pci/devices/$dev/driver_override"
+        echo "$dev" > /sys/bus/pci/drivers/vfio-pci/unbind 2>/dev/null
+    done
+    reload_nvidia
+    for dev in $DEVICES; do
+        echo "$dev" > /sys/bus/pci/drivers_probe 2>/dev/null
+        log "$dev -> $(driver_of "$dev")"
+    done
+}
+
+xml=$(cat)
+claims_dgpu "$xml" || exit 0
+
+case "$OP/$SUBOP" in
+prepare/begin)
+    log "handover requested; dGPU currently on $(driver_of "${DEVICES%% *}")"
+    if ! unload_nvidia; then
+        # Put the host back the way we found it before refusing: the desktop
+        # should not lose PRIME offload because a VM failed to start.
+        reload_nvidia
+        die "cannot free the dGPU -- close whatever holds /dev/nvidia0 and retry"
+    fi
+    bind_vfio || die "devices did not bind to vfio-pci"
+    log "handover complete"
+    ;;
+release/end)
+    release_vfio
+    log "card returned to the host"
+    ;;
+esac
+
+exit 0
