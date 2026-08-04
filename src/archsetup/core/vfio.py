@@ -1,9 +1,10 @@
-"""VFIO passthrough: a stable name for the GPU that stays home, and the
-libvirt hook that hands the other one over.
+"""VFIO passthrough: a stable name for the GPU that stays home, the libvirt
+hook that hands the other one over, and the one host-side holder that hook
+cannot talk its way past.
 
-Two tasks live here, and they are separate on purpose: the symlink is useful
+Three tasks live here, and they are separate on purpose: the symlink is useful
 on its own (it is what pins the compositor), while the hook is only safe once
-the compositor no longer holds the discrete card.
+nothing on the host still holds the discrete card.
 
 **install_udev_rule** -- a stable name for the integrated GPU.
 
@@ -43,6 +44,42 @@ passed through -- the leftover device would have to leave its host driver too.
 Writing the config anyway would produce a hook that fails at VM start, on a
 machine where nothing can make it succeed. Same shape as the symlink refusing a
 non-hybrid machine: say no where the answer is structural.
+
+**disable_xorg_autoaddgpu** -- stop the display manager's X greeter from
+opening the discrete card and never letting go.
+
+Pinning the compositor is not enough, because the compositor is not the only
+thing running. SDDM starts a plain Xorg for its greeter and, with -noreset,
+that server stays up for the whole login session -- measured here as the *only*
+process holding the card, from boot onwards. Xorg does not need to display
+anything on it: AutoAddGPU is on by default, so the card arrives from the udev
+backend as a secondary GPU screen, nvidia-utils' 10-nvidia-drm-outputclass.conf
+loads nvidia_drv.so for it, and that is enough to open the device. The primary
+screen was the integrated GPU the whole time.
+
+What that costs is the entire point of the project. Handing the card over with
+Xorg still holding it makes the kernel say "Attempting to remove device ... with
+non-zero usage count" and SIGABRT the greeter's server; SDDM loses its display
+server and ends the user's session with it -- compositor, portals, terminals.
+The handover would "succeed" at the price of everything it was supposed to
+leave running. The hook cannot detect this either: its lsmod gate looks a
+second later, by which time the kernel has already killed the holder and the
+modules are gone.
+
+Option "AutoAddGPU" "off" cuts exactly that link -- man xorg.conf: "no GPU
+devices will be added from the udev backend" -- and leaves the primary screen
+alone, since that one is not a GPU device and comes up the ordinary way. Three
+other candidates were measured and dropped: DisplayServer=wayland needs weston,
+which is not installed, and trades a measured certainty for an unknown; SDDM's
+[X11] ServerArguments cannot scope it, because no such Xorg flag exists;
+AutoBindGPU off only stops output-sink binding, the GPU screen and the open
+device remain.
+
+The file is global, though, which is the whole gate: on a machine that really
+runs X11 desktops it would also take away their PRIME offload outputs. So the
+task refuses where /usr/share/xsessions/ has anything in it, and this laptop is
+the case where it does not exist at all -- the greeter is the only X server on
+the machine.
 """
 
 from __future__ import annotations
@@ -71,6 +108,36 @@ HOOK = HOOK_DIR / HOOK_NAME
 HOOK_BACKUP = HOOK_DIR.parent / (HOOK_NAME + ".bak")
 HOOK_ASSET = paths.DATA_DIR / "vfio" / HOOK_NAME
 VFIO_CONF = Path("/etc/libvirt/hooks/vfio.conf")
+
+XORG_CONF_DIR = Path("/etc/X11/xorg.conf.d")
+XORG_AUTOADDGPU = XORG_CONF_DIR / "20-vfio-no-autoaddgpu.conf"
+# X11 session desktop entries. Empty or absent means no X11 desktop is offered
+# on this machine, which is what makes a global AutoAddGPU switch acceptable.
+XSESSIONS = Path("/usr/share/xsessions")
+# Where the running server says what it did. Only useful as a "before/after":
+# it describes the Xorg that is up now, not the one the next boot will start.
+XORG_LOG = Path("/var/log/Xorg.0.log")
+# Xorg logs a GPU screen as "NVIDIA(G0)"; the primary screen would be
+# "NVIDIA(0)". The G is the whole distinction being checked.
+GPU_SCREEN_MARK = "NVIDIA(G"
+
+AUTOADDGPU_CONF = """\
+# Written by archsetup (task: vfio-xorg-autoaddgpu).
+#
+# Keeps the display manager's X greeter off the discrete GPU. Without this,
+# Xorg adds the card from the udev backend as a secondary GPU screen, loads
+# nvidia_drv.so for it and holds /dev/nvidia0 open for the whole session --
+# even though it draws nothing there. Handing the card to a VM then makes the
+# kernel kill the greeter's server, and SDDM ends the user's session with it.
+#
+# The primary screen is unaffected: it is not a GPU device and does not come
+# from the udev backend. This file is global, so it is only installed on a
+# machine that offers no X11 desktop session of its own -- on one that does, it
+# would also remove its PRIME offload outputs.
+Section "ServerFlags"
+    Option "AutoAddGPU" "off"
+EndSection
+"""
 
 # 0x03 covers VGA (0x0300), 3D (0x0302) and other display controllers. A
 # laptop's discrete card can register as either depending on how the vBIOS
@@ -266,4 +333,62 @@ def install_handover_hook() -> int:
 
     print(t("vfio.hook_done", hook=HOOK, conf=VFIO_CONF))
     print(t("vfio.hook_verify", hook=HOOK))
+    return rc
+
+
+def x11_sessions() -> list[str]:
+    """X11 desktop sessions this machine offers, by desktop-entry name."""
+    try:
+        return sorted(entry.name for entry in XSESSIONS.glob("*.desktop"))
+    except OSError:
+        return []
+
+
+def gpu_screens() -> int | None:
+    """NVIDIA GPU screens the *running* X server created; None if unreadable.
+
+    This answers "is it in effect yet", not "is the file right": the log
+    belongs to the server that is up now, which on a machine that has not
+    rebooted was started before the file existed.
+    """
+    try:
+        log = XORG_LOG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return log.count(GPU_SCREEN_MARK)
+
+
+def disable_xorg_autoaddgpu() -> int:
+    """Keep the display manager's X greeter from opening the discrete GPU."""
+    detected = cards()
+    nvidia = [card for card in detected if card[1] == NVIDIA_VENDOR]
+    amd = [card for card in detected if card[1] == AMD_VENDOR]
+
+    if not nvidia:
+        print(t("vfio.no_dgpu"))
+        return 1
+    if len(amd) != 1:
+        print(t("vfio.no_igpu", count=len(amd)))
+        return 1
+
+    # The one gate that matters, because the file is global rather than
+    # scoped to the greeter -- no Xorg flag exists that could scope it.
+    sessions = x11_sessions()
+    if sessions:
+        print(t("vfio.xorg_sessions", path=XSESSIONS, sessions=" ".join(sessions)))
+        return 1
+
+    rc = run(["sudo", "mkdir", "-p", str(XORG_CONF_DIR)])
+    # Unlike libvirt's hook directory, a sibling .bak is harmless here: Xorg
+    # reads only the files ending in ".conf" out of xorg.conf.d.
+    write_rc, _ = sysedit.write_with_backup(XORG_AUTOADDGPU, AUTOADDGPU_CONF)
+    rc |= write_rc
+
+    screens = gpu_screens()
+    if screens:
+        print(t("vfio.xorg_pending", path=XORG_AUTOADDGPU, count=screens))
+    elif screens == 0:
+        print(t("vfio.xorg_effective", path=XORG_AUTOADDGPU))
+    else:
+        print(t("vfio.xorg_done", path=XORG_AUTOADDGPU))
     return rc

@@ -236,6 +236,12 @@ TASKS: tuple[Task, ...] = (
         group="virt",
     ),
     Task(
+        "vfio-xorg-autoaddgpu",
+        "task.vfio_xorg_autoaddgpu",
+        vfio.disable_xorg_autoaddgpu,
+        group="virt",
+    ),
+    Task(
         "looking-glass",
         "task.looking_glass",
         looking_glass.install,

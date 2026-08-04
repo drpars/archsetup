@@ -15,6 +15,7 @@ from archsetup.core import (
     coding_agents,
     coredump,
     dotfiles,
+    i18n,
     iwd,
     hardware,
     gpuconfig,
@@ -1048,6 +1049,102 @@ def test_hook_refuses_a_malformed_config(tmp_path):
     out = _run_gate(tmp_path, CLAIMING_DOMAIN, devices='"not-an-address"')
     assert out.returncode == 1
     assert "not a PCI address" in out.stderr
+
+
+# --- the greeter's X server ------------------------------------------------
+
+
+@pytest.fixture
+def xorg_paths(tmp_path, monkeypatch, fake_write, runlog):
+    """Point the AutoAddGPU task at tmp_path, with no X11 session defined."""
+    conf = tmp_path / "xorg.conf.d" / "20-vfio-no-autoaddgpu.conf"
+    monkeypatch.setattr(vfio, "XORG_CONF_DIR", conf.parent)
+    monkeypatch.setattr(vfio, "XORG_AUTOADDGPU", conf)
+    monkeypatch.setattr(vfio, "XSESSIONS", tmp_path / "xsessions")
+    monkeypatch.setattr(vfio, "XORG_LOG", tmp_path / "Xorg.0.log")
+    monkeypatch.setattr(vfio, "run", runlog)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    return SimpleNamespace(
+        conf=conf,
+        sessions=tmp_path / "xsessions",
+        log=tmp_path / "Xorg.0.log",
+        calls=runlog.calls,
+    )
+
+
+HYBRID_CARDS = [
+    ("card1", "0x10de", "0000:01:00.0"),
+    ("card2", "0x1002", "0000:05:00.0"),
+]
+
+
+def test_xorg_autoaddgpu_turns_the_udev_backend_off(drm_sysfs, xorg_paths):
+    drm_sysfs(HYBRID_CARDS)
+
+    assert vfio.disable_xorg_autoaddgpu() == 0
+
+    conf = xorg_paths.conf.read_text()
+    assert 'Option "AutoAddGPU" "off"' in conf
+    assert 'Section "ServerFlags"' in conf
+
+
+def test_xorg_autoaddgpu_refuses_where_x11_sessions_exist(drm_sysfs, xorg_paths):
+    """The setting is machine-wide; no Xorg flag exists that could scope it.
+
+    On a machine that really runs X11 desktops, turning the udev backend off
+    takes their PRIME offload outputs with it. This laptop is the opposite
+    case -- /usr/share/xsessions does not exist at all -- and that difference
+    is the only thing standing between "narrow fix" and "broke the desktop".
+    """
+    drm_sysfs(HYBRID_CARDS)
+    xorg_paths.sessions.mkdir()
+    (xorg_paths.sessions / "plasmax11.desktop").write_text("[Desktop Entry]\n")
+
+    assert vfio.disable_xorg_autoaddgpu() == 1
+    assert not xorg_paths.conf.exists()
+
+
+def test_xorg_autoaddgpu_refuses_a_single_gpu_machine(drm_sysfs, xorg_paths):
+    # Nothing to hand over, and nothing to fall back to: same structural no
+    # the symlink task gives.
+    drm_sysfs([("card1", "0x1002", "0000:05:00.0")])
+
+    assert vfio.disable_xorg_autoaddgpu() == 1
+    assert not xorg_paths.conf.exists()
+
+
+def test_xorg_autoaddgpu_does_not_call_the_running_server_done(
+    drm_sysfs, xorg_paths, capsys
+):
+    """A GPU screen in the log means the card is still held, file or no file.
+
+    The server that is up was started before the file existed, so writing it
+    changes nothing until the next one. Saying "done" here is how the
+    expensive experiment gets run against a host that never let go.
+    """
+    drm_sysfs(HYBRID_CARDS)
+    xorg_paths.log.write_text("(II) NVIDIA(G0): Using...\n(II) NVIDIA(G0): more\n")
+
+    assert vfio.disable_xorg_autoaddgpu() == 0
+
+    expected = i18n.t("vfio.xorg_pending", path=xorg_paths.conf, count=2)
+    assert expected in capsys.readouterr().out
+
+
+def test_xorg_autoaddgpu_reports_a_server_that_left_the_card_alone(
+    drm_sysfs, xorg_paths, capsys
+):
+    drm_sysfs(HYBRID_CARDS)
+    # The primary screen is the integrated GPU, and it stays: NVIDIA(0)
+    # without the G would be a screen on the card itself, which is not what
+    # this counts either.
+    xorg_paths.log.write_text("(II) AMDGPU(0): Using...\n")
+
+    assert vfio.disable_xorg_autoaddgpu() == 0
+
+    expected = i18n.t("vfio.xorg_effective", path=xorg_paths.conf)
+    assert expected in capsys.readouterr().out
 
 
 # --- the bind order --------------------------------------------------------
