@@ -28,12 +28,30 @@
 #   ignored until the daemon next starts. archsetup try-restarts libvirtd.
 #
 # THE ONE RULE THIS ENCODES
-# Writing a PCI address to unbind / driver_override / drivers_probe while the
+# Writing a PCI address to a driver's unbind, or to drivers_probe, while the
 # nvidia modules are loaded and something still holds /dev/nvidia0 sends the
-# nvidia remove() path spinning in the kernel (state R); kill -9 does not clear
-# it, only a reboot does. That happened twice. Every write below therefore sits
-# behind unload_nvidia(), which refuses to return success while
-# `lsmod | grep ^nvidia` matches anything.
+# nvidia remove() path spinning in the kernel (state R). kill -9 does not clear
+# it; a timeout does not fire on it, because the task cannot take a signal; and
+# whoever issued the write waits with it -- here that is libvirtd, and every
+# virsh after it. Only a reboot clears it. That has happened three times, the
+# last one (2026-08-04) caused by this very script.
+#
+# So those two writes sit behind unload_nvidia(), and bind_vfio() unbinds only
+# from the drivers named in VFIO_SAFE_UNBIND. Finding nvidia on the card after
+# an apparently successful unload is not something to push through: it means
+# udev re-bound it, and the only safe move left is to stop.
+#
+# driver_override is the exception, and it is the exact opposite: a plain
+# attribute write that detaches nothing and probes nothing. It therefore goes
+# FIRST, before the unload. From the moment it is set the PCI core will bind
+# nothing but vfio-pci to these devices, so the window in which udev could
+# re-probe the card as the modules go away is closed structurally instead of by
+# timing. Measured 2026-08-04: written afterwards, that window is real, and
+# udev took it.
+#
+# Every path that gives up after the override is set must clear it again. Left
+# behind, it outlives this script: nvidia can never bind the card again, the
+# machine comes back without its discrete GPU, and nothing on it says why.
 #
 # NOT IN SCOPE
 # The compositor half. Hyprland must already be pinned to the integrated GPU
@@ -57,6 +75,18 @@ set -uo pipefail
 : "${NVIDIA_MODULES:=nvidia_drm nvidia_modeset nvidia_uvm nvidia}"
 : "${NVIDIA_SERVICES:=nvidia-powerd}"
 : "${VFIO_LOG:=/var/log/vfio-hook.log}"
+
+# Drivers this script is allowed to detach a device from. The list is an
+# allow-list rather than a deny-list on purpose: an unknown driver is a driver
+# whose remove() path nobody has measured, and the failure mode for guessing
+# wrong is a machine that only a power cycle recovers. On this board the only
+# entry that is ever needed is the audio function of the card itself.
+: "${VFIO_SAFE_UNBIND:=snd_hda_intel}"
+
+# Overridable so the bind order can be exercised against a fake tree in the
+# test suite -- the order is the part of this script that cannot be checked by
+# reading it, and the real /sys costs a reboot to get wrong.
+: "${SYSFS_PCI:=/sys/bus/pci}"
 
 # Verification mode (see below) has to be runnable by the user who defined the
 # domain, and /var/log is not theirs to write.
@@ -212,31 +242,95 @@ case "$OP/$SUBOP" in
 esac
 
 driver_of() {
-    local link="/sys/bus/pci/devices/$1/driver"
+    local link="$SYSFS_PCI/devices/$1/driver"
     [ -e "$link" ] && basename "$(readlink -f "$link")" || echo "(none)"
 }
 
 nvidia_loaded() { lsmod | grep -q '^nvidia'; }
 
-# The gate the whole script rests on. Returns non-zero -- and logs who is to
-# blame -- rather than letting the caller near the PCI driver core.
-unload_nvidia() {
-    local svc mod
-    for svc in $NVIDIA_SERVICES; do
-        systemctl stop "$svc" 2>/dev/null
+# Claim the devices for vfio-pci before anything is unloaded. See THE ONE RULE:
+# this is a pure attribute write, and it is what closes the re-probe window.
+set_override() {
+    local dev rc=0
+    for dev in $DEVICES; do
+        echo vfio-pci > "$SYSFS_PCI/devices/$dev/driver_override" 2>/dev/null || {
+            log "FAIL: cannot write driver_override for $dev"
+            rc=1
+        }
     done
-    # shellcheck disable=SC2086  # deliberately split: it is a list of modules
-    modprobe -r $NVIDIA_MODULES 2>&1 | while IFS= read -r line; do log "modprobe: $line"; done
-    sleep 1
-    nvidia_loaded || { log "all nvidia modules unloaded"; return 0; }
+    return $rc
+}
 
-    log "FAIL: nvidia modules still loaded"
+# Called on every giving-up path once set_override has run, and by release.
+# Best effort by design: this is the undo, so it must not be able to fail in a
+# way that leaves a worse state than it found.
+clear_override() {
+    local dev
+    for dev in $DEVICES; do
+        echo > "$SYSFS_PCI/devices/$dev/driver_override" 2>/dev/null \
+            || log "WARN: could not clear driver_override for $dev"
+    done
+}
+
+# modprobe -r exits non-zero for a module that is not loaded ("FATAL: Module x
+# is not currently loaded"), so handing it the whole list would make its exit
+# code meaningless the day one of them is absent -- and that exit code is the
+# only honest signal this function has. Give it exactly what is loaded.
+loaded_nvidia_modules() {
+    local mod loaded out=""
+    loaded=" $(lsmod | awk 'NR > 1 { print $1 }' | tr '\n' ' ')"
+    for mod in $NVIDIA_MODULES; do
+        case $loaded in *" $mod "*) out="${out:+$out }$mod" ;; esac
+    done
+    printf '%s' "$out"
+}
+
+unload_blame() {
+    local mod
     for mod in $NVIDIA_MODULES; do
         [ -d "/sys/module/$mod" ] && log "  $mod refcnt=$(cat "/sys/module/$mod/refcnt" 2>/dev/null)"
     done
     # The usual culprit is a PRIME-offloaded process (a game, or a browser
-    # started with __NV_PRIME_RENDER_OFFLOAD) that has to be closed first.
+    # started with __NV_PRIME_RENDER_OFFLOAD) that has to be closed first. On
+    # this machine it has also been SDDM's X greeter, which never let the card
+    # go from boot.
     log "  holders: $(fuser -v /dev/nvidia* 2>&1 | tr '\n' ' ')"
+}
+
+# The gate the whole script rests on. Returns non-zero -- and logs who is to
+# blame -- rather than letting the caller near the PCI driver core.
+unload_nvidia() {
+    local svc mods out rc
+    for svc in $NVIDIA_SERVICES; do
+        systemctl stop "$svc" 2>/dev/null
+    done
+
+    mods=$(loaded_nvidia_modules)
+    if [ -n "$mods" ]; then
+        # shellcheck disable=SC2086  # deliberately split: it is a list of modules
+        out=$(modprobe -r $mods 2>&1)
+        rc=$?
+        printf '%s\n' "$out" | while IFS= read -r line; do
+            [ -n "$line" ] && log "modprobe: $line"
+        done
+        if [ "$rc" -ne 0 ]; then
+            # "FATAL: Module nvidia_drm is in use." was a real answer and used
+            # to be thrown away: the decision was left to an lsmod a second
+            # later, which came back clean -- because the kernel had killed the
+            # process holding the card, taking the user's whole graphical
+            # session with it. A non-zero exit is a failure even when the later
+            # lsmod looks fine.
+            log "FAIL: modprobe -r exited $rc"
+            unload_blame
+            return 1
+        fi
+    fi
+
+    sleep 1
+    nvidia_loaded || { log "all nvidia modules unloaded"; return 0; }
+
+    log "FAIL: nvidia modules still loaded"
+    unload_blame
     return 1
 }
 
@@ -248,19 +342,43 @@ reload_nvidia() {
     done
 }
 
+safe_to_unbind() {
+    local ok
+    for ok in $VFIO_SAFE_UNBIND; do
+        [ "$1" = "$ok" ] && return 0
+    done
+    return 1
+}
+
+# Runs only after set_override and a successful unload_nvidia, so the override
+# is already in place and every device here can bind to nothing but vfio-pci.
 bind_vfio() {
     local dev cur rc=0
     modprobe vfio-pci || { log "FAIL: vfio-pci will not load"; return 1; }
     for dev in $DEVICES; do
         cur=$(driver_of "$dev")
-        if [ "$cur" != "(none)" ] && [ "$cur" != "vfio-pci" ]; then
-            # Safe: no nvidia module is loaded at this point, so the worst
-            # driver we can be detaching is snd_hda_intel on the audio function.
-            timeout 20 tee "/sys/bus/pci/drivers/$cur/unbind" <<<"$dev" >/dev/null 2>&1 \
-                || log "unbind of $dev from $cur timed out"
-        fi
-        echo vfio-pci > "/sys/bus/pci/devices/$dev/driver_override"
-        timeout 20 tee /sys/bus/pci/drivers_probe <<<"$dev" >/dev/null 2>&1
+        case $cur in
+            "(none)" | vfio-pci) ;;
+            *)
+                if ! safe_to_unbind "$cur"; then
+                    # 'nvidia' here means the unload reported success and udev
+                    # re-bound the card behind it. Writing unbind now is exactly
+                    # the wedge this script exists to avoid, so stop instead.
+                    log "FAIL: $dev is on '$cur', which is not in VFIO_SAFE_UNBIND ($VFIO_SAFE_UNBIND) -- refusing to unbind it"
+                    return 1
+                fi
+                # This timeout catches a driver that hangs *and* can still take
+                # a signal. It is not what keeps us out of the unkillable case;
+                # refusing the write above is. And it is fatal rather than
+                # logged: going on to drivers_probe with an unbind in an unknown
+                # state is how a card ends up half-detached.
+                timeout 20 tee "$SYSFS_PCI/drivers/$cur/unbind" <<<"$dev" >/dev/null 2>&1 || {
+                    log "FAIL: unbind of $dev from $cur did not finish"
+                    return 1
+                }
+                ;;
+        esac
+        timeout 20 tee "$SYSFS_PCI/drivers_probe" <<<"$dev" >/dev/null 2>&1
     done
     for dev in $DEVICES; do
         cur=$(driver_of "$dev")
@@ -275,13 +393,20 @@ release_vfio() {
     # Order matters and is the reverse of bind: clear the override and unbind
     # from vfio-pci *before* the nvidia modules come back, so nothing is ever
     # asked to detach a card nvidia has re-attached to.
+    clear_override
+    # libvirt also calls release/end after a prepare/begin that refused, so a
+    # device here may never have left nvidia. Both writes below are therefore
+    # asked "is there anything to do" first: probing a device that already has
+    # a driver is a no-op the kernel answers with -EBUSY, but this is the one
+    # file where "harmless in theory" has cost three reboots.
     for dev in $DEVICES; do
-        echo > "/sys/bus/pci/devices/$dev/driver_override"
-        echo "$dev" > /sys/bus/pci/drivers/vfio-pci/unbind 2>/dev/null
+        [ "$(driver_of "$dev")" = "vfio-pci" ] \
+            && timeout 20 tee "$SYSFS_PCI/drivers/vfio-pci/unbind" <<<"$dev" >/dev/null 2>&1
     done
     reload_nvidia
     for dev in $DEVICES; do
-        echo "$dev" > /sys/bus/pci/drivers_probe 2>/dev/null
+        [ "$(driver_of "$dev")" = "(none)" ] \
+            && timeout 20 tee "$SYSFS_PCI/drivers_probe" <<<"$dev" >/dev/null 2>&1
         log "$dev -> $(driver_of "$dev")"
     done
 }
@@ -292,13 +417,24 @@ claims_dgpu "$xml" || exit 0
 case "$OP/$SUBOP" in
 prepare/begin)
     log "handover requested; dGPU currently on $(driver_of "${DEVICES%% *}")"
+    # Order is the whole point here; see THE ONE RULE at the top.
+    if ! set_override; then
+        clear_override
+        die "cannot claim the devices for vfio-pci"
+    fi
+    # Both failures below put the host back the way we found it before
+    # refusing: the desktop should not lose PRIME offload -- or the card
+    # altogether, via a leftover override -- because a VM failed to start.
     if ! unload_nvidia; then
-        # Put the host back the way we found it before refusing: the desktop
-        # should not lose PRIME offload because a VM failed to start.
+        clear_override
         reload_nvidia
         die "cannot free the dGPU -- close whatever holds /dev/nvidia0 and retry"
     fi
-    bind_vfio || die "devices did not bind to vfio-pci"
+    if ! bind_vfio; then
+        clear_override
+        reload_nvidia
+        die "devices did not bind to vfio-pci"
+    fi
     log "handover complete"
     ;;
 release/end)

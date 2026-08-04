@@ -1050,6 +1050,319 @@ def test_hook_refuses_a_malformed_config(tmp_path):
     assert "not a PCI address" in out.stderr
 
 
+# --- the bind order --------------------------------------------------------
+#
+# The order in which the hook writes to sysfs is the rest of what cannot be
+# checked by reading, and it is the expensive part to get wrong: writing an
+# unbind while the nvidia modules are loaded parks a kernel task in state R
+# that no signal clears, and takes libvirtd down with it. It has cost three
+# reboots, once from this very script (2026-08-04).
+#
+# So the kernel side is faked just far enough to answer the questions that
+# matter -- what was written, in what order, and what the driver binding looked
+# like at each step -- and the hook is run for real against it.
+
+DGPU = "0000:01:00.0"
+DGPU_AUDIO = "0000:01:00.1"
+
+LSMOD_FULL = """\
+nvidia_drm            167936  2
+nvidia_uvm           2449408  0
+nvidia_modeset       1921024  3 nvidia_drm
+nvidia              18186240  45 nvidia_uvm,nvidia_modeset
+"""
+
+# Records every write and, at each modprobe, what the override said at that
+# moment -- which is exactly the ordering claim under test. "-r" drops the
+# nvidia driver links the way removing the module really does, unless the
+# regrab flag is set: that flag is udev getting there first.
+STUB_MODPROBE = """\
+#!/bin/sh
+printf 'modprobe %s\\n' "$*" >> "$TRACE"
+printf 'override-was %s\\n' \
+    "$(cat "$SYSFS_PCI/devices/0000:01:00.0/driver_override")" >> "$TRACE"
+if [ "$1" = "-r" ]; then
+    shift
+    : > "$STATE/lsmod"
+    if [ ! -f "$STATE/regrab" ]; then
+        rm -f "$SYSFS_PCI/devices/0000:01:00.0/driver"
+        rm -rf "$SYSFS_PCI/drivers/nvidia"
+    fi
+    # "in use" still clears lsmod, because that is what was measured: the
+    # kernel killed the process holding the card, so a second later the
+    # modules really were gone -- and the session with them.
+    if [ -f "$STATE/in-use" ]; then
+        printf 'FATAL: Module %s is in use.\\n' "$1" >&2
+        exit 1
+    fi
+    exit 0
+fi
+if [ "$1" = "nvidia_drm" ]; then
+    mkdir -p "$SYSFS_PCI/drivers/nvidia"
+    cp "$STATE/lsmod.full" "$STATE/lsmod"
+else
+    mkdir -p "$SYSFS_PCI/drivers/$1"
+fi
+exit 0
+"""
+
+STUB_LSMOD = """\
+#!/bin/sh
+echo "Module                  Size  Used by"
+cat "$STATE/lsmod" 2>/dev/null
+exit 0
+"""
+
+# The mini-kernel: drivers_probe binds whatever the override names, unbind
+# detaches. Only bind_vfio goes through tee, which is the path under test.
+STUB_TEE = """\
+#!/bin/sh
+target=$1
+dev=$(cat)
+printf 'write %s %s\\n' "$target" "$dev" >> "$TRACE"
+printf '%s\\n' "$dev" >> "$target"
+case $target in
+    */drivers_probe)
+        ov=$(cat "$SYSFS_PCI/devices/$dev/driver_override" 2>/dev/null)
+        if [ -z "$ov" ]; then
+            ov=$(cat "$STATE/default/$dev" 2>/dev/null)
+        fi
+        if [ -n "$ov" ] && [ -d "$SYSFS_PCI/drivers/$ov" ]; then
+            ln -sfn "../../drivers/$ov" "$SYSFS_PCI/devices/$dev/driver"
+        fi
+        ;;
+    */unbind)
+        rm -f "$SYSFS_PCI/devices/$dev/driver"
+        ;;
+esac
+exit 0
+"""
+
+STUB_SYSTEMCTL = """\
+#!/bin/sh
+printf 'systemctl %s\\n' "$*" >> "$TRACE"
+exit 0
+"""
+
+STUB_FUSER = """\
+#!/bin/sh
+exit 1
+"""
+
+
+class FakeHost:
+    """A sysfs tree, a set of stubs, and the hook run against both."""
+
+    def __init__(self, root):
+        self.root = root
+        self.sysfs = root / "sys" / "bus" / "pci"
+        self.state = root / "state"
+        self.bin = root / "bin"
+        self.trace = self.state / "trace"
+        self.log = root / "vfio-hook.log"
+
+        self.state.mkdir(parents=True)
+        self.bin.mkdir(parents=True)
+        self.trace.write_text("")
+        (self.state / "lsmod.full").write_text(LSMOD_FULL)
+        (self.state / "lsmod").write_text(LSMOD_FULL)
+
+        for name, body in (
+            ("modprobe", STUB_MODPROBE),
+            ("lsmod", STUB_LSMOD),
+            ("tee", STUB_TEE),
+            ("systemctl", STUB_SYSTEMCTL),
+            ("fuser", STUB_FUSER),
+        ):
+            stub = self.bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+
+        (self.sysfs / "drivers_probe").parent.mkdir(parents=True)
+        (self.sysfs / "drivers_probe").write_text("")
+        (self.state / "default").mkdir()
+        for device, driver in ((DGPU, "nvidia"), (DGPU_AUDIO, "snd_hda_intel")):
+            self.add_driver(driver)
+            node = self.sysfs / "devices" / device
+            node.mkdir(parents=True)
+            (node / "driver_override").write_text("")
+            (node / "driver").symlink_to(Path("../../drivers") / driver)
+            # What drivers_probe binds when nothing overrides it -- the fake
+            # kernel's stand-in for module matching.
+            (self.state / "default" / device).write_text(driver)
+
+        self.conf = root / "vfio.conf"
+        self.conf.write_text(
+            f'VFIO_DEVICES="{DGPU} {DGPU_AUDIO}"\nVFIO_LOG="{self.log}"\n'
+        )
+
+    def add_driver(self, name):
+        directory = self.sysfs / "drivers" / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "unbind").touch()
+
+    def run(self, op="prepare", subop="begin", xml=CLAIMING_DOMAIN):
+        return subprocess.run(
+            ["bash", str(vfio.HOOK_ASSET), "win11", op, subop, "-"],
+            input=xml,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "PATH": f"{self.bin}:{os.environ['PATH']}",
+                "VFIO_CONF": str(self.conf),
+                "SYSFS_PCI": str(self.sysfs),
+                "TRACE": str(self.trace),
+                "STATE": str(self.state),
+            },
+        )
+
+    @property
+    def steps(self):
+        """The trace with tmp paths stripped, so assertions stay readable."""
+        return [
+            line.replace(f"{self.sysfs}/", "").rstrip()
+            for line in self.trace.read_text().splitlines()
+        ]
+
+    def driver_of(self, device):
+        link = self.sysfs / "devices" / device / "driver"
+        return link.readlink().name if link.is_symlink() else "(none)"
+
+    def override(self, device):
+        return (self.sysfs / "devices" / device / "driver_override").read_text().strip()
+
+
+@pytest.fixture
+def fake_host(tmp_path):
+    return FakeHost(tmp_path)
+
+
+def test_hook_writes_the_override_before_unloading_nvidia(fake_host):
+    """The fix for the wedge: the override closes the re-probe window first.
+
+    Written after the unload instead, there is a gap in which udev re-probes
+    the card and nvidia takes it back -- and it did, on 2026-08-04.
+    """
+    assert fake_host.run().returncode == 0
+
+    # What the override said at the moment modprobe -r ran. Empty would mean
+    # the window was open.
+    unload = fake_host.steps.index("modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia")
+    assert fake_host.steps[unload + 1] == "override-was vfio-pci"
+
+    # And no write to the PCI driver core happened before the unload at all.
+    assert not [step for step in fake_host.steps[:unload] if step.startswith("write ")]
+
+
+def test_hook_hands_both_functions_to_vfio_pci(fake_host):
+    out = fake_host.run()
+
+    assert out.returncode == 0
+    assert fake_host.driver_of(DGPU) == "vfio-pci"
+    assert fake_host.driver_of(DGPU_AUDIO) == "vfio-pci"
+    assert "handover complete" in fake_host.log.read_text()
+
+    # The audio function is on the one driver the allow-list names, so it is
+    # detached; the GPU function was already free once the module went.
+    assert "write drivers/snd_hda_intel/unbind 0000:01:00.1" in fake_host.steps
+
+
+def test_hook_refuses_to_unbind_a_card_nvidia_took_back(fake_host):
+    """The guard, shown catching what it exists to catch.
+
+    unload_nvidia can report success while the card is back on nvidia: udev
+    re-probes it, or the kernel killed whatever held it. Unbinding then is the
+    write that parks a task in state R and hangs libvirtd behind it.
+    """
+    (fake_host.state / "regrab").touch()
+
+    out = fake_host.run()
+
+    assert out.returncode == 1
+    assert "refusing to unbind" in fake_host.log.read_text()
+    assert not [step for step in fake_host.steps if "drivers/nvidia/unbind" in step]
+    # Host left usable: no VM, but the card can still go back to nvidia.
+    assert fake_host.override(DGPU) == ""
+    assert fake_host.override(DGPU_AUDIO) == ""
+    assert "modprobe nvidia_drm" in fake_host.steps
+
+
+def test_hook_believes_modprobe_over_a_later_lsmod(fake_host):
+    """`FATAL: Module nvidia_drm is in use.` is the answer, not the lsmod after.
+
+    The old code logged that line and judged by an lsmod a second later. That
+    lsmod came back clean -- because the kernel had killed the process holding
+    the card, taking the user's graphical session with it -- so the hook called
+    the unload a success and carried on. The modules being gone is not the same
+    question as the unload having gone well.
+    """
+    (fake_host.state / "in-use").touch()
+
+    out = fake_host.run()
+
+    assert out.returncode == 1
+    assert "cannot free the dGPU" in out.stderr
+    assert "FAIL: modprobe -r exited 1" in fake_host.log.read_text()
+    assert not [step for step in fake_host.steps if step.startswith("write ")]
+    assert fake_host.override(DGPU) == ""
+
+
+def test_hook_unloads_only_the_modules_that_are_loaded(fake_host):
+    """Otherwise the exit code read above means nothing.
+
+    modprobe -r exits non-zero for a module that is not loaded, so passing the
+    full list would turn a partially loaded stack into a failed handover.
+    """
+    (fake_host.state / "lsmod").write_text("nvidia_modeset  1921024  0\nnvidia  18186240  1\n")
+
+    assert fake_host.run().returncode == 0
+    assert "modprobe -r nvidia_modeset nvidia" in fake_host.steps
+
+
+def test_hook_clears_the_override_before_nvidia_comes_back(fake_host):
+    """release/end is the reverse order, for the same reason."""
+    assert fake_host.run().returncode == 0
+    fake_host.trace.write_text("")
+
+    assert fake_host.run(op="release", subop="end").returncode == 0
+
+    # Cleared before the modules come back, so nothing is ever asked to detach
+    # a card nvidia has already re-attached to.
+    assert fake_host.override(DGPU) == ""
+    reload_at = fake_host.steps.index("modprobe nvidia_drm")
+    assert fake_host.steps[reload_at + 1] == "override-was"
+    assert [step for step in fake_host.steps[:reload_at] if "vfio-pci/unbind" in step]
+
+    assert fake_host.driver_of(DGPU) == "nvidia"
+    assert fake_host.driver_of(DGPU_AUDIO) == "snd_hda_intel"
+    assert "card returned to the host" in fake_host.log.read_text()
+
+
+def test_hook_release_touches_nothing_after_a_refused_handover(fake_host):
+    """libvirt calls release/end even for a guest prepare/begin turned away.
+
+    The card never left nvidia in that case, so there is nothing to unbind and
+    nothing to probe -- and drivers_probe is not a file to write on a hunch.
+    """
+    (fake_host.state / "regrab").touch()
+    assert fake_host.run().returncode == 1
+    fake_host.trace.write_text("")
+
+    assert fake_host.run(op="release", subop="end").returncode == 0
+    assert not [step for step in fake_host.steps if step.startswith("write ")]
+    assert fake_host.driver_of(DGPU) == "nvidia"
+
+
+def test_hook_leaves_a_guest_that_wants_no_gpu_alone(fake_host):
+    out = fake_host.run(xml=DECOY_DOMAIN)
+
+    assert out.returncode == 0
+    assert fake_host.steps == []
+    assert fake_host.driver_of(DGPU) == "nvidia"
+    assert fake_host.override(DGPU) == ""
+
+
 def test_nvidia_laptop_requires_driver(monkeypatch):
     monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
     monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: False)
