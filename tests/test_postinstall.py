@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1258,6 +1259,16 @@ class FakeHost:
         self.trace = self.state / "trace"
         self.log = root / "vfio-hook.log"
 
+        # The card's character devices and the processes that may hold them.
+        # Faked like /sys above, and for the same reason: the wait before the
+        # unload has to be exercised without the machine's own processes.
+        self.dev = root / "dev"
+        self.proc = root / "proc"
+        self.dev.mkdir()
+        self.proc.mkdir()
+        for node in ("nvidia0", "nvidiactl"):
+            (self.dev / node).write_text("")
+
         self.state.mkdir(parents=True)
         self.bin.mkdir(parents=True)
         self.trace.write_text("")
@@ -1298,7 +1309,15 @@ class FakeHost:
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "unbind").touch()
 
-    def run(self, op="prepare", subop="begin", xml=CLAIMING_DOMAIN):
+    def hold(self, pid, comm="nvidia-smi", node="nvidia0"):
+        """A process with an nvidia node open. Returns the fd to close later."""
+        fd = self.proc / str(pid) / "fd"
+        fd.mkdir(parents=True)
+        (self.proc / str(pid) / "comm").write_text(f"{comm}\n")
+        (fd / "3").symlink_to(self.dev / node)
+        return fd / "3"
+
+    def run(self, op="prepare", subop="begin", xml=CLAIMING_DOMAIN, env=None):
         return subprocess.run(
             ["bash", str(vfio.HOOK_ASSET), "win11", op, subop, "-"],
             input=xml,
@@ -1311,6 +1330,13 @@ class FakeHost:
                 "SYSFS_PCI": str(self.sysfs),
                 "TRACE": str(self.trace),
                 "STATE": str(self.state),
+                "PROC_FS": str(self.proc),
+                "VFIO_CARD_NODES": f"{self.dev}/nvidia[0-9]* {self.dev}/nvidiactl",
+                # Short enough to keep the suite quick; the code path is the
+                # same one that waits 15 s on the machine.
+                "VFIO_SETTLE_SECS": "1",
+                "VFIO_SETTLE_POLL": "0.05",
+                **(env or {}),
             },
         )
 
@@ -1350,6 +1376,75 @@ def test_hook_writes_the_override_before_unloading_nvidia(fake_host):
 
     # And no write to the PCI driver core happened before the unload at all.
     assert not [step for step in fake_host.steps[:unload] if step.startswith("write ")]
+
+
+def test_hook_refuses_while_something_still_holds_the_card(fake_host):
+    """The unload is a dice roll unless the card is waited for first.
+
+    Measured 2026-08-04: waybar's gputemp module called nvidia-smi once a
+    second, and any call *born* during modprobe -r took the card -- two starts
+    in a row were refused. Rather than let modprobe -r fail, the hook waits;
+    and when the holder will not go, it refuses without touching anything.
+    """
+    fake_host.hold(4242, "nvidia-smi")
+
+    out = fake_host.run()
+
+    assert out.returncode == 1
+    assert "still open" in out.stderr
+    log = fake_host.log.read_text()
+    assert "nvidia-smi(4242)" in log
+    assert "still held after" in log
+    # Nothing was unloaded, nothing was written to the PCI driver core, and the
+    # override is gone: the host is exactly as it was found.
+    assert not [step for step in fake_host.steps if step.startswith("write ")]
+    assert not [step for step in fake_host.steps if step.startswith("modprobe -r")]
+    assert fake_host.override(DGPU) == ""
+    assert fake_host.driver_of(DGPU) == "nvidia"
+
+
+def test_hook_goes_on_once_the_holder_lets_go(fake_host):
+    """The wait is what closes the race, so it has to end when the card frees.
+
+    Waiting *before* driver_override is written would prove nothing -- the
+    poller comes back a moment later. After it, the PCI core binds nothing but
+    vfio-pci and the poller stops spawning, so "nobody holds it" stays true.
+    """
+    fd = fake_host.hold(4242, "nvidia-smi")
+    releaser = threading.Timer(0.2, fd.unlink)
+    releaser.start()
+    try:
+        out = fake_host.run(env={"VFIO_SETTLE_SECS": "20"})
+    finally:
+        releaser.cancel()
+
+    assert out.returncode == 0
+    log = fake_host.log.read_text()
+    assert "waiting up to" in log
+    assert "card released after" in log
+    assert fake_host.driver_of(DGPU) == "vfio-pci"
+
+
+def test_hook_does_not_wait_for_a_holder_it_could_never_outlast(fake_host):
+    """nvidia-powerd runs as root and unload_nvidia stops it a moment later.
+
+    Waiting for a process only this script can end would never finish, so
+    root's holders are not counted. The fake /proc belongs to the user running
+    the tests, so the uid to ignore is set to theirs -- on the machine it is 0.
+    """
+    fake_host.hold(999, "nvidia-powerd")
+
+    out = fake_host.run(env={"VFIO_HOLDER_IGNORE_UID": str(os.getuid())})
+
+    assert out.returncode == 0
+    assert "waiting up to" not in fake_host.log.read_text()
+    assert fake_host.driver_of(DGPU) == "vfio-pci"
+
+
+def test_hook_costs_nothing_when_the_card_is_free(fake_host):
+    """The usual case: no holder, no sleep, no line in the log."""
+    assert fake_host.run().returncode == 0
+    assert "waiting up to" not in fake_host.log.read_text()
 
 
 def test_hook_hands_both_functions_to_vfio_pci(fake_host):

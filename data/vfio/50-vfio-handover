@@ -18,7 +18,9 @@
 #   wanted here: better no VM than a guest booting against a card the host
 #   still drives.
 # * Hooks run synchronously -- libvirt waits, so every sleep and timeout below
-#   is added to the guest's start time. Worst case here is ~40 s.
+#   is added to the guest's start time. Worst case here is ~55 s; the usual
+#   case is ~1 s, because the one wait that could be long (wait_for_release)
+#   returns immediately when nothing holds the card.
 # * On a non-zero exit libvirt logs the return code *and* this script's stderr.
 #   That is why failures go to stderr as well as to the log file: someone whose
 #   VM refused to start reads libvirtd's log, not a file they never heard of.
@@ -87,6 +89,26 @@ set -uo pipefail
 # test suite -- the order is the part of this script that cannot be checked by
 # reading it, and the real /sys costs a reboot to get wrong.
 : "${SYSFS_PCI:=/sys/bus/pci}"
+: "${PROC_FS:=/proc}"
+
+# How long prepare/begin may wait, once the card is claimed, for the last
+# process holding an nvidia node to let go -- and how often it looks. Why the
+# wait exists and why it sits exactly where it does: see wait_for_release().
+# With nothing holding the card it costs one scan of PROC_FS and no sleep.
+: "${VFIO_SETTLE_SECS:=15}"
+: "${VFIO_SETTLE_POLL:=0.25}"
+
+# The character devices whose open fds keep the modules above loaded. The DRM
+# node is deliberately not among them: a compositor holding /dev/dri/cardN does
+# not let go by itself, so waiting for it would add VFIO_SETTLE_SECS to a
+# handover that fails either way. Keeping the session away from that node is a
+# udev job (archsetup task: vfio-dgpu-seat), not this script's.
+: "${VFIO_CARD_NODES:=/dev/nvidia[0-9]* /dev/nvidiactl /dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools}"
+
+# Holders owned by this uid are not waited for: nvidia-powerd runs as root and
+# unload_nvidia stops it itself a moment later, so waiting for a process only
+# this script can end would never finish.
+: "${VFIO_HOLDER_IGNORE_UID:=0}"
 
 # Verification mode (see below) has to be runnable by the user who defined the
 # domain, and /var/log is not theirs to write.
@@ -297,6 +319,73 @@ unload_blame() {
     log "  holders: $(fuser -v /dev/nvidia* 2>&1 | tr '\n' ' ')"
 }
 
+# "comm(pid)" for every process holding one of VFIO_CARD_NODES, minus root's
+# and this script's own. Written without a fork per process on purpose: it runs
+# every VFIO_SETTLE_POLL over the whole of PROC_FS. `-ef` compares device and
+# inode through the /proc/<pid>/fd symlink, so no readlink is needed, and the
+# comm is read with the shell's own redirection. Only a process that turns out
+# to hold a node costs a stat, and there is normally none.
+card_holders() {
+    local fd node pid comm uid seen=" " out=""
+    for fd in "$PROC_FS"/[0-9]*/fd/*; do
+        pid=${fd#"$PROC_FS"/}
+        pid=${pid%%/*}
+        [ "$pid" = "$$" ] && continue
+        case $seen in *" $pid "*) continue ;; esac
+        for node in $VFIO_CARD_NODES; do
+            [ "$fd" -ef "$node" ] || continue
+            seen="$seen$pid "
+            # A process that exited mid-scan is not a holder any more; treat an
+            # unreadable owner as "nothing to wait for" rather than waiting the
+            # full VFIO_SETTLE_SECS for a pid that is already gone.
+            uid=$(stat -c %u "$PROC_FS/$pid" 2>/dev/null) \
+                || uid=$VFIO_HOLDER_IGNORE_UID
+            if [ "$uid" != "$VFIO_HOLDER_IGNORE_UID" ]; then
+                comm=""
+                [ -r "$PROC_FS/$pid/comm" ] && read -r comm < "$PROC_FS/$pid/comm"
+                out="${out:+$out }${comm:-?}($pid)"
+            fi
+            break
+        done
+    done
+    printf '%s' "$out"
+}
+
+# Between claiming the card and unloading the driver: give whatever still has
+# an nvidia node open a bounded chance to close it.
+#
+# WHY IT EXISTS. A short-lived process that opens /dev/nvidia0 makes the unload
+# below fail with "FATAL: Module nvidia is in use". On this machine it was
+# waybar's gputemp module calling nvidia-smi once a second, and the handover
+# was a dice roll: on 2026-08-04 two starts in a row were refused, both blaming
+# nvidia-smi, and freezing waybar with kill -STOP made the next one succeed
+# first try. The fragile window is not an instant but the whole of modprobe -r:
+# any call *born* while it runs grabs the card. Which program it is, is beside
+# the point -- anything on the host that opens the node does the same, and a
+# hook that only looks at the refcount it happens to see stays probabilistic.
+#
+# WHY HERE AND NOWHERE ELSE. Waiting before driver_override is written proves
+# nothing: a poller is free to come back a moment later, and one did -- a caller
+# that settled first saw a clean card and the hook found nvidia-smi on it two
+# seconds after. Once the override is set, the PCI core will bind nothing but
+# vfio-pci, and a poller that reads the override before it spawns (dotfiles'
+# gputemp does since 2026-08-04) stops spawning at all. That makes this the one
+# point where "nobody holds the card" stays true long enough to act on.
+wait_for_release() {
+    local held
+    held=$(card_holders)
+    [ -n "$held" ] || return 0
+    log "waiting up to ${VFIO_SETTLE_SECS}s for the card: $held"
+    SECONDS=0
+    while [ "$SECONDS" -lt "$VFIO_SETTLE_SECS" ]; do
+        sleep "$VFIO_SETTLE_POLL"
+        held=$(card_holders)
+        [ -n "$held" ] || { log "card released after ${SECONDS}s"; return 0; }
+    done
+    log "FAIL: still held after ${VFIO_SETTLE_SECS}s: $held"
+    return 1
+}
+
 # The gate the whole script rests on. Returns non-zero -- and logs who is to
 # blame -- rather than letting the caller near the PCI driver core.
 unload_nvidia() {
@@ -422,9 +511,14 @@ prepare/begin)
         clear_override
         die "cannot claim the devices for vfio-pci"
     fi
-    # Both failures below put the host back the way we found it before
+    # Every failure below puts the host back the way we found it before
     # refusing: the desktop should not lose PRIME offload -- or the card
     # altogether, via a leftover override -- because a VM failed to start.
+    if ! wait_for_release; then
+        clear_override
+        reload_nvidia
+        die "the dGPU is still open -- close whatever holds /dev/nvidia0 and retry"
+    fi
     if ! unload_nvidia; then
         clear_override
         reload_nvidia
