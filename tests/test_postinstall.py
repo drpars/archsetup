@@ -612,6 +612,7 @@ def hook_paths(tmp_path, monkeypatch, fake_write, runlog):
     conf = tmp_path / "hooks" / "vfio.conf"
     monkeypatch.setattr(vfio, "HOOK_DIR", hook.parent)
     monkeypatch.setattr(vfio, "HOOK", hook)
+    monkeypatch.setattr(vfio, "HOOK_BACKUP", hook.parent.parent / (hook.name + ".bak"))
     monkeypatch.setattr(vfio, "VFIO_CONF", conf)
     monkeypatch.setattr(vfio.pacman, "is_installed", lambda name: True)
     monkeypatch.setattr(vfio, "run", runlog)
@@ -652,6 +653,30 @@ def test_vfio_hook_writes_devices_read_off_the_machine(pci_sysfs, hook_paths):
         "try-restart",
         "libvirtd.service",
     ] in hook_paths.calls
+
+
+def test_vfio_hook_backup_lands_outside_the_dropin_directory(pci_sysfs, hook_paths):
+    """A sibling .bak would be a second hook, and the older one at that.
+
+    libvirt runs every executable file in qemu.d/ "with any name", and the copy
+    is taken with `cp`, execute bit included. On 2026-08-04 the version being
+    replaced was the one that wedges the machine, so the backup would have
+    re-run it on every VM start.
+    """
+    pci_sysfs(
+        DGPU_GROUP,
+        {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]},
+    )
+    assert vfio.install_handover_hook() == 0
+    hook_paths.hook.write_text("# an older hook someone is replacing\n")
+    hook_paths.calls.clear()
+
+    assert vfio.install_handover_hook() == 0
+
+    copies = [call for call in hook_paths.calls if call[:2] == ["sudo", "cp"]]
+    assert len(copies) == 1
+    assert Path(copies[0][2]) == hook_paths.hook
+    assert Path(copies[0][3]).parent != hook_paths.hook.parent
 
 
 def test_vfio_hook_is_idempotent_and_skips_the_restart(pci_sysfs, hook_paths):

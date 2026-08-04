@@ -64,6 +64,11 @@ PCI_DEVICES = Path("/sys/bus/pci/devices")
 HOOK_NAME = "50-vfio-handover"
 HOOK_DIR = Path("/etc/libvirt/hooks/qemu.d")
 HOOK = HOOK_DIR / HOOK_NAME
+# One level up, out of the drop-in directory: libvirt runs every executable
+# file in qemu.d/ whatever it is called, so a sibling .bak is a second hook --
+# and the copy being replaced is, by definition, the older behaviour. Nothing
+# reads /etc/libvirt/hooks/ itself; libvirt wants the exact name "qemu" there.
+HOOK_BACKUP = HOOK_DIR.parent / (HOOK_NAME + ".bak")
 HOOK_ASSET = paths.DATA_DIR / "vfio" / HOOK_NAME
 VFIO_CONF = Path("/etc/libvirt/hooks/vfio.conf")
 
@@ -240,7 +245,7 @@ def install_handover_hook() -> int:
 
     rc = run(["sudo", "mkdir", "-p", str(HOOK_DIR)])
     hook_rc, hook_changed = sysedit.write_with_backup(
-        HOOK, HOOK_ASSET.read_text(encoding="utf-8")
+        HOOK, HOOK_ASSET.read_text(encoding="utf-8"), backup=HOOK_BACKUP
     )
     rc |= hook_rc
     # libvirt silently skips a hook without the execute bit -- no error, no log
