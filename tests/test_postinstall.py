@@ -716,6 +716,151 @@ def test_vfio_hook_refuses_a_shared_iommu_group(pci_sysfs, hook_paths):
     assert not hook_paths.hook.exists()
 
 
+# --- taking the discrete card off the seat -----------------------------------
+
+
+@pytest.fixture
+def seat_paths(tmp_path, monkeypatch, fake_write, runlog):
+    rules = tmp_path / "72-vfio-dgpu-no-uaccess.rules"
+    monkeypatch.setattr(vfio, "DGPU_SEAT_RULES", rules)
+    monkeypatch.setattr(vfio, "run", runlog)
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    return SimpleNamespace(rules=rules, calls=runlog.calls)
+
+
+@pytest.fixture
+def fake_tags(monkeypatch):
+    """What udev says each card carries right now."""
+
+    def build(tags):
+        monkeypatch.setattr(vfio, "current_tags", lambda card: tags.get(card))
+
+    return build
+
+
+HYBRID_CARDS = [
+    ("card1", "0x10de", "0000:01:00.0"),
+    ("card2", "0x1002", "0000:05:00.0"),
+]
+
+
+def test_vfio_seat_rule_file_name_is_ordered_and_read_by_udev():
+    """Both halves of the name were measured, and both fail silently.
+
+    71-seat.rules adds the tags this rule removes and 73-seat-late.rules turns
+    uaccess into an ACL, so a name outside that window is read at the wrong
+    time; and udev reads only *.rules, so a first attempt named ".rule" was
+    ignored for a whole boot -- indistinguishable from a rule that does not
+    work.
+    """
+    name = vfio.DGPU_SEAT_RULES.name
+    assert name.endswith(".rules")
+    assert 70 < int(name.split("-")[0]) < 73
+
+
+def test_vfio_seat_rule_written_for_the_discrete_card(
+    pci_sysfs, drm_sysfs, seat_paths, fake_tags
+):
+    pci_sysfs(DGPU_GROUP, {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]})
+    drm_sysfs(HYBRID_CARDS)
+    fake_tags(
+        {
+            "card1": ["switcheroo-discrete-gpu"],
+            "card2": ["seat", "master-of-seat", "uaccess"],
+        }
+    )
+
+    assert vfio.install_dgpu_seat_rule() == 0
+
+    # The directives only: the comment above them names the nodes and tags the
+    # rule must leave alone, which a search over the whole file would match.
+    rule = "\n".join(
+        line
+        for line in seat_paths.rules.read_text().splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    assert 'KERNELS=="0000:01:00.0"' in rule
+    # The card that keeps the seat alive must not appear anywhere in it.
+    assert "0000:05:00.0" not in rule
+    # uaccess alone was measured to be not enough: logind opens a seat device
+    # as root and hands the fd over regardless of the ACL.
+    for tag in ("uaccess", "seat", "master-of-seat"):
+        assert f'TAG-="{tag}"' in rule
+    # card* only. The render node has to stay 0666 or PRIME offload goes with
+    # it, and switcheroo-discrete-gpu is not ours to drop.
+    assert 'KERNEL=="card*"' in rule
+    assert "renderD" not in rule
+    assert "switcheroo" not in rule
+
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in seat_paths.calls
+
+
+def test_vfio_seat_rule_refuses_to_leave_the_seat_without_a_card(
+    pci_sysfs, drm_sysfs, seat_paths
+):
+    """A machine with one GPU has no card left to carry master-of-seat.
+
+    Writing the rule there takes seat0 away and with it the graphical login --
+    the same structural refusal the symlink task gives.
+    """
+    pci_sysfs(
+        {"0000:01:00.0": ("0x10de", "0x030000", 13)}, {13: ["0000:01:00.0"]}
+    )
+    drm_sysfs([("card1", "0x10de", "0000:01:00.0")])
+
+    assert vfio.install_dgpu_seat_rule() == 1
+    assert not seat_paths.rules.exists()
+
+
+def test_vfio_seat_rule_writes_while_the_card_is_on_vfio_pci(
+    pci_sysfs, drm_sysfs, seat_paths, fake_tags
+):
+    """The address comes from the PCI class, which a handover does not change.
+
+    Read off /sys/class/drm instead, this task could not run at all while a
+    guest owns the card -- there is no DRM node then. The task says so rather
+    than claiming an effect it cannot see.
+    """
+    pci_sysfs(DGPU_GROUP, {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]})
+    drm_sysfs([("card2", "0x1002", "0000:05:00.0")])
+    fake_tags({"card2": ["seat", "master-of-seat", "uaccess"]})
+
+    assert vfio.install_dgpu_seat_rule() == 0
+    assert 'KERNELS=="0000:01:00.0"' in seat_paths.rules.read_text()
+
+
+def test_vfio_seat_rule_does_not_claim_an_effect_it_cannot_see(
+    pci_sysfs, drm_sysfs, seat_paths, fake_tags, capsys
+):
+    """Tags still on the node after the trigger mean the rule is not applying."""
+    pci_sysfs(DGPU_GROUP, {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]})
+    drm_sysfs(HYBRID_CARDS)
+    fake_tags(
+        {
+            "card1": ["seat", "master-of-seat", "uaccess"],
+            "card2": ["seat", "master-of-seat", "uaccess"],
+        }
+    )
+
+    assert vfio.install_dgpu_seat_rule() != 0
+    expected = i18n.t(
+        "vfio.seat_pending", card="card1", tags="seat master-of-seat uaccess"
+    )
+    assert expected in capsys.readouterr().out
+
+
+def test_vfio_seat_rule_reports_a_seat_that_lost_its_master(
+    pci_sysfs, drm_sysfs, seat_paths, fake_tags
+):
+    """seat0 losing master-of-seat costs a login screen -- it cannot pass."""
+    pci_sysfs(DGPU_GROUP, {13: ["0000:01:00.0", "0000:01:00.1"], 20: ["0000:05:00.0"]})
+    drm_sysfs(HYBRID_CARDS)
+    fake_tags({"card1": ["switcheroo-discrete-gpu"], "card2": ["seat"]})
+
+    assert vfio.install_dgpu_seat_rule() != 0
+
+
 # libvirt's own commented sample, copied verbatim from /etc/libvirt/qemu.conf.
 # Uncommenting *this* is the point: naming the key replaces libvirt's built-in
 # list, so a list written from memory would quietly take /dev/null and friends

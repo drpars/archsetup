@@ -230,6 +230,12 @@ TASKS: tuple[Task, ...] = (
         group="virt",
     ),
     Task(
+        "vfio-dgpu-seat",
+        "task.vfio_dgpu_seat",
+        vfio.install_dgpu_seat_rule,
+        group="virt",
+    ),
+    Task(
         "vfio-handover-hook",
         "task.vfio_handover_hook",
         vfio.install_handover_hook,

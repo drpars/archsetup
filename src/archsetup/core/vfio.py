@@ -2,7 +2,7 @@
 hook that hands the other one over, and the one host-side holder that hook
 cannot talk its way past.
 
-Three tasks live here, and they are separate on purpose: the symlink is useful
+Four tasks live here, and they are separate on purpose: the symlink is useful
 on its own (it is what pins the compositor), while the hook is only safe once
 nothing on the host still holds the discrete card.
 
@@ -29,6 +29,24 @@ This task writes only the rule. The compositor half -- AQ_DRM_DEVICES plus the
 EGL/GLX/Vulkan ICD variables that must accompany it -- belongs to the user's
 session and lives in dotfiles; the rule alone changes nothing, which is why
 the task says so when it finishes.
+
+**install_dgpu_seat_rule** -- the other half of pinning the compositor, and the
+one that makes a handover repeatable.
+
+AQ_DRM_DEVICES is read once, when the compositor starts. Everything that
+happens afterwards escapes it: when the hook gives the card back it reloads
+nvidia_drm, the DRM node is born again as a hotplug event, and the compositor
+opens it without ever consulting the filter. nvidia_drm then sits at refcnt=1
+and the next handover fails -- so, before this rule, the step that returns the
+card was also the step that limited the machine to one handover per boot. A
+*failed* handover does it too, since the hook's undo path reloads the module
+as well: one bad attempt poisoned every attempt until the next reboot.
+
+The rule takes the discrete card's DRM node out of logind's seat inventory, so
+nothing hands the session an fd for it in the first place. What must not be
+touched is as important as what is: the render node stays 0666 (PRIME offload
+goes through it), and the integrated card keeps master-of-seat, which is what
+keeps seat0 alive. The task refuses where there is no second card to carry it.
 
 **install_handover_hook** -- the libvirt drop-in that moves the discrete card
 to vfio-pci while a guest runs.
@@ -86,6 +104,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from pathlib import Path
 
 from .. import paths
@@ -96,6 +115,19 @@ t = i18n.t
 
 DRM_CLASS = Path("/sys/class/drm")
 UDEV_RULES = Path("/etc/udev/rules.d/70-vfio-igpu.rules")
+
+# The number is not decoration. /usr/lib/udev/rules.d/71-seat.rules adds the
+# seat tags this file removes, and 73-seat-late.rules turns "uaccess" into an
+# ACL; a rule outside 71..73 is read too early or too late and does nothing at
+# all. The suffix matters just as much: udev reads only *.rules, and a first
+# attempt named ".rule" was silently ignored for a whole boot -- from the
+# outside, indistinguishable from a rule that does not work.
+DGPU_SEAT_RULES = Path("/etc/udev/rules.d/72-vfio-dgpu-no-uaccess.rules")
+
+# What logind reads off a DRM node to decide it belongs to a seat, plus the
+# uaccess tag that becomes the session ACL.
+SEAT_TAGS = ("seat", "master-of-seat")
+UACCESS_TAG = "uaccess"
 
 PCI_DEVICES = Path("/sys/bus/pci/devices")
 HOOK_NAME = "50-vfio-handover"
@@ -225,6 +257,151 @@ def install_udev_rule() -> int:
         rc |= 1
 
     print(t("vfio.next_step", link=DEV_LINK))
+    return rc
+
+
+DGPU_SEAT_TEMPLATE = """\
+# Written by archsetup (task: vfio-dgpu-seat). Keeps the discrete GPU's KMS
+# node out of the session's hands, so a running compositor can never grab it.
+#
+# WHY: AQ_DRM_DEVICES filters GPUs only when the compositor *starts*. The node
+# that appears when the handover hook reloads nvidia_drm arrives as a hotplug
+# event, and the filter is not re-applied to it -- the compositor opens it,
+# nvidia_drm sticks at refcnt=1, and the NEXT handover fails. So the step that
+# gives the card back is what limits handovers to one per boot, and a failed
+# handover does the same, because the hook's undo path reloads nvidia_drm too.
+#
+# HOW -- and why dropping "uaccess" alone is NOT enough (measured 2026-08-04):
+# 71-seat.rules tags every drm card* with "seat" and "master-of-seat", so
+# logind treats the node as a seat device. It opens it AS ROOT, hands the fd to
+# the session over TakeDevice, and re-applies the uaccess ACL itself. With only
+# TAG-="uaccess" the node came up root:root with group::--- and the compositor
+# still held two fds on it -- proof it never opened the node itself. Dropping
+# the seat tags is what takes the device out of logind's inventory; the mode
+# below is defence in depth against a direct open.
+#
+# COST: none that was not already accepted -- the host does not drive a display
+# on this card. seat0 survives, because the integrated GPU's card node keeps
+# master-of-seat. Render offload is untouched: it goes through
+# /dev/dri/renderD*, which this rule does not match, and the
+# switcheroo-discrete-gpu tag is left in place.
+#
+# ESCAPE HATCH: if the session will not start, delete this file from a plain VT
+# (Ctrl+Alt+F3), run `udevadm control --reload` and reboot.
+ACTION=="remove", GOTO="vfio_dgpu_end"
+SUBSYSTEM=="drm", KERNEL=="card*", KERNELS=="{slot}", \\
+    TAG-="uaccess", TAG-="seat", TAG-="master-of-seat", \\
+    GROUP="root", MODE="0660"
+LABEL="vfio_dgpu_end"
+"""
+
+
+def dgpu_seat_rule_content(slot: str) -> str:
+    return DGPU_SEAT_TEMPLATE.format(slot=slot)
+
+
+def card_named(slot: str) -> str | None:
+    """The DRM card node of a PCI device, if it has one at this moment.
+
+    The discrete card has none while a guest owns it, which is a normal state
+    rather than a failure -- and the reason the rule's address comes from the
+    PCI class instead of here.
+    """
+    for name, _, card_slot in cards():
+        if card_slot == slot:
+            return name
+    return None
+
+
+def current_tags(card: str) -> list[str] | None:
+    """Tags udev has on a DRM card right now; None if they cannot be read.
+
+    CURRENT_TAGS, not TAGS: the first is what the device carries after the last
+    event, the second includes tags from rules that no longer apply. Only the
+    first can answer "did the rule take".
+    """
+    try:
+        out = subprocess.run(
+            [
+                "udevadm",
+                "info",
+                "--query=property",
+                "--property=CURRENT_TAGS",
+                "--value",
+                f"--path={DRM_CLASS / card}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    # The value is colon-delimited on both ends: ":seat:master-of-seat:".
+    return [tag for tag in out.stdout.strip().split(":") if tag]
+
+
+def install_dgpu_seat_rule() -> int:
+    """Take the discrete GPU's DRM node out of logind's seat inventory."""
+    dgpus = display_devices(NVIDIA_VENDOR)
+    if not dgpus:
+        print(t("vfio.no_dgpu"))
+        return 1
+    if len(dgpus) > 1:
+        print(t("vfio.hook_many_dgpu", devices=" ".join(dgpus)))
+        return 1
+    slot = dgpus[0]
+
+    # Removing the seat tags from the only card that has them would leave the
+    # machine without a seat0 to log into -- the same structural "no" the
+    # symlink task gives a single-GPU machine.
+    amd = [card for card in cards() if card[1] == AMD_VENDOR]
+    if len(amd) != 1:
+        print(t("vfio.seat_no_igpu", count=len(amd)))
+        return 1
+    igpu = amd[0][0]
+
+    print(t("vfio.seat_found", slot=slot))
+    # The default sibling .bak is safe here, unlike in libvirt's hook directory:
+    # udev reads the files ending in ".rules" out of rules.d, and this one ends
+    # in ".bak".
+    rc, changed = sysedit.write_with_backup(
+        DGPU_SEAT_RULES, dgpu_seat_rule_content(slot)
+    )
+    if changed:
+        rc |= run(["sudo", "udevadm", "control", "--reload-rules"])
+        rc |= run(["sudo", "udevadm", "trigger", "--settle", "--subsystem-match=drm"])
+
+    dcard = card_named(slot)
+    if dcard is None:
+        # No KMS node to measure: the card is on vfio-pci, or nvidia_drm is not
+        # loaded. The rule is on disk and applies when the node next appears.
+        print(t("vfio.seat_no_node", path=DGPU_SEAT_RULES))
+    else:
+        tags = current_tags(dcard)
+        if tags is None:
+            print(t("vfio.seat_tags_unknown", card=dcard))
+        elif [tag for tag in (*SEAT_TAGS, UACCESS_TAG) if tag in tags]:
+            # The tags are re-evaluated by the trigger above, so they should be
+            # gone already. Still there means the rule is not being applied --
+            # the file name or the address, not the timing.
+            print(t("vfio.seat_pending", card=dcard, tags=" ".join(tags)))
+            rc |= 1
+        else:
+            print(t("vfio.seat_clean", path=DGPU_SEAT_RULES, card=dcard))
+
+    # The other half of the claim, and the one that costs a login screen if it
+    # is wrong: seat0 still has a card carrying master-of-seat.
+    igpu_tags = current_tags(igpu)
+    if igpu_tags is None:
+        print(t("vfio.seat_tags_unknown", card=igpu))
+    elif SEAT_TAGS[1] in igpu_tags:
+        print(t("vfio.seat_igpu_ok", card=igpu))
+    else:
+        print(t("vfio.seat_igpu_lost", card=igpu, tags=" ".join(igpu_tags)))
+        rc |= 1
+
     return rc
 
 
