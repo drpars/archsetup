@@ -328,8 +328,14 @@ id = "filemanagers"
   [[category.packages]]
   name = "archlinux-xdg-menu"
 
+  # Categories install independently, so picking yazi here gets the file
+  # manager and none of the binaries its config calls out to -- preview,
+  # search and archive handling then fail one by one while the install still
+  # reports success. That list is its own category (yazi_extras); this points
+  # at it, because nothing else in this screen does.
   [[category.packages]]
   name = "yazi"
+  post_msg = "msg.yazi_extras_hint"
 
   [[category.packages]]
   name = "dolphin"
@@ -378,6 +384,14 @@ id = "filemanagers"
   name = "tumbler"
   default = false
 
+# The odd one out on purpose: every other category groups by topic, this one
+# groups by "what yazi needs to work". That is why six of these names appear
+# in a topical category as well (7zip, fd, fzf, jq, ripgrep, zoxide) -- the
+# only duplication in this file. It costs nothing, every install path runs
+# pacman -S --needed, and it is what makes one screen enough for a working
+# yazi. The label says which axis this is; do not rename it back to
+# "extras", none of these packages is a yazi plugin. The plugins are Lua
+# files in dotfiles, and these are the binaries they shell out to.
 [[category]]
 id = "yazi_extras"
 
