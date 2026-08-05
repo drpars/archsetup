@@ -411,6 +411,14 @@ id = "yazi_extras"
   [[category.packages]]
   name = "perl-image-exiftool"
 
+  [[category.packages]]
+  name = "glow"
+  note = { tr = "Markdown önizlemesi (yazi piper eklentisi)", en = "Markdown preview (yazi piper plugin)" }
+
+  [[category.packages]]
+  name = "sshfs"
+  note = { tr = "Uzak dizini SSH ile bağlar (yazi sshfs eklentisi)", en = "Mounts a remote directory over SSH (yazi sshfs plugin)" }
+
 [[category]]
 id = "multimedia"
 
