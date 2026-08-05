@@ -631,6 +631,31 @@ id = "virtualization"
   post_msg = "msg.virtio_win_hint"
   note = { tr = "Windows misafirler için virtio sürücü ISO'su (753 MB)", en = "virtio driver ISO for Windows guests (753 MB)" }
 
+  # Looking Glass used to be a task here, because the packages leave four
+  # things undone: the kvmfr module, its size, /dev/kvmfr0 permissions and
+  # libvirt's device ACL. All four now belong to vfioctl, which owns the whole
+  # passthrough host side, so nothing is left for archsetup to do after pacman
+  # returns -- and by this file's own rule that makes it a catalogue entry, not
+  # a task (same reasoning as virtio-win above).
+  #
+  # Off by default: the client is useless without a guest that has the card,
+  # and the DKMS module builds a kernel module on every kernel update. That
+  # build needs the headers for the running kernel, which no package pulls in
+  # (linux-g14-headers here) -- a DKMS package installs happily without them
+  # and fails silently. Same accepted gap as acpi_call-dkms.
+  [[category.packages]]
+  name = "looking-glass"
+  aur = true
+  default = false
+  post_msg = "msg.looking_glass_hint"
+  note = { tr = "Misafirin ekranını düşük gecikmeyle gösteren istemci", en = "Client showing the guest's screen with low latency" }
+
+  [[category.packages]]
+  name = "looking-glass-module-dkms"
+  aur = true
+  default = false
+  note = { tr = "kvmfr çekirdek modülü (DKMS; çekirdek başlıkları gerekir)", en = "kvmfr kernel module (DKMS; needs the kernel headers)" }
+
   # bridge-utils is gone from the repos: brctl was superseded by iproute2 and
   # libvirt manages bridges over netlink. Listing it aborted the whole
   # virtualization install with "target not found".
