@@ -621,6 +621,18 @@ id = "virtualization"
   [[category.packages]]
   name = "swtpm"
 
+  # xorriso ships in libisoburn, and nothing here depended on it directly:
+  # measured 2026-08-05, the only chain was virt-manager -> virt-install ->
+  # libisoburn. That leaves ISO authoring riding on a GUI staying selected,
+  # and virt-manager is exactly what someone driving virsh from a terminal
+  # deselects. The break would show up late and in the wrong place -- machine
+  # installed, host configured, and the first guest build stopping at
+  # "'xorriso' bulunamadi". 2 MiB installed, so the entry is cheaper than the
+  # question of whether the chain still holds.
+  [[category.packages]]
+  name = "libisoburn"
+  note = { tr = "xorriso — misafir için ISO üretir (gözetimsiz kurulum)", en = "xorriso -- authors ISOs for guests (unattended install)" }
+
   [[category.packages]]
   name = "virtiofsd"
   note = { tr = "Host ↔ misafir klasör paylaşımı", en = "Host to guest folder sharing" }
@@ -673,3 +685,75 @@ id = "virtualization"
   # bridge-utils is gone from the repos: brctl was superseded by iproute2 and
   # libvirt manages bridges over netlink. Listing it aborted the whole
   # virtualization install with "target not found".
+
+# The second category on the requirement axis, same shape as yazi_extras: not
+# a topic but "what a working GPU passthrough needs". Every name here also
+# lives in `virtualization` above, and that duplication is the point -- the
+# set was already installable there, spread across fourteen entries with the
+# three that matter most arriving switched off. Whoever wants passthrough had
+# to know the names before the catalogue would show them.
+#
+# Why a category and not a sentence in a note: a sentence listing package
+# names goes stale silently, a category whose membership *is* the list cannot.
+# Same reason yazi's post_msg points at a category instead of naming binaries.
+#
+# Why everything defaults on here while the same entries default off above:
+# the axis decides. In `virtualization` they are options a general VM user
+# mostly does not want (753 MiB of Windows drivers, a client with no card to
+# show). On this screen they are requirements, and the user opened it after
+# deciding on passthrough. The costs stay visible in each note, and anything
+# can still be deselected -- what is gone is having to find them first.
+#
+# What is deliberately absent: virt-manager and virt-viewer. vfioctl drives
+# virsh, so the GUI is convenience here, not a requirement; listing it would
+# reintroduce exactly the dependency this file just unwound (see libisoburn).
+#
+# archsetup's half ends with pacman. The kvmfr module and its size,
+# /dev/kvmfr0 permissions, libvirt's device ACL, the handover hook, the vfio
+# binding -- all of that is vfioctl's, and the note below is where that split
+# is finally written on a surface a user can read, rather than only in code
+# comments and a post_msg.
+[[category]]
+id = "passthrough"
+note = { tr = "Paketler burada biter; gerisi vfioctl'de → github.com/drpars/vfioctl", en = "Packages end here; the rest is vfioctl's -> github.com/drpars/vfioctl" }
+
+  [[category.packages]]
+  name = "libvirt"
+
+  [[category.packages]]
+  name = "iptables"
+
+  [[category.packages]]
+  name = "dnsmasq"
+
+  [[category.packages]]
+  name = "qemu-desktop"
+
+  [[category.packages]]
+  name = "edk2-ovmf"
+  note = { tr = "UEFI misafirler için OVMF ürün yazılımı", en = "OVMF firmware for UEFI guests" }
+
+  [[category.packages]]
+  name = "swtpm"
+  note = { tr = "TPM 2.0 — Windows 11 misafiri olmadan kurulmuyor", en = "TPM 2.0 -- a Windows 11 guest will not install without it" }
+
+  [[category.packages]]
+  name = "libisoburn"
+  note = { tr = "xorriso — misafir için ISO üretir (gözetimsiz kurulum)", en = "xorriso -- authors ISOs for guests (unattended install)" }
+
+  [[category.packages]]
+  name = "virtio-win"
+  aur = true
+  post_msg = "msg.virtio_win_hint"
+  note = { tr = "Windows misafirler için virtio sürücü ISO'su (753 MB)", en = "virtio driver ISO for Windows guests (753 MB)" }
+
+  [[category.packages]]
+  name = "looking-glass"
+  aur = true
+  post_msg = "msg.looking_glass_hint"
+  note = { tr = "Misafirin ekranını düşük gecikmeyle gösteren istemci", en = "Client showing the guest's screen with low latency" }
+
+  [[category.packages]]
+  name = "looking-glass-module-dkms"
+  aur = true
+  note = { tr = "kvmfr çekirdek modülü (DKMS; çekirdek başlıkları gerekir)", en = "kvmfr kernel module (DKMS; needs the kernel headers)" }

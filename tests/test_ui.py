@@ -45,7 +45,7 @@ async def test_navigation_and_package_screen():
         app.screen.query_one(OptionList).highlighted = 1  # Uygulamalar
         await pilot.press("enter")
         await pilot.pause()
-        assert len(app.screen._items) == 15
+        assert len(app.screen._items) == 16
         await pilot.press("enter")  # ilk kategori (console)
         await pilot.pause()
         assert isinstance(app.screen, screens.PackageScreen)
@@ -69,6 +69,30 @@ async def test_navigation_and_package_screen():
         await pilot.press("escape", "escape")
         await pilot.pause()
         assert isinstance(app.screen, screens.MainMenuScreen)
+
+
+async def test_category_note_is_readable_before_installing_anything():
+    """The passthrough pointer used to be a post_msg, so it only reached
+    whoever had already found the right entries. It has to be on the menu
+    row and on the list screen, both before pacman runs."""
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 1  # Uygulamalar
+        await pilot.press("enter")
+        await pilot.pause()
+        index = list(app.screen._items).index("passthrough")
+        assert "vfioctl" in app.screen._items["passthrough"].desc
+
+        app.screen.query_one(OptionList).highlighted = index
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, screens.PackageScreen)
+        subtitles = [str(s.render()) for s in app.screen.query(Static)]
+        assert any("vfioctl" in text for text in subtitles)
+        # Requirement axis: the screen opens with the whole set ticked.
+        selection_list = app.screen.query_one(SelectionList)
+        assert len(selection_list.selected) == selection_list.option_count
 
 
 async def test_config_menu_is_submenus_not_a_flat_list():

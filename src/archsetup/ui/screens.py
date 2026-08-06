@@ -121,6 +121,8 @@ class PackageScreen(SelectionCountMixin, Screen):
         yield Static(
             t(f"category.{self._category.id}"), classes="screen-title"
         )
+        if self._category.note:
+            yield Static(self._category.note, classes="screen-subtitle")
         yield Static("", id="count", classes="screen-subtitle")
         selections = [
             Selection(self._prompt(pkg), index, pkg.default)
@@ -286,11 +288,17 @@ class LanguageScreen(Screen):
 def _category_items(filename: str, screen_factory) -> list[MenuItem]:
     items = []
     for category in data.load_categories(filename):
-        desc = ""
+        lines = []
         if category.condition is not None:
             met = hardware.condition_ok(category.condition)
-            desc = t("msg.detected") if met else t("msg.not_detected")
-            desc = f"{category.condition} — {desc}"
+            detected = t("msg.detected") if met else t("msg.not_detected")
+            lines.append(f"{category.condition} — {detected}")
+        # The note goes under the detection line, not instead of it: a
+        # category can have both, and MenuScreen renders the description
+        # as its own dim block.
+        if category.note:
+            lines.append(category.note)
+        desc = "\n".join(lines)
         items.append(
             MenuItem(
                 id=category.id,

@@ -29,6 +29,11 @@ class Category:
     id: str
     packages: tuple[Package, ...]
     condition: str | None = None
+    # One line about the category as a whole, shown in the menu and above the
+    # list -- before anything is installed. post_msg cannot carry this: it
+    # fires after a successful install, so it only reaches whoever already
+    # found the right entries.
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,12 @@ def load_categories(filename: str, section: str = "postinstall") -> list[Categor
             for pkg in cat.get("packages", [])
         )
         categories.append(
-            Category(id=cat["id"], packages=packages, condition=cat.get("condition"))
+            Category(
+                id=cat["id"],
+                packages=packages,
+                condition=cat.get("condition"),
+                note=_note(cat.get("note")),
+            )
         )
     return categories
 

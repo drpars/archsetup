@@ -50,6 +50,22 @@ anındaki tek gerçek savunma. `test_aur_helper_is_never_silenced` ve kaynak
 taraması bunu koruyor — resmi depo `pacman` çağrılarında bayrak serbest,
 yalnızca yardımcıda yasak.
 
+**Bir kategori konu ekseninde olmak zorunda değil, ama ekseni görünür
+olmalı.** Çoğu kategori konuya göre gruplanır; `yazi_extras` ve
+`passthrough` "şu iş için ne gerekir" ekseninde durur ve aynı paketi iki
+kategoride listeler. Yineleme bedava (`pacman -S --needed`) ve kazancı tek
+ekranın çalışan bir sonuç vermesi. İki koşulla: ekseni **etiket** söyler, ve
+gereklilik ekseninde girdiler kapalı gelmez — o ekranı açan kullanıcı kararı
+zaten vermiştir. Bir paket kümesini düz metinle anlatmak (not, README) yerine
+kategori yapmanın sebebi: paket adı sayan cümle sessizce eskir, üyeliği
+listenin kendisi olan kategori eskiyemez.
+
+**Kategoriye ait bir cümle `post_msg` değil `note` ile söylenir.**
+`post_msg` başarılı kurulumdan **sonra** çıkar; yani yönlendirmeyi, doğru
+girdiyi zaten bulmuş olana verir. Kurulumdan önce okunması gereken şey
+(`[[category]]` altındaki `note`) hem menü satırında hem listenin başında
+görünür. Bulunamayan bir şeyi anlatan metin her zaman ikincisidir.
+
 **Ayar mı görev mi: `config.toml`'a yazılan şey ayardır.** Ayarlar menüsü
 (dil, tema) yalnızca aracın kendi davranışını değiştirir ve
 `~/.config/archsetup/config.toml`'da kalır; makineye dokunan her şey

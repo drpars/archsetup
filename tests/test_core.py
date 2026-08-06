@@ -73,6 +73,49 @@ def test_notes_are_localized():
     assert "Archive" in ark.note
 
 
+def test_category_notes_are_localized_and_optional():
+    """A category note is what the menu can show before anything is
+    installed; post_msg only reaches whoever already found the entries."""
+    cats = {c.id: c for c in data.load_categories("apps.toml")}
+    assert cats["console"].note == ""
+    assert "gerisi vfioctl'de" in cats["passthrough"].note
+    i18n.load("en")
+    cats = {c.id: c for c in data.load_categories("apps.toml")}
+    assert "the rest is vfioctl's" in cats["passthrough"].note
+    # The pointer is useless without somewhere to go.
+    assert "github.com/drpars/vfioctl" in cats["passthrough"].note
+
+
+def test_passthrough_category_carries_the_whole_requirement_set():
+    """Guard, not decoration: this is the set vfioctl refuses to start
+    without (virsh, qemu-img, xorriso) plus what a passthrough guest needs
+    to boot and be seen. Losing one of these back into "it comes with
+    something else" is the failure this category exists to prevent, and it
+    surfaces late -- at the first guest build, not at install time."""
+    cats = {c.id: c for c in data.load_categories("apps.toml")}
+    required = {
+        "libvirt", "iptables", "dnsmasq", "qemu-desktop", "edk2-ovmf",
+        "swtpm", "libisoburn", "virtio-win", "looking-glass",
+        "looking-glass-module-dkms",
+    }
+    assert {p.name for p in cats["passthrough"].packages} == required
+    # On the requirement axis nothing arrives switched off: the user opened
+    # this screen having already chosen passthrough. The same names default
+    # to off under `virtualization`, where they are options.
+    assert all(p.default for p in cats["passthrough"].packages)
+    assert cats["passthrough"].note
+
+
+def test_xorriso_does_not_ride_on_virt_manager():
+    """libisoburn was reachable only as virt-manager -> virt-install ->
+    libisoburn. virt-manager is a GUI and deselectable, so the requirement
+    needs an entry of its own -- in the topical category too, not just in
+    the passthrough one."""
+    cats = {c.id: c for c in data.load_categories("apps.toml")}
+    for category in ("virtualization", "passthrough"):
+        assert "libisoburn" in {p.name for p in cats[category].packages}
+
+
 def test_display_managers():
     dms = data.load_display_managers()
     assert [d.id for d in dms] == ["gdm", "sddm", "sddm-git", "lxdm", "lightdm"]
