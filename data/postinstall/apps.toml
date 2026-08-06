@@ -232,9 +232,15 @@ id = "internet"
   # downloads Google's own .deb from dl.google.com and pins it by sha512, so
   # the trust chain runs to upstream rather than to a maintainer's build --
   # the same test that picked rustdesk-bin over rustdesk. What chromium
-  # cannot do is the reason this is here and not there: Arch builds it
-  # without Google's API keys, so signing into an account does not work.
-  # (Not measured here; the account is the user's own reason for it.)
+  # cannot do is the reason this is here and not there, and the reason is
+  # narrower than "no Google bits": Arch's PKGBUILD does bake in a Google
+  # API key (its own, for Arch only) and enables widevine, proprietary
+  # codecs and the hangout services extension. What it leaves out, since
+  # Chromium 89 in March 2021, is the OAuth2 client id and secret -- so
+  # signing into an account does not work out of the box. Arch patches in
+  # --oauth2-client-id= / --oauth2-client-secret= for anyone willing to
+  # register their own credentials with Google; that is the escape hatch,
+  # not a default. Measured against the PKGBUILD on 2026-08-06.
   # Widevine is not a reason either way -- Linux is L3 everywhere, measured
   # 2026-08-02.
   [[category.packages]]
