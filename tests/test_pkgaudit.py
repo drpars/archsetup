@@ -143,6 +143,34 @@ id = "virtualization"
     assert "mesa" not in out  # healthy entries stay out of the way
 
 
+def test_summary_counts_packages_not_entries(tmp_path, capsys):
+    """The same package is listed on two axes on purpose (a topical category
+    and a "what X needs" one). Counting entries made the summary claim more
+    packages than the catalogue has -- one per duplication."""
+    _write(tmp_path, "a.toml", """
+[[category]]
+id = "virtualization"
+  [[category.packages]]
+  name = "mesa"
+  [[category.packages]]
+  name = "mlocate"
+[[category]]
+id = "passthrough"
+  [[category.packages]]
+  name = "mesa"
+  [[category.packages]]
+  name = "mlocate"
+""")
+    findings = pkgaudit.audit(tmp_path)
+    assert len(findings) == 4  # per entry: that is what says where to fix it
+    pkgaudit.report(findings, sync_dir=tmp_path)
+    out = capsys.readouterr().out
+    assert "2 paket" in out
+    assert "1 eskimiş ad" in out  # mlocate twice is still one stale name
+    # ...but both places that carry it are still printed.
+    assert out.count("mlocate") == 2
+
+
 # --- AUR pass ---------------------------------------------------------------
 
 AUR_WORLD = {

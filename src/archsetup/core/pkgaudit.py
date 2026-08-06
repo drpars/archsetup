@@ -240,6 +240,19 @@ def report(findings: list[Finding], sync_dir: Path | None = None,
     def of(*statuses):
         return [f for f in findings if f.status in statuses]
 
+    def names(items) -> int:
+        """Distinct package names, for the summary line only.
+
+        A name may appear in more than one category on purpose: some
+        categories group by topic and some by "what X needs", so the same
+        package is listed on both axes (yazi_extras, passthrough). The
+        detail blocks above print one line per entry, because the category
+        is what tells you where to fix it -- but the summary says "N
+        paket", and counting entries there makes it claim more packages
+        than the catalogue has.
+        """
+        return len({f.name for f in items})
+
     missing = of(MISSING)
     aur_missing = of(AUR_MISSING)
     provided = of(PROVIDED)
@@ -296,15 +309,15 @@ def report(findings: list[Finding], sync_dir: Path | None = None,
     if not aur_entries:
         aur_clause = ""
     elif unchecked:
-        aur_clause = t("pkgaudit.summary_aur_unchecked", count=len(unchecked))
+        aur_clause = t("pkgaudit.summary_aur_unchecked", count=names(unchecked))
     else:
-        aur_clause = t("pkgaudit.summary_aur_checked", count=len(aur_entries))
+        aur_clause = t("pkgaudit.summary_aur_checked", count=names(aur_entries))
 
     print(t(
         "pkgaudit.summary",
-        total=len(findings),
-        missing=len(missing) + len(aur_missing),
-        provided=len(provided),
+        total=names(findings),
+        missing=names(missing + aur_missing),
+        provided=names(provided),
         aur=aur_clause,
     ))
     # Only worth suggesting when --aur was not asked for. After a failed
