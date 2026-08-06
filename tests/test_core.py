@@ -116,6 +116,18 @@ def test_xorriso_does_not_ride_on_virt_manager():
         assert "libisoburn" in {p.name for p in cats[category].packages}
 
 
+def test_webapp_manager_has_a_browser_to_write_exec_lines_for():
+    """webapp-manager depends on no browser, not even optionally, and puts
+    whichever one is chosen into the Exec= line of what it generates. With
+    none in the catalogue it installs fine and produces entries that do
+    nothing when clicked -- which is exactly what happened here, unnoticed
+    until the dead entries were deleted months later."""
+    cats = {c.id: c for c in data.load_categories("apps.toml")}
+    listed = {p.name for cat in cats.values() for p in cat.packages}
+    if "webapp-manager" in listed:
+        assert listed & {"google-chrome", "chromium", "ungoogled-chromium-bin"}
+
+
 def test_display_managers():
     dms = data.load_display_managers()
     assert [d.id for d in dms] == ["gdm", "sddm", "sddm-git", "lxdm", "lightdm"]

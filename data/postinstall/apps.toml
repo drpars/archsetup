@@ -227,6 +227,21 @@ id = "internet"
   name = "zen-browser-bin"
   aur = true
 
+  # Do not "fix" this into extra/chromium. The repo-first rule is about the
+  # AUR surface an entry opens, and this one opens almost none: the PKGBUILD
+  # downloads Google's own .deb from dl.google.com and pins it by sha512, so
+  # the trust chain runs to upstream rather than to a maintainer's build --
+  # the same test that picked rustdesk-bin over rustdesk. What chromium
+  # cannot do is the reason this is here and not there: Arch builds it
+  # without Google's API keys, so signing into an account does not work.
+  # (Not measured here; the account is the user's own reason for it.)
+  # Widevine is not a reason either way -- Linux is L3 everywhere, measured
+  # 2026-08-02.
+  [[category.packages]]
+  name = "google-chrome"
+  aur = true
+  note = { tr = "Chromium ailesi; hesap senkronu için (chromium'da çalışmaz)", en = "Chromium family; for account sync (which chromium cannot do)" }
+
   [[category.packages]]
   name = "uget"
   default = false
@@ -314,8 +329,16 @@ id = "common"
   name = "bleachbit"
   default = false
 
+  # It writes the Exec= line of the .desktop entries it generates from
+  # whichever browser is picked, and declares no browser dependency at all --
+  # not even an optional one. On this machine every entry it had produced
+  # said Exec=chromium with no chromium installed, so they did nothing from
+  # the day they were made; deleting them in 2026-08-05 lost nothing. The
+  # note is what keeps that from happening again on a fresh install, since
+  # categories install independently and the browsers are in another one.
   [[category.packages]]
   name = "webapp-manager"
+  note = { tr = "Web app girdileri üretir; İnternet'ten bir tarayıcı da seçin", en = "Generates web app entries; pick a browser under Internet as well" }
 
   [[category.packages]]
   name = "stacer-bin"
