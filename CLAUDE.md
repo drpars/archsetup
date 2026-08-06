@@ -23,6 +23,16 @@ tek tek çağrılır.
 dosyaya girmez. Kullanıcıya özel şeyler kullanıcının kendi dosyasından
 okunur — örnek: SSH envanteri `~/.ssh/archsetup.toml`.
 
+**gitleaks pre-commit kancası var, ama ayarı klon başına elle yapılır:**
+`git config core.hooksPath .githooks`. Ayar depoya girmiyor, o yüzden
+klonlanmıyor; atlanırsa tarama sessizce devre dışı kalır — ve `core.hooksPath`
+okunduğunda "dolu" görünüp `.githooks/` yokken commit uyarısız geçtiği için
+ayarı tek başına doğrulamak da yetmez. CI bu işi yapmıyor (yalnız test ve paket
+denetimi) ve zaten push'tan **sonra** bakardı; sır için o geç. Yanlış alarm
+satırın **kendisine** `# gitleaks:allow` yazılarak susturulur — üst satıra
+yazmak işe yaramaz (ölçüldü 2026-08-06). `G14_KEY` böyle muaf: asus-linux'un
+açık imzalama anahtarının parmak izi, `generic-api-key` ile eşleşiyor.
+
 **`tr.toml` ve `en.toml` anahtar kümeleri birebir aynı olmak zorunda.**
 `test_locale_files_have_identical_keys` bunu zorluyor. Yeni metin eklerken
 ikisine birden ekleyin.

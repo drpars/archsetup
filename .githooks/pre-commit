@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# gitleaks pre-commit -- staged içerikte sır ararsa commit'i durdurur.
+#
+# Bu depo PUBLIC ve aracın işi tam olarak kişisel kimlik/ağ dosyaları
+# üretmek: ~/.gitconfig.local, ~/.ssh/config.local, allowed_signers, SSH
+# envanteri. Kural bunların depoya hiç girmemesi (CLAUDE.md, "Depo public");
+# üretilen dosya kullanıcının ev dizininde kalır, envanter de oradan okunur
+# (~/.ssh/archsetup.toml). Kancanın işi o kuralı kaza eseri bozmayı
+# engellemek: gerçek bir örneğin test fixture'ı ya da data/ varlığı olarak
+# içeri sızması -- araç yazarın kendi makinesinde geliştiriliyor, kopyalanacak
+# gerçek dosya aynı diskte duruyor.
+#
+# Geçmiş 2026-08-06'da tarandı, sızıntı yok; yani kanca önleyici.
+#
+# Kanca sürümlenir ve klonlanır; onu etkinleştiren ayar klonlanmaz.
+# Klon başına bir kez:
+#     git config core.hooksPath .githooks
+#
+# gitleaks 8.19'da `protect` yerine `git --staged` geldi ama `protect` hâlâ
+# duruyor. Hangi sürümün kurulu olduğu betik yazılırken bilinmiyor, o yüzden
+# alt komut çalışma anında seçiliyor.
+
+set -uo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    printf '\033[1;31mpre-commit: gitleaks kurulu değil, commit durduruldu.\033[0m\n'
+    printf 'Kur:  sudo pacman -S gitleaks\n'
+    printf 'Atla: git commit --no-verify   (yalnızca ne yaptığını biliyorsan)\n'
+    exit 1
+fi
+
+if gitleaks protect --help >/dev/null 2>&1; then
+    gitleaks protect --staged --redact --verbose
+else
+    gitleaks git --staged --redact --verbose .
+fi
+DURUM=$?
+
+if [[ $DURUM -ne 0 ]]; then
+    printf '\n\033[1;31mpre-commit: gitleaks bulgu verdi, commit durduruldu.\033[0m\n'
+    printf 'Yanlış alarmsa .gitleaksignore dosyasına parmak izini ekle.\n'
+    exit 1
+fi
+
+exit 0

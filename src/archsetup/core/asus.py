@@ -25,7 +25,11 @@ t = i18n.t
 
 PACMAN_CONF = Path("/etc/pacman.conf")
 
-G14_KEY = "8F654886F17D497FEFE3DB448B15A6B0E9A3FA35"
+# asus-linux'un AÇIK imzalama anahtarının parmak izi; sunucudan `--recv-keys`
+# ile çekilir. gitleaks `generic-api-key` ile eşliyor, sır değil. Muafiyet
+# işareti satırın kendisinde olmak zorunda -- üst satıra yazılırsa gitleaks
+# görmez ve kanca commit'i durdurur (ölçüldü 2026-08-06).
+G14_KEY = "8F654886F17D497FEFE3DB448B15A6B0E9A3FA35"  # gitleaks:allow
 G14_STANZA = "\n[g14]\nServer = https://arch.asus-linux.org\n"
 
 G14_PACKAGES = ("asusctl", "rog-control-center")
