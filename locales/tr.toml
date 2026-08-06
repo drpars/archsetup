@@ -229,8 +229,10 @@ aur_needs_check = "--aur yalnızca --check-packages ile birlikte kullanılır."
 
 [virt]
 already = "{path} zaten yapılandırılmış."
-libvirt_missing = "libvirt kurulu değil; önce Uygulamalar > Sanallaştırma kategorisinden kurun."
+libvirt_missing = "libvirt kurulu değil; önce Uygulamalar > Sanallaştırma ve GPU Passthrough > Sanallaştırma kategorisinden kurun."
 done = "libvirt yapılandırıldı. Grup üyeliği için oturumu kapatıp açın."
+vfioctl_needs_base_devel = "vfioctl kaynaktan derleniyor ve base-devel kurulu değil. Önce: sudo pacman -S --needed base-devel"
+vfioctl_done = "vfioctl kuruldu. Otomatik güncelleme kanalı yok: AUR'da olmadığı için 'pacman -Syu' onu tazelemez — yeni sürüm için bu görevi yeniden çalıştırın."
 
 [waydroid]
 missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
@@ -397,6 +399,8 @@ wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (120 sn boot gecikmesini keser)"
 virt_config = "Virt-Manager Yapılandırması"
 virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, soket aktivasyonu"
+vfioctl = "vfioctl Kurulumu"
+vfioctl_desc = "GPU passthrough aracı: github.com/drpars/vfioctl klonlanır ve makepkg ile derlenir"
 waydroid_setup = "Waydroid Binder Kurulumu"
 waydroid_setup_desc = "binder_linux modülü (çekirdekte yerleşikse atlanır) + servis"
 ssh_status = "SSH Durumu"
@@ -443,6 +447,14 @@ extras = "Ek Paketler (chroot)"
 amd = "AMD/Radeon Sürücüleri"
 nvidia = "NVIDIA Sürücüleri"
 sound = "Ses Sistemi (PipeWire)"
+
+# Kategori grubu: aynı `group` değerini taşıyan kategoriler tek bir satırın
+# altına iner. Alt başlıklar buradaki adı korur -- örneğin passthrough
+# etiketindeki "Gereken Paketler" eki, hangi eksende olduğunu söyleyen tek
+# yerdir ve üst satırın adı onu tekrar etse bile silinmez.
+[category_group]
+virt = "Sanallaştırma ve GPU Passthrough"
+virt_desc = "Aynı paketler iki eksende: genel sanal makine kullanımı, ve passthrough'un gerektirdikleri"
 
 [inst]
 title = "Arch Linux Kurucusu (Canlı ISO)"

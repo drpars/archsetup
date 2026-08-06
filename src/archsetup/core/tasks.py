@@ -221,6 +221,7 @@ TASKS: tuple[Task, ...] = (
         group="network",
     ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
+    Task("vfioctl", "task.vfioctl", virt.install_vfioctl, group="virt"),
     Task(
         "waydroid-setup",
         "task.waydroid_setup",

@@ -229,8 +229,10 @@ aur_needs_check = "--aur only works together with --check-packages."
 
 [virt]
 already = "{path} already configured."
-libvirt_missing = "libvirt is not installed; install it from Applications > Virtualization first."
+libvirt_missing = "libvirt is not installed; install it from Applications > Virtualization and GPU Passthrough > Virtualization first."
 done = "libvirt configured. Log out and back in for group membership."
+vfioctl_needs_base_devel = "vfioctl is built from source and base-devel is not installed. First: sudo pacman -S --needed base-devel"
+vfioctl_done = "vfioctl installed. There is no automatic update channel: it is not in the AUR, so 'pacman -Syu' will not refresh it -- run this task again for a newer version."
 
 [waydroid]
 missing = "waydroid is not installed; install it from Applications > Common Applications first."
@@ -397,6 +399,8 @@ wait_online_timeout = "Shorten Network Wait"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (cuts the 120 s boot delay)"
 virt_config = "Virt-Manager Configuration"
 virt_config_desc = "libvirt socket/user settings, groups, socket activation"
+vfioctl = "Install vfioctl"
+vfioctl_desc = "The GPU passthrough tool: clones github.com/drpars/vfioctl and builds it with makepkg"
 waydroid_setup = "Waydroid Binder Setup"
 waydroid_setup_desc = "binder_linux module (skipped when built into the kernel) + service"
 ssh_status = "SSH Status"
@@ -443,6 +447,14 @@ extras = "Extra Packages (chroot)"
 amd = "AMD/Radeon Drivers"
 nvidia = "NVIDIA Drivers"
 sound = "Audio System (PipeWire)"
+
+# Category group: categories carrying the same `group` fold under one row.
+# The children keep their own labels -- the "Required Packages" suffix on
+# passthrough is the only place its axis is stated, so it stays even though
+# the parent row repeats the words.
+[category_group]
+virt = "Virtualization and GPU Passthrough"
+virt_desc = "The same packages on two axes: general virtual machine use, and what passthrough requires"
 
 [inst]
 title = "Arch Linux Installer (Live ISO)"

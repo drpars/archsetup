@@ -285,27 +285,80 @@ class LanguageScreen(Screen):
             self.app.pop_screen()
 
 
+def _category_item(category: data.Category, screen_factory) -> MenuItem:
+    lines = []
+    if category.condition is not None:
+        met = hardware.condition_ok(category.condition)
+        detected = t("msg.detected") if met else t("msg.not_detected")
+        lines.append(f"{category.condition} — {detected}")
+    # The note goes under the detection line, not instead of it: a
+    # category can have both, and MenuScreen renders the description
+    # as its own dim block.
+    if category.note:
+        lines.append(category.note)
+    return MenuItem(
+        id=category.id,
+        label=t(f"category.{category.id}"),
+        desc="\n".join(lines),
+        action=lambda screen, cat=category: screen.app.push_screen(
+            screen_factory(cat)
+        ),
+    )
+
+
 def _category_items(filename: str, screen_factory) -> list[MenuItem]:
-    items = []
+    return [
+        _category_item(category, screen_factory)
+        for category in data.load_categories(filename)
+    ]
+
+
+def _grouped_category_items(filename: str, screen_factory) -> list[MenuItem]:
+    """Same list, except categories sharing a `group` fold into one submenu.
+
+    The row this creates is the only surface where the *relation* between two
+    categories can be written. Adjacency cannot say it: `virtualization` and
+    `passthrough` list overlapping packages on purpose, on two different axes,
+    and side by side they read as alternatives instead of one being the
+    requirement subset of the other.
+
+    A group of one is left flat -- a submenu holding a single screen is a
+    keystroke that buys nothing, and that is what deleting a member would
+    otherwise leave behind.
+    """
+    members: dict[str, list[data.Category]] = {}
+    order: list[str | data.Category] = []
     for category in data.load_categories(filename):
-        lines = []
-        if category.condition is not None:
-            met = hardware.condition_ok(category.condition)
-            detected = t("msg.detected") if met else t("msg.not_detected")
-            lines.append(f"{category.condition} — {detected}")
-        # The note goes under the detection line, not instead of it: a
-        # category can have both, and MenuScreen renders the description
-        # as its own dim block.
-        if category.note:
-            lines.append(category.note)
-        desc = "\n".join(lines)
+        if not category.group:
+            order.append(category)
+            continue
+        if category.group not in members:
+            members[category.group] = []
+            order.append(category.group)
+        members[category.group].append(category)
+
+    items: list[MenuItem] = []
+    for entry in order:
+        if isinstance(entry, data.Category):
+            items.append(_category_item(entry, screen_factory))
+            continue
+        group = members[entry]
+        if len(group) == 1:
+            items.append(_category_item(group[0], screen_factory))
+            continue
+        title = t(f"category_group.{entry}")
         items.append(
             MenuItem(
-                id=category.id,
-                label=t(f"category.{category.id}"),
-                desc=desc,
-                action=lambda screen, cat=category: screen.app.push_screen(
-                    screen_factory(cat)
+                id=entry,
+                label=title,
+                desc=t(f"category_group.{entry}_desc"),
+                action=lambda screen, name=title, cats=tuple(group): (
+                    screen.app.push_screen(
+                        MenuScreen(
+                            name,
+                            [_category_item(cat, screen_factory) for cat in cats],
+                        )
+                    )
                 ),
             )
         )
@@ -313,7 +366,10 @@ def _category_items(filename: str, screen_factory) -> list[MenuItem]:
 
 
 def make_apps_menu() -> MenuScreen:
-    return MenuScreen(t("menu.apps.title"), _category_items("apps.toml", PackageScreen))
+    return MenuScreen(
+        t("menu.apps.title"),
+        _grouped_category_items("apps.toml", PackageScreen),
+    )
 
 
 def make_drivers_menu() -> MenuScreen:

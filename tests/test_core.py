@@ -82,8 +82,13 @@ def test_category_notes_are_localized_and_optional():
     i18n.load("en")
     cats = {c.id: c for c in data.load_categories("apps.toml")}
     assert "the rest is vfioctl's" in cats["passthrough"].note
-    # The pointer is useless without somewhere to go.
-    assert "github.com/drpars/vfioctl" in cats["passthrough"].note
+    # The pointer is useless without somewhere to go. That destination used to
+    # be the repository URL; it is now the task that clones and builds it, so
+    # the note answers "how" instead of "where". The URL did not disappear --
+    # it moved to the task's own description, which is what the second
+    # assertion holds in place.
+    assert "Install vfioctl" in cats["passthrough"].note
+    assert "github.com/drpars/vfioctl" in i18n.t("task.vfioctl_desc")
 
 
 def test_passthrough_category_carries_the_whole_requirement_set():

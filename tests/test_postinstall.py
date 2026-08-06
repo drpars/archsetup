@@ -745,6 +745,43 @@ def test_libvirt_sockets_enabled_after_service_disable(monkeypatch, tmp_path,
     assert order[1] == ["sudo", "systemctl", "enable", "--now", *virt.LIBVIRT_SOCKETS]
 
 
+def test_vfioctl_clones_and_builds(monkeypatch):
+    """The install goes through the same clone+makepkg call yay-bin uses.
+
+    vfioctl is not in any repository, so there is no package name to hand to
+    pacman -- and putting one in the catalogue would be a name nothing
+    resolves, which drops the whole category transaction.
+    """
+    urls = []
+    monkeypatch.setattr(virt.pacman, "is_installed", lambda p: True)
+    monkeypatch.setattr(
+        virt.pacman, "install_from_aur_git", lambda url: urls.append(url) or 0
+    )
+
+    assert virt.install_vfioctl() == 0
+    assert urls == [virt.VFIOCTL_URL]
+    # Anonymous HTTPS, not SSH: whoever runs archsetup is not the author and
+    # has no key on the forge.
+    assert virt.VFIOCTL_URL.startswith("https://")
+
+
+def test_vfioctl_stops_without_base_devel(monkeypatch):
+    """makepkg needs base-devel and a DKMS-style silent failure is worse.
+
+    base-devel has been a meta package rather than a group since 2022, so
+    pacman -Qq answers it; makepkg itself ships in `pacman` and would always
+    be found, which is why the gate does not look for the binary.
+    """
+    called = []
+    monkeypatch.setattr(virt.pacman, "is_installed", lambda p: p != "base-devel")
+    monkeypatch.setattr(
+        virt.pacman, "install_from_aur_git", lambda url: called.append(url) or 0
+    )
+
+    assert virt.install_vfioctl() == 1
+    assert called == []
+
+
 def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
     """Built-in binder must skip the DKMS module, whatever the kernel is called.
 

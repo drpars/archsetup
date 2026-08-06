@@ -612,6 +612,7 @@ id = "gaming"
 
 [[category]]
 id = "virtualization"
+group = "virt"
 
   [[category.packages]]
   name = "libvirt"
@@ -715,6 +716,12 @@ id = "virtualization"
   # libvirt manages bridges over netlink. Listing it aborted the whole
   # virtualization install with "target not found".
 
+# Grouped with `virtualization` above (group = "virt"): both screens stay
+# exactly as they are, but the Applications list shows one row for the pair
+# instead of two siblings that read as alternatives. The relation -- same
+# packages, two axes, one a requirement subset of the other -- has nowhere
+# else to be said; adjacency does not say it.
+#
 # The second category on the requirement axis, same shape as yazi_extras: not
 # a topic but "what a working GPU passthrough needs". Every name here also
 # lives in `virtualization` above, and that duplication is the point -- the
@@ -742,9 +749,16 @@ id = "virtualization"
 # binding -- all of that is vfioctl's, and the note below is where that split
 # is finally written on a surface a user can read, rather than only in code
 # comments and a post_msg.
+#
+# The note names the task rather than the repository URL. An address answers
+# "where", and whoever reads it still has to work out that the answer is a
+# clone and a makepkg; the task is the answer to "how", and archsetup has run
+# it for yay-bin since the beginning. The URL still exists -- it is in the
+# task's own description, one screen away.
 [[category]]
 id = "passthrough"
-note = { tr = "Paketler burada biter; gerisi vfioctl'de → github.com/drpars/vfioctl", en = "Packages end here; the rest is vfioctl's -> github.com/drpars/vfioctl" }
+group = "virt"
+note = { tr = "Paketler burada biter; gerisi vfioctl'de → Yapılandırma > Sanallaştırma > 'vfioctl Kurulumu'", en = "Packages end here; the rest is vfioctl's -> Configuration > Virtualization > 'Install vfioctl'" }
 
   [[category.packages]]
   name = "libvirt"

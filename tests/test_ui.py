@@ -45,7 +45,9 @@ async def test_navigation_and_package_screen():
         app.screen.query_one(OptionList).highlighted = 1  # Uygulamalar
         await pilot.press("enter")
         await pilot.pause()
-        assert len(app.screen._items) == 16
+        # 16 kategori, ama ikisi (virtualization + passthrough) tek satırın
+        # altında: listede 15 madde görünür.
+        assert len(app.screen._items) == 15
         await pilot.press("enter")  # ilk kategori (console)
         await pilot.pause()
         assert isinstance(app.screen, screens.PackageScreen)
@@ -71,6 +73,32 @@ async def test_navigation_and_package_screen():
         assert isinstance(app.screen, screens.MainMenuScreen)
 
 
+async def test_apps_menu_folds_the_two_virtualisation_categories():
+    """İki kategori tek satırın altında toplanır ve satır ilişkiyi söyler.
+
+    Yan yana durmaları ilişkiyi anlatmıyordu: aynı paketleri iki eksende
+    listeliyorlar (genel VM kullanımı / passthrough gerekliliği) ve kardeş
+    olarak okununca birbirinin alternatifi gibi görünüyorlardı.
+    """
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 1  # Uygulamalar
+        await pilot.press("enter")
+        await pilot.pause()
+        ids = list(app.screen._items)
+        assert "virt" in ids
+        for folded in ("virtualization", "passthrough"):
+            assert folded not in ids
+        # Üst satır ilişkiyi taşımalı; taşımazsa seviye eklemek bedava değil.
+        assert app.screen._items["virt"].desc
+
+        app.screen.query_one(OptionList).highlighted = ids.index("virt")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert list(app.screen._items) == ["virtualization", "passthrough"]
+
+
 async def test_category_note_is_readable_before_installing_anything():
     """The passthrough pointer used to be a post_msg, so it only reached
     whoever had already found the right entries. It has to be on the menu
@@ -79,6 +107,11 @@ async def test_category_note_is_readable_before_installing_anything():
     async with app.run_test(size=(100, 40)) as pilot:
         await pilot.pause()
         app.screen.query_one(OptionList).highlighted = 1  # Uygulamalar
+        await pilot.press("enter")
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = list(
+            app.screen._items
+        ).index("virt")
         await pilot.press("enter")
         await pilot.pause()
         index = list(app.screen._items).index("passthrough")

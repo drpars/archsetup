@@ -34,6 +34,11 @@ class Category:
     # fires after a successful install, so it only reaches whoever already
     # found the right entries.
     note: str = ""
+    # Categories sharing a group id collapse into one submenu row, titled from
+    # category_group.<group>. It stays in the data file rather than in the menu
+    # code because every other membership question in this tool is answered
+    # here; splitting the two would mean reading both to know what a menu holds.
+    group: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,6 +83,7 @@ def load_categories(filename: str, section: str = "postinstall") -> list[Categor
                 packages=packages,
                 condition=cat.get("condition"),
                 note=_note(cat.get("note")),
+                group=cat.get("group", ""),
             )
         )
     return categories
