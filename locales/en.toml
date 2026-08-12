@@ -193,6 +193,15 @@ done = "Audio DSP installed. The preset switches to Flat when headphones are plu
 [coredump]
 done = "Core dump storage capped at 1 GB: {path}"
 
+[ethernet_pm]
+no_device = "No Realtek 2.5GbE controller (10ec:8125) on this machine; there is nothing for the rule to act on."
+not_laptop = "This machine is not a laptop (chassis: {chassis}). The payoff here is battery: with a cable plugged in the link never drops, the controller never autosuspends, and the rule changes nothing but the wake path."
+chassis_unknown = "Could not detect the chassis ({chassis}). This task is aimed at a laptop running on wifi with the ethernet port empty."
+continue_q = "Apply it anyway?"
+state = "{device}: power/control={control}, runtime_status={status}"
+not_applied = "The rule was written but power/control did not change. Check it with: udevadm test /sys/bus/pci/devices/<address> ({path})"
+done = "Runtime PM is on for the ethernet controller. It autosuspends about 10 s after the link drops, so runtime_status is worth reading then, not now. Plugging a cable back in wakes it over PME; if the port is ever dead or slow to come up, this rule is the first thing to look at."
+
 [iwd]
 no_manager = "No network manager is running ({managers}). Turning off iwd's network configuration may leave the machine without an address."
 continue_q = "Turn it off anyway?"
@@ -397,6 +406,8 @@ network_sharing = "Network Sharing (Samba/Avahi)"
 network_sharing_desc = "Samba configuration, sambashare group, mDNS and services"
 wait_online_timeout = "Shorten Network Wait"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (cuts the 120 s boot delay)"
+ethernet_pm = "Ethernet Runtime PM"
+ethernet_pm_desc = "power/control=auto for the Realtek 2.5GbE port; 1.52 W measured on battery"
 virt_config = "Virt-Manager Configuration"
 virt_config_desc = "libvirt socket/user settings, groups, socket activation"
 vfioctl = "Install vfioctl"

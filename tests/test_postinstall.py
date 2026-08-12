@@ -14,6 +14,7 @@ from archsetup.core import (
     coding_agents,
     coredump,
     dotfiles,
+    ethernet_pm,
     i18n,
     iwd,
     hardware,
@@ -487,6 +488,111 @@ def test_nvidia_laptop_requires_driver(monkeypatch):
     monkeypatch.setattr(nvidia_laptop.hardware, "gpu_matches", lambda q: True)
     monkeypatch.setattr(nvidia_laptop.pacman, "is_installed", lambda p: False)
     assert nvidia_laptop.configure() == 1
+
+
+@pytest.fixture
+def fake_nic(tmp_path, monkeypatch):
+    """A sysfs tree with the measured NIC plus a device that must not match."""
+    devices = tmp_path / "pci-devices"
+    nic = devices / "0000:03:00.0"
+    (nic / "power").mkdir(parents=True)
+    (nic / "vendor").write_text("0x10ec\n")
+    (nic / "device").write_text("0x8125\n")
+    (nic / "power" / "control").write_text("on\n")
+    (nic / "power" / "runtime_status").write_text("active\n")
+
+    wifi = devices / "0000:02:00.0"
+    (wifi / "power").mkdir(parents=True)
+    (wifi / "vendor").write_text("0x8086\n")
+    (wifi / "device").write_text("0x2725\n")
+    (wifi / "power" / "control").write_text("auto\n")
+
+    monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", devices)
+    # Sasi gercek makineden okunmamali: CI konteynerinde hostnamectl yok ve
+    # gorev orada "bilinmiyor" dalina dusup soru sorardi.
+    monkeypatch.setattr(ethernet_pm.hardware, "is_laptop", lambda: True)
+    return nic
+
+
+def _udev_runner(nic, applies: bool):
+    """Stand-in for udev: the trigger is what moves power/control, or does not.
+
+    The two answers are the whole point of the task -- it triggers an event
+    and then reads the attribute back rather than trusting the file it wrote.
+    """
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        if applies and cmd[:3] == ["sudo", "udevadm", "trigger"]:
+            (nic / "power" / "control").write_text("auto\n")
+        return 0
+
+    run.calls = calls
+    return run
+
+
+def test_ethernet_pm_writes_the_rule_and_triggers_it(
+    tmp_path, monkeypatch, fake_nic, fake_write
+):
+    rules = tmp_path / "81-ethernet-pm.rules"
+    runner = _udev_runner(fake_nic, applies=True)
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+    monkeypatch.setattr(ethernet_pm, "run", runner)
+    monkeypatch.setattr(sysedit, "run", runner)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+
+    assert ethernet_pm.configure() == 0
+    assert 'ATTR{power/control}="auto"' in rules.read_text()
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in runner.calls
+    trigger = [cmd for cmd in runner.calls if cmd[:3] == ["sudo", "udevadm", "trigger"]]
+    assert trigger == [["sudo", "udevadm", "trigger", "--action=add", str(fake_nic)]]
+
+
+def test_ethernet_pm_fails_when_the_rule_did_not_take(
+    tmp_path, monkeypatch, fake_nic, fake_write, capsys
+):
+    """Yazmak yurulukte olmak degil: kural yazilip ayar degismezse gorev duser."""
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", tmp_path / "81-ethernet-pm.rules")
+    monkeypatch.setattr(ethernet_pm, "run", _udev_runner(fake_nic, applies=False))
+    monkeypatch.setattr(sysedit, "run", lambda cmd, **kw: 0)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+
+    assert ethernet_pm.configure() != 0
+    assert "power/control" in capsys.readouterr().out
+
+
+def test_ethernet_pm_without_the_device_writes_nothing(tmp_path, monkeypatch):
+    rules = tmp_path / "81-ethernet-pm.rules"
+    monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", tmp_path / "empty")
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+
+    assert ethernet_pm.configure() == 1
+    assert not rules.exists()
+
+
+def test_ethernet_pm_on_a_desktop_asks_and_takes_no_for_an_answer(
+    tmp_path, monkeypatch, fake_nic
+):
+    rules = tmp_path / "81-ethernet-pm.rules"
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+    monkeypatch.setattr(ethernet_pm.hardware, "is_laptop", lambda: False)
+    monkeypatch.setattr(ethernet_pm.hardware, "chassis", lambda: "desktop")
+    monkeypatch.setattr(ethernet_pm, "ask_yes", lambda prompt: False)
+
+    assert ethernet_pm.configure() == 0
+    assert not rules.exists()
+
+
+def test_ethernet_pm_rule_matches_only_what_was_measured():
+    """Kural, olculen tek kimlige ve attr'i olan cihaza baglidir."""
+    assert f'ATTR{{vendor}}=="{ethernet_pm.VENDOR}"' in ethernet_pm.UDEV_CONTENT
+    assert f'ATTR{{device}}=="{ethernet_pm.DEVICE}"' in ethernet_pm.UDEV_CONTENT
+    assert 'TEST=="power/control"' in ethernet_pm.UDEV_CONTENT
+    # udev bu dizinde yalnizca .rules ile bitenleri okur; baska bir uzanti
+    # kurali sessizce yok sayar ve disaridan "kural ise yaramadi" gibi gorunur.
+    assert ethernet_pm.UDEV_RULES.suffix == ".rules"
+    assert ethernet_pm.UDEV_RULES.parent == Path("/etc/udev/rules.d")
 
 
 @pytest.fixture

@@ -193,6 +193,15 @@ done = "Ses DSP'si kuruldu. Kulaklık takınca preset otomatik olarak Flat'e ge�
 [coredump]
 done = "Çekirdek dökümü tavanı 1 GB olarak ayarlandı: {path}"
 
+[ethernet_pm]
+no_device = "Bu makinede Realtek 2.5GbE denetleyicisi (10ec:8125) yok; kuralın üzerinde çalışacağı bir cihaz bulunmuyor."
+not_laptop = "Bu makine dizüstü değil (şasi: {chassis}). Buradaki kazanç pil kazancı: kablo takılıyken link hiç düşmez, denetleyici hiç uykuya girmez, kural yalnızca uyanma yolunu değiştirir."
+chassis_unknown = "Şasi tespit edilemedi ({chassis}). Bu görev, ethernet portu boş ve wifi ile çalışan bir dizüstünü hedefliyor."
+continue_q = "Yine de uygulansın mı?"
+state = "{device}: power/control={control}, runtime_status={status}"
+not_applied = "Kural yazıldı ama power/control değişmedi. Denetlemek için: udevadm test /sys/bus/pci/devices/<adres> ({path})"
+done = "Ethernet denetleyicisinde runtime PM açık. Cihaz link düştükten ~10 sn sonra uykuya giriyor; runtime_status'a bakılacak an şimdi değil orası. Kablo takılınca PME ile uyanıyor; port bir gün ölü ya da geç görünürse ilk bakılacak şey bu kuraldır."
+
 [iwd]
 no_manager = "Çalışan bir ağ yöneticisi yok ({managers}). iwd'nin ağ yapılandırmasını kapatmak makineyi adressiz bırakabilir."
 continue_q = "Yine de kapatılsın mı?"
@@ -397,6 +406,8 @@ network_sharing = "Ağ Paylaşımı (Samba/Avahi)"
 network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servisler"
 wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
 wait_online_timeout_desc = "networkd-wait-online: --any --timeout=3 (120 sn boot gecikmesini keser)"
+ethernet_pm = "Ethernet Runtime PM"
+ethernet_pm_desc = "Realtek 2.5GbE portu için power/control=auto; pilde ölçülen 1,52 W"
 virt_config = "Virt-Manager Yapılandırması"
 virt_config_desc = "libvirt soket/kullanıcı ayarları, gruplar, soket aktivasyonu"
 vfioctl = "vfioctl Kurulumu"
