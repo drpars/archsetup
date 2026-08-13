@@ -406,6 +406,10 @@ def test_asus_repo_setup_keeps_official_first(tmp_path, monkeypatch, fake_write,
     monkeypatch.setattr(asus, "PACMAN_CONF", conf)
     monkeypatch.setattr(asus, "run", runlog)
     monkeypatch.setattr(asus, "sudo_write", fake_write)
+    # setup_repo ends by asking the live pacman whether the repo resolves.
+    # Unpinned, this test answers with the machine under it: yes on a box that
+    # already has [ogc], FileNotFoundError on the CI runner, no anywhere else.
+    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
 
     assert asus.setup_repo() is True
     text = conf.read_text()
@@ -424,6 +428,7 @@ def test_asus_repo_setup_outranks_g14(tmp_path, monkeypatch, fake_write, runlog)
     monkeypatch.setattr(asus, "PACMAN_CONF", conf)
     monkeypatch.setattr(asus, "run", runlog)
     monkeypatch.setattr(asus, "sudo_write", fake_write)
+    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
 
     assert asus.setup_repo() is True
     text = conf.read_text()
@@ -451,6 +456,16 @@ def test_asus_repo_survives_a_declined_upgrade(tmp_path, monkeypatch, fake_write
     monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: False)
     conf.write_text("[options]\n[core]\nInclude = x\n")
     assert asus.setup_repo() is False
+
+
+def test_repo_usable_says_no_where_there_is_no_pacman(monkeypatch):
+    """Hiç pacman olmayan makinede cevap "hayır"dır, traceback değil."""
+
+    def missing(cmd, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "pacman")
+
+    monkeypatch.setattr(asus.subprocess, "run", missing)
+    assert asus.repo_usable() is False
 
 
 def test_asus_repo_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):

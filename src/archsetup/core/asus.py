@@ -106,10 +106,16 @@ def repo_usable(repo: repos.Repo = REPO) -> bool:
 
     `pacman -Sl` reads the synced database and changes nothing, so this is the
     measurement rather than an inference from whatever the last write returned.
+
+    No pacman at all is a "no" and not a traceback: this runs on whatever the
+    caller is standing on, and the CI container is not an Arch box.
     """
-    out = subprocess.run(
-        ["pacman", "-Sl", repo.name], capture_output=True, text=True
-    )
+    try:
+        out = subprocess.run(
+            ["pacman", "-Sl", repo.name], capture_output=True, text=True
+        )
+    except OSError:
+        return False
     return out.returncode == 0 and bool(out.stdout.strip())
 
 
