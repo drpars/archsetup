@@ -74,9 +74,12 @@ id = "hyprland"
   default = false
   note = { tr = "Waybar geliştirme sürümü — 'waybar' ile çakışır, ikisinden birini seçin", en = "Waybar development build — conflicts with 'waybar', pick one" }
 
+  # The dotfiles drive the bar's update module with their own script, which
+  # calls checkupdates from this package. Without it the module's exec-if
+  # guard drops the whole module: the indicator reads as absent, not broken.
   [[category.packages]]
-  name = "waybar-updates"
-  aur = true
+  name = "pacman-contrib"
+  note = { tr = "checkupdates komutunu getirir; waybar güncelleme göstergesi buna dayanır", en = "provides checkupdates, which the waybar update indicator depends on" }
 
   [[category.packages]]
   name = "wleave-git"
