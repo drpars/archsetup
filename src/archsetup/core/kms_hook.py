@@ -162,18 +162,34 @@ def blacklisted() -> set[str]:
     return names
 
 
-def firmware_bytes(kver: str, module: str) -> int:
-    """On-disk size of the firmware a module declares, compressed variants too."""
+def firmware_bytes(kver: str, module: str, seen: set | None = None) -> int:
+    """On-disk size of the firmware a module declares, compressed variants too.
+
+    Counted per inode, not per declared path, and `seen` carries that across
+    calls so two kernels declaring the same blob do not both pay for it.
+    /usr/lib/firmware is full of symlinks pointing at shared blobs and stat()
+    follows them: measured 2026-08-13, nouveau declares 519 paths that resolve
+    to 222 distinct inodes, and summing paths reported 1302 MiB where the real
+    cost is 103 MiB. The image delta the task prints afterwards was 107 MiB, so
+    the wrong number was wrong by an order of magnitude in the one place a user
+    would have checked it.
+    """
+    if seen is None:
+        seen = set()
     total = 0
     for relative in _capture(["modinfo", "-k", kver, "-F", "firmware", module]).split():
         base = FIRMWARE_ROOT / relative
         for candidate in (base, base.with_name(base.name + ".zst"),
                           base.with_name(base.name + ".xz")):
             try:
-                total += candidate.stat().st_size
-                break
+                stat = candidate.stat()
             except OSError:
                 continue
+            key = (stat.st_dev, stat.st_ino)
+            if key not in seen:
+                seen.add(key)
+                total += stat.st_size
+            break
     return total
 
 
@@ -262,6 +278,7 @@ def configure() -> int:
     waste: set[str] = set()
     losses: set[str] = set()
     blind: list[str] = []
+    counted: set = set()
     freed = 0
     for kver in installed:
         contribution = kms_contribution(kver)
@@ -270,7 +287,7 @@ def configure() -> int:
         for name in contribution:
             if name in blacklist:
                 waste.add(name)
-                freed += firmware_bytes(kver, name)
+                freed += firmware_bytes(kver, name, counted)
             elif name not in whitelisted:
                 losses.add(name)
         if not _console_survives(kver, whitelisted):

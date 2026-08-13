@@ -218,3 +218,22 @@ def test_firmware_bytes_counts_compressed_variants(kms_env):
     (firmware / "gsp.bin.zst").write_bytes(b"y" * 512)
     (firmware / "gsp.bin").unlink()
     assert kms_hook.firmware_bytes("7.1-zen", "nouveau") == 512
+
+
+def test_firmware_bytes_counts_each_blob_once(kms_env, monkeypatch):
+    """519 declared paths resolving to 222 inodes reported 1302 MiB for 103."""
+    firmware = kms_env / "firmware/nvidia/ga102"
+    for name in ("a.bin", "b.bin", "c.bin"):
+        (firmware / name).symlink_to(firmware / "gsp.bin")
+    declared = "nvidia/ga102/gsp.bin nvidia/ga102/a.bin nvidia/ga102/b.bin nvidia/ga102/c.bin"
+    monkeypatch.setattr(
+        kms_hook, "_capture",
+        lambda cmd: declared if cmd[0] == "modinfo" else "",
+    )
+    # Four paths, one blob of 2048 bytes -- following symlinks would say 8192.
+    assert kms_hook.firmware_bytes("7.1-zen", "nouveau") == 2048
+
+    # And the set is shared, so a second kernel does not pay for it again.
+    counted = set()
+    assert kms_hook.firmware_bytes("7.1-zen", "nouveau", counted) == 2048
+    assert kms_hook.firmware_bytes("7.1-g14", "nouveau", counted) == 0
