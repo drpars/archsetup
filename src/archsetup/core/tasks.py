@@ -33,6 +33,7 @@ from . import (
     pacman,
     sddm,
     ssh,
+    uki,
     virt,
     waydroid,
 )
@@ -275,6 +276,12 @@ TASKS: tuple[Task, ...] = (
         group="agents",
     ),
     Task("bat-cache", "task.bat_cache", bat_cache, group="config"),
+    Task(
+        "uki-preset",
+        "task.uki_preset",
+        uki.configure,
+        group="system",
+    ),
     Task(
         "bootloader-info",
         "task.bootloader_info",
