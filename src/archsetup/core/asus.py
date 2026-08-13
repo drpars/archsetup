@@ -27,6 +27,7 @@ NVIDIA laptop power management lives in core.nvidia_laptop.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from . import i18n, pacman, prompt, repos, services
@@ -87,7 +88,29 @@ def setup_repo(repo: repos.Repo = REPO) -> bool:
         return False
     if repos.has(text, "g14"):
         print(t("asus.above_g14"))
-    return run(["sudo", "pacman", "-Suy"]) == 0
+
+    # -Suy refreshes the databases, and it has to be -u rather than a bare -Sy
+    # or the next install is a partial upgrade. But its exit code answers a
+    # different question than the one being asked here: a user who declines
+    # the upgrade gets a non-zero pacman and a perfectly working repository,
+    # and reporting that as failure sent the caller off to build from the AUR
+    # with the packages sitting right there (measured 2026-08-13). So the
+    # upgrade is offered, and then the repository is *asked* whether it works.
+    if run(["sudo", "pacman", "-Suy"]) != 0:
+        print(t("asus.upgrade_skipped", repo=repo.name))
+    return repo_usable(repo)
+
+
+def repo_usable(repo: repos.Repo = REPO) -> bool:
+    """Does pacman resolve names out of this repository right now?
+
+    `pacman -Sl` reads the synced database and changes nothing, so this is the
+    measurement rather than an inference from whatever the last write returned.
+    """
+    out = subprocess.run(
+        ["pacman", "-Sl", repo.name], capture_output=True, text=True
+    )
+    return out.returncode == 0 and bool(out.stdout.strip())
 
 
 def install() -> int:

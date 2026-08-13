@@ -159,6 +159,7 @@ repo_found = "[{repo}] repository found: ASUS packages will be installed from it
 repo_missing = "No [{repo}] repository: asusctl/rog-control-center will come from the AUR."
 repo_setup_q = "Add the [{repo}] repository ({server})? asusctl's upstream moved there; [g14] has published nothing since 2026-07-19."
 key_failed = "Could not import the [{repo}] signing key; repository not added."
+upgrade_skipped = "The system upgrade did not run; [{repo}] is set up and usable anyway. Run `sudo pacman -Syu` later."
 above_g14 = "[ogc] was written ABOVE [g14]: pacman resolves a name from the first repository in the file, regardless of version."
 supergfx_archived = "supergfxctl's upstream is archived and the package is in no repository; it only builds from the AUR. Its successor is cardwire (in [ogc]), but whether that covers vfio handover is unmeasured."
 pacman_conf_unreadable = "Could not read {path}; repository not added."

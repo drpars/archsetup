@@ -431,6 +431,28 @@ def test_asus_repo_setup_outranks_g14(tmp_path, monkeypatch, fake_write, runlog)
     assert text.count("[g14]") == 1
 
 
+def test_asus_repo_survives_a_declined_upgrade(tmp_path, monkeypatch, fake_write):
+    """Ölçüldü 2026-08-13: kullanıcı yükseltmeyi reddetti, pacman 1 döndü, depo
+    kusursuz kuruluydu — ve eski kod bunu başarısızlık sayıp AUR'a gidiyordu."""
+    conf = tmp_path / "pacman.conf"
+    conf.write_text("[options]\n[core]\nInclude = x\n")
+    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+    monkeypatch.setattr(asus, "sudo_write", fake_write)
+    # pacman-key başarılı, `pacman -Suy` reddedildi.
+    monkeypatch.setattr(
+        asus, "run", lambda cmd, **kw: 1 if cmd[:3] == ["sudo", "pacman", "-Suy"] else 0
+    )
+    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
+
+    assert asus.setup_repo() is True
+    assert "[ogc]" in conf.read_text()
+
+    # Ama depo gerçekten çözünmüyorsa cevap yine hayır.
+    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: False)
+    conf.write_text("[options]\n[core]\nInclude = x\n")
+    assert asus.setup_repo() is False
+
+
 def test_asus_repo_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
     conf = tmp_path / "pacman.conf"
     conf.write_text("[options]\n")
