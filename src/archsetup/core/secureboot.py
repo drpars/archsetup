@@ -1,11 +1,12 @@
 """Checking that images a task just rebuilt are still signed.
 
-Five post-install tasks run `mkinitcpio -P`, and on a Secure Boot machine the
+Five post-install tasks rebuild boot images, and on a Secure Boot machine the
 signing afterwards is somebody else's job: sbctl ships its own mkinitcpio post
 hook, so a hand-run `-P` is signed too. "Somebody else does it" is a claim, and
 a task that rebuilds a boot image without checking it hands the user a machine
 that only reports the problem at the next power-on -- a place where nothing
-here can help any more.
+here can help any more. The caller is `mkinitcpio.regenerate()` rather than
+each of those five, so the check cannot be left out of the sixth.
 
 Why the exit code is not the check. `sbctl verify` returns 0 whether or not it
 found something unsigned: measured on sbctl 0.18 against a deliberately

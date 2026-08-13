@@ -96,7 +96,7 @@ def configure() -> int:
 
     rc = 0
     if result.needs_mkinitcpio or hooks_changed:
-        rc = run(["sudo", "mkinitcpio", "-P"])
+        rc = mkinitcpio.regenerate()
     if result.regen_cmd is not None:
         rc |= run(list(result.regen_cmd))
 

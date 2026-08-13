@@ -6,9 +6,10 @@ presets for UKI output -- each used to carry its own `^NAME=(...)` regex, and a
 boot-critical line with four independent writers drifts.
 
 The text helpers take and return strings, so a caller keeps pointing at its own
-file constant and stays testable against a temporary file. Only `presets()`
-touches the filesystem, and it takes the root it works under so the installer
-can aim it at /mnt while a post-install task aims it at /.
+file constant and stays testable against a temporary file. The three functions
+that touch the filesystem -- `presets`, `outputs`, `regenerate` -- take the
+root they work under, so the installer can aim them at /mnt while a
+post-install task aims them at /.
 """
 
 from __future__ import annotations
@@ -17,8 +18,12 @@ import re
 from pathlib import Path
 from typing import Sequence
 
+from . import secureboot
+from .pacman import run
+
 CONF = Path("/etc/mkinitcpio.conf")
 CONF_D = Path("/etc/mkinitcpio.conf.d")
+ROOT = Path("/")
 
 
 def _last_array(text: str, name: str) -> re.Match[str] | None:
@@ -78,8 +83,38 @@ def effective_text(conf: Path = CONF, conf_d: Path = CONF_D) -> str:
     return text
 
 
-def presets(root: Path = Path("/")) -> list[Path]:
+def presets(root: Path = ROOT) -> list[Path]:
     return sorted((root / "etc/mkinitcpio.d").glob("*.preset"))
+
+
+def outputs(root: Path = ROOT) -> list[Path]:
+    """Every image the presets under `root` name, across all of them."""
+    found: list[Path] = []
+    for preset in presets(root):
+        try:
+            text = preset.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        found.extend(preset_outputs(text))
+    return found
+
+
+def regenerate(root: Path = ROOT) -> int:
+    """Rebuild every image, and then ask whether the result is still signed.
+
+    Four tasks rebuilt boot images and stopped at the exit code of `-P`. On a
+    Secure Boot machine that leaves the signing to sbctl's own post hook and
+    never checks that it happened, and the answer arrives at the next
+    power-on. The check lives here rather than at each call site for the
+    reason those four were missing it: whoever writes the fifth task will
+    reach for the rebuild, not for the verification.
+    """
+    rc = run(["sudo", "mkinitcpio", "-P"])
+    # Enumerated only when there is something to check with it -- otherwise
+    # this reads every preset on the machine to produce an answer nobody wants.
+    if secureboot.enabled() is not True:
+        return rc
+    return rc | secureboot.verify(outputs(root))
 
 
 def preset_value(text: str, key: str) -> str | None:

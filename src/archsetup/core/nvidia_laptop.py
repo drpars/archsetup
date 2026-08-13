@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import hardware, i18n, pacman, services, sysedit
+from . import hardware, i18n, mkinitcpio, pacman, services, sysedit
 from .pacman import run
 from .prompt import ask_yes
 
@@ -122,7 +122,7 @@ def configure() -> int:
 
     if modprobe_changed:
         # Module options are baked into the initramfs on early-KMS setups.
-        rc |= run(["sudo", "mkinitcpio", "-P"])
+        rc |= mkinitcpio.regenerate()
     if udev_changed:
         rc |= run(["sudo", "udevadm", "control", "--reload-rules"])
 

@@ -48,7 +48,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
-from . import hardware, i18n, mkinitcpio, pacman, secureboot, sysedit
+from . import hardware, i18n, mkinitcpio, pacman, sysedit
 from .pacman import run
 from .prompt import ask_yes
 
@@ -206,14 +206,7 @@ def _console_survives(kver: str, whitelisted: set[str]) -> bool:
 
 
 def _images() -> list[Path]:
-    outputs: list[Path] = []
-    for preset in mkinitcpio.presets(ROOT):
-        try:
-            text = preset.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        outputs.extend(mkinitcpio.preset_outputs(text))
-    return outputs
+    return mkinitcpio.outputs(ROOT)
 
 
 def _sizes(paths: list[Path]) -> dict[Path, int]:
@@ -335,17 +328,15 @@ def configure() -> int:
     if rc != 0 or not changed:
         return rc
 
-    rc |= run(["sudo", "mkinitcpio", "-P"])
+    # Rebuilds and verifies the signatures; the second half is asked even when
+    # -P fails, a half-written image being exactly the one worth asking about.
+    rc |= mkinitcpio.regenerate(ROOT)
 
     # What was written is not what is in force: report the produced images.
-    produced = _images()
-    for path, size in sorted(_sizes(produced).items()):
+    for path, size in sorted(_sizes(_images()).items()):
         was = before.get(path)
         if was:
             print(t("kms_hook.image_size", path=path,
                     before=round(was / 1024**2, 1), after=round(size / 1024**2, 1)))
-    # Asked even when -P failed: a half-written image is exactly the one whose
-    # signature is worth knowing about before the next boot.
-    rc |= secureboot.verify(produced)
     print(t("kms_hook.undo", backup=backup, conf=CONF))
     return rc

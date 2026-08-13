@@ -8,11 +8,13 @@ laptop, on the desktop or in the CI container.
 """
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from archsetup import core
 from archsetup.core import hardware, kms_hook, mkinitcpio, pacman, secureboot, sysedit
 
 
@@ -59,6 +61,81 @@ def test_preset_outputs_skips_commented_assignments():
     ]
 
 
+def test_outputs_collects_every_preset_and_only_presets(tmp_path):
+    preset_dir = tmp_path / "etc/mkinitcpio.d"
+    preset_dir.mkdir(parents=True)
+    (preset_dir / "linux-g14.preset").write_text(
+        "PRESETS=('default')\ndefault_uki=\"/efi/g14.efi\"\n"
+    )
+    (preset_dir / "linux-zen.preset").write_text(
+        "PRESETS=('default')\ndefault_uki=\"/efi/zen.efi\"\n"
+    )
+    # A real neighbour on this laptop: the glob is *.preset, so a saved
+    # template sitting beside them must not be read as one.
+    (preset_dir / "linux-zen.preset.sablon").write_text(
+        "PRESETS=('default')\ndefault_uki=\"/efi/nope.efi\"\n"
+    )
+    assert mkinitcpio.outputs(tmp_path) == [Path("/efi/g14.efi"), Path("/efi/zen.efi")]
+
+
+def test_regenerate_rebuilds_and_then_asks_about_the_signature(
+    tmp_path, monkeypatch, runlog, capsys
+):
+    root = tmp_path / "root"
+    (root / "etc/mkinitcpio.d").mkdir(parents=True)
+    image = tmp_path / "arch.efi"
+    (root / "etc/mkinitcpio.d/linux.preset").write_text(
+        f"PRESETS=('default')\ndefault_uki=\"{image}\"\n"
+    )
+    monkeypatch.setattr(secureboot, "enabled", lambda: True)
+    monkeypatch.setattr(secureboot, "report", lambda: {image: False})
+
+    assert mkinitcpio.regenerate(root) == 1
+    assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
+    assert str(image) in capsys.readouterr().out
+
+
+def test_regenerate_does_not_walk_the_presets_with_secure_boot_off(
+    tmp_path, monkeypatch, runlog
+):
+    """The gate sits before the walk, not only inside verify().
+
+    Otherwise every rebuild on every machine reads every preset on disk to
+    produce an answer that is then thrown away.
+    """
+
+    def explode(root=None):
+        raise AssertionError("presets walked with Secure Boot off")
+
+    monkeypatch.setattr(mkinitcpio, "outputs", explode)
+    assert mkinitcpio.regenerate(tmp_path) == 0
+    assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
+
+
+def _shells_out_to_minus_p(text: str) -> bool:
+    return re.search(r'"mkinitcpio",\s*"-P"', text) is not None
+
+
+def test_no_core_task_rebuilds_images_behind_regenerate():
+    """The verification is only unforgettable while the rebuild has one door.
+
+    Four tasks called `sudo mkinitcpio -P` themselves and none of them
+    verified the result; this is what keeps the fifth from doing it again.
+    installer.chroot is not covered on purpose -- it rebuilds inside /mnt,
+    where there is no signed ESP of ours to check yet.
+    """
+    core_dir = Path(core.__file__).parent
+    offenders = sorted(
+        path.name
+        for path in core_dir.glob("*.py")
+        if path.name != "mkinitcpio.py"
+        and _shells_out_to_minus_p(path.read_text(encoding="utf-8"))
+    )
+    assert offenders == []
+    # And the scan catches what it is meant to catch.
+    assert _shells_out_to_minus_p('rc |= run(["sudo", "mkinitcpio", "-P"])')
+
+
 # --- kms_hook measurement ----------------------------------------------------
 
 
@@ -101,10 +178,6 @@ def kms_env(tmp_path, monkeypatch, runlog):
     monkeypatch.setattr(kms_hook, "BACKUP_DIR", tmp_path / "backup")
     monkeypatch.setattr(kms_hook, "ROOT", tmp_path / "root")
     monkeypatch.setattr(kms_hook, "run", runlog)
-    # Secure Boot is read from efivarfs, so the machine running the tests would
-    # otherwise decide whether the verification branch runs -- and on the box
-    # this was written on it is on, which would put `sudo sbctl` in a test run.
-    monkeypatch.setattr(secureboot, "SECURE_BOOT_VAR", tmp_path / "no-efivars")
     monkeypatch.setattr(hardware, "gpu_matches", lambda q: q == "nvidia")
     monkeypatch.setattr(pacman, "is_installed", lambda pkg: pkg == "nvidia-utils")
 

@@ -77,7 +77,7 @@ def configure_nvidia_modules() -> int:
 
     rc = 0
     if changed or result.needs_mkinitcpio:
-        rc = run(["sudo", "mkinitcpio", "-P"])
+        rc = mkinitcpio.regenerate()
     if result.regen_cmd is not None:
         rc |= run(list(result.regen_cmd))
     if not changed and not result.changed:
@@ -89,4 +89,4 @@ def configure_amd_modules() -> int:
     if not _merge_modules(AMD_MODULES):
         print(t("msg.no_changes"))
         return 0
-    return run(["sudo", "mkinitcpio", "-P"])
+    return mkinitcpio.regenerate()
