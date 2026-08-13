@@ -1,9 +1,11 @@
 """Reading and rewriting mkinitcpio's configuration and preset files.
 
-One parser, four callers. core.gpuconfig merges MODULES, core.hibernate adds
-the resume hook, core.kms_hook drops the kms one and installer.chroot rewrites
-presets for UKI output -- each used to carry its own `^NAME=(...)` regex, and a
-boot-critical line with four independent writers drifts.
+One parser, five callers. core.gpuconfig merges MODULES, core.hibernate adds
+the resume hook, core.kms_hook drops the kms one, and installer.chroot and
+core.uki rewrite presets for UKI output -- each used to carry its own
+`^NAME=(...)` regex, and a boot-critical line with four independent writers
+drifts. The last two rewrite the same four preset lines, so that rule lives
+here as well rather than once per side of the install.
 
 The text helpers take and return strings, so a caller keeps pointing at its own
 file constant and stays testable against a temporary file. The three functions
@@ -15,6 +17,7 @@ post-install task aims them at /.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Sequence
 
@@ -99,6 +102,51 @@ def outputs(root: Path = ROOT) -> list[Path]:
     return found
 
 
+def _sudo_stat(paths: Sequence[Path]) -> str:
+    """`stat` for images this user cannot see; "" when it gives no answer.
+
+    Its own function so a test can seal it by name: the alternative is
+    patching subprocess.run for the whole module, which would also silence
+    everything else that shells out.
+    """
+    try:
+        return subprocess.run(
+            ["sudo", "stat", "-c", "%s %n", *[str(p) for p in paths]],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def sizes(paths: Sequence[Path]) -> dict[Path, int]:
+    """Sizes of the images that could be measured, absent ones simply missing.
+
+    An ESP is mode 0700 on any sane install, so stat() on a UKI is a
+    permission error for the user running a task rather than an answer. The
+    fallback is one `sudo stat` covering all of them rather than one per file:
+    sudo asks per command, and a password prompt repeated once per kernel is
+    one the user stops reading.
+    """
+    if not paths:
+        return {}
+    found: dict[Path, int] = {}
+    missing: list[Path] = []
+    for path in paths:
+        try:
+            found[path] = path.stat().st_size
+        except OSError:
+            missing.append(path)
+    if not missing:
+        return found
+    for line in _sudo_stat(missing).splitlines():
+        size, _, name = line.partition(" ")
+        if size.isdigit() and name:
+            found[Path(name)] = int(size)
+    return found
+
+
 def regenerate(root: Path = ROOT) -> int:
     """Rebuild every image, and then ask whether the result is still signed.
 
@@ -123,6 +171,11 @@ def preset_value(text: str, key: str) -> str | None:
     return match.group(1).strip() if match else None
 
 
+def preset_passes(text: str) -> list[str]:
+    """The pass names in PRESETS, without the shell quoting."""
+    return [entry.strip("'\"") for entry in read_array(text, "PRESETS") or []]
+
+
 def preset_outputs(text: str) -> list[Path]:
     """Every image a `mkinitcpio -p` run over this preset will overwrite.
 
@@ -133,10 +186,36 @@ def preset_outputs(text: str) -> list[Path]:
     of a file that is not being written would be worse than no backup at all.
     """
     outputs: list[Path] = []
-    for entry in read_array(text, "PRESETS") or []:
-        name = entry.strip("'\"")
+    for name in preset_passes(text):
         for kind in ("uki", "image"):
             value = preset_value(text, f"{name}_{kind}")
             if value:
                 outputs.append(Path(value))
     return outputs
+
+
+def set_uki_output(text: str, passes: Sequence[str]) -> str:
+    """Point the named passes at a Unified Kernel Image instead of an image.
+
+    Four assignments decide it and they are the same four everywhere the
+    conversion happens: `ALL_config` on, and per pass `_uki` on, `_options` on
+    (the splash line the stock template carries), `_image` off. The installer
+    writes them into a fresh target and core.uki writes them into a preset a
+    kernel package just generated; a boot-critical rewrite with two authors
+    drifts, which is the reason the arrays are parsed in one place too.
+
+    Nothing here touches PRESETS: which passes exist is the preset's own
+    business, and this function only changes what the ones it is given write.
+
+    A pass whose `_uki` line is not in the file comes back unchanged rather
+    than half-converted -- the caller is expected to read the result and check,
+    because "the regex did not match" and "the preset now builds a UKI" look
+    identical from the outside.
+    """
+    text = re.sub(r"^#(ALL_config)", r"\1", text, flags=re.MULTILINE)
+    for name in passes:
+        escaped = re.escape(name)
+        text = re.sub(rf"^#({escaped}_uki)", r"\1", text, flags=re.MULTILINE)
+        text = re.sub(rf"^#({escaped}_options)", r"\1", text, flags=re.MULTILINE)
+        text = re.sub(rf"^({escaped}_image=)", r"#\1", text, flags=re.MULTILINE)
+    return text

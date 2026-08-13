@@ -47,6 +47,20 @@ def sealed_rebuild(monkeypatch, tmp_path, runlog):
     monkeypatch.setattr(secureboot, "SECURE_BOOT_VAR", tmp_path / "no-efivars")
 
 
+@pytest.fixture(autouse=True)
+def sealed_sizes(monkeypatch):
+    """The sudo behind `mkinitcpio.sizes()`.
+
+    An image the presets name but that is not on disk sends sizes() to
+    `sudo stat`, and in a suite that means an askpass window in front of the
+    user -- or, in CI, a wait for one that never comes. Reaching it takes only
+    a test whose preset points somewhere it did not create, which is the easy
+    thing to write by accident, so the seal is here rather than per file.
+    A test that wants the fallback replaces this with its own answer.
+    """
+    monkeypatch.setattr(mkinitcpio, "_sudo_stat", lambda paths: "")
+
+
 @pytest.fixture
 def fake_write():
     """sudo_write replacement that writes directly (tests run unprivileged)."""

@@ -209,28 +209,8 @@ def _images() -> list[Path]:
     return mkinitcpio.outputs(ROOT)
 
 
-def _sizes(paths: list[Path]) -> dict[Path, int]:
-    """Sizes of images that may sit on a 0700 ESP -- one sudo call, not one each."""
-    if not paths:
-        return {}
-    sizes: dict[Path, int] = {}
-    missing: list[Path] = []
-    for path in paths:
-        try:
-            sizes[path] = path.stat().st_size
-        except OSError:
-            missing.append(path)
-    if missing:
-        out = _capture(["sudo", "stat", "-c", "%s %n", *[str(p) for p in missing]])
-        for line in out.splitlines():
-            size, _, name = line.partition(" ")
-            if size.isdigit() and name:
-                sizes[Path(name)] = int(size)
-    return sizes
-
-
 def _backup_images(stamp: str) -> int:
-    present = _sizes(_images())
+    present = mkinitcpio.sizes(_images())
     if not present:
         print(t("kms_hook.no_images"))
         return 1
@@ -317,7 +297,7 @@ def configure() -> int:
     if rc != 0:
         return rc
 
-    before = _sizes(_images())
+    before = mkinitcpio.sizes(_images())
     trimmed = mkinitcpio.set_array(text, "HOOKS", [h for h in own if h != HOOK])
     if trimmed is None:
         print(t("kms_hook.no_hooks", path=CONF))
@@ -333,7 +313,7 @@ def configure() -> int:
     rc |= mkinitcpio.regenerate(ROOT)
 
     # What was written is not what is in force: report the produced images.
-    for path, size in sorted(_sizes(_images()).items()):
+    for path, size in sorted(mkinitcpio.sizes(_images()).items()):
         was = before.get(path)
         if was:
             print(t("kms_hook.image_size", path=path,

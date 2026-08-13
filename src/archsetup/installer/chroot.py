@@ -352,12 +352,8 @@ def gen_uki() -> int:
     fallback = _want_fallback()
 
     text = preset.read_text(encoding="utf-8")
-    text = re.sub(r"^#(ALL_config)", r"\1", text, flags=re.MULTILINE)
     names = ("default", "fallback") if fallback else ("default",)
-    for name in names:
-        text = re.sub(rf"^#({name}_uki)", r"\1", text, flags=re.MULTILINE)
-        text = re.sub(rf"^#({name}_options)", r"\1", text, flags=re.MULTILINE)
-        text = re.sub(rf"^({name}_image=)", r"#\1", text, flags=re.MULTILINE)
+    text = mkinitcpio.set_uki_output(text, names)
     text = _enable_fallback_preset(text) if fallback else _default_only_preset(text)
     preset.write_text(text, encoding="utf-8")
 
