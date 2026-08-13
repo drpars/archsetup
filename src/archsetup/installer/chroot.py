@@ -14,7 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..core import hardware, i18n
+from ..core import hardware, i18n, mkinitcpio
 from ..core.pacman import run
 from ..core.prompt import ask_yes
 
@@ -200,7 +200,7 @@ def create_swapfile() -> int:
 
 
 def _presets() -> list[Path]:
-    return sorted((MNT / "etc/mkinitcpio.d").glob("*.preset"))
+    return mkinitcpio.presets(MNT)
 
 
 def _choose_preset() -> Path | None:
@@ -220,10 +220,7 @@ def _choose_preset() -> Path | None:
 
 
 def default_uki_path(preset: Path) -> str | None:
-    match = re.search(
-        r'^default_uki="?([^"\n]+)"?', preset.read_text(encoding="utf-8"), re.MULTILINE
-    )
-    return match.group(1).strip() if match else None
+    return mkinitcpio.preset_value(preset.read_text(encoding="utf-8"), "default_uki")
 
 
 @contextlib.contextmanager
@@ -302,11 +299,18 @@ def _enable_fallback_preset(text: str) -> str:
     present at build time -- that is also what keeps the disk bootable after
     it moves to another machine or into a VM.
 
-    Kernel packages disagree on the stock layout: Arch's linux.preset ships
-    the pair active, while linux-g14 ships PRESETS=('default') active with the
-    pair commented out beneath it. Commenting every live PRESETS line first
-    and then activating the pair gives the same result for both, instead of
-    leaving two assignments whose order silently decides the outcome.
+    Preset files disagree on the stock layout: some carry PRESETS=('default')
+    active with the pair commented out beneath it, others ship the pair active
+    already. Commenting every live PRESETS line first and then activating the
+    pair gives the same result for both, instead of leaving two assignments
+    whose order silently decides the outcome. Nothing here reads the kernel's
+    name, which is what keeps it working for a package we have never seen.
+
+    Do not assume the kernel package puts the file there. Measured 2026-08-13:
+    neither linux-g14 nor linux-ogc ships /etc/mkinitcpio.d/*.preset at all --
+    on this machine that file belongs to no package -- because modern kernels
+    hand the job to /usr/lib/kernel/install.d/ instead. A target installed with
+    such a kernel and no preset lands in _choose_preset()'s empty branch.
     """
     return _force_presets(text, FALLBACK_PRESETS)
 

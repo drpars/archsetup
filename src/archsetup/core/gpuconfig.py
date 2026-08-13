@@ -17,7 +17,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import bootloader, i18n
+from . import bootloader, i18n, mkinitcpio
 from .pacman import run
 from .sysedit import sudo_write
 
@@ -37,20 +37,18 @@ NVIDIA_MODPROBE_CONTENT = "options nvidia_drm modeset=1 fbdev=1\n"
 def _merge_modules(modules: tuple[str, ...]) -> bool:
     """Add missing entries to MODULES=(...); returns True if the file changed."""
     text = MKINITCPIO.read_text(encoding="utf-8")
-    match = re.search(r"^MODULES=\(([^)]*)\)", text, re.MULTILINE)
-    if match is None:
+    present = mkinitcpio.read_array(text, "MODULES")
+    if present is None:
         print(t("msg.mkinitcpio_no_modules"))
         return False
 
-    present = match.group(1).split()
     missing = [mod for mod in modules if mod not in present]
     if not missing:
         print(t("msg.modules_present", modules=" ".join(modules)))
         return False
 
-    merged = " ".join(present + missing)
-    new_text = f"{text[:match.start(1)]}{merged}{text[match.end(1):]}"
-    return sudo_write(MKINITCPIO, new_text) == 0
+    new_text = mkinitcpio.set_array(text, "MODULES", present + missing)
+    return new_text is not None and sudo_write(MKINITCPIO, new_text) == 0
 
 
 def _nvidia_modeset_is_default() -> bool:

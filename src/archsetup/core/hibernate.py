@@ -12,12 +12,11 @@ Ported from installarchde's swap_file_config with fixes:
 
 from __future__ import annotations
 
-import re
 import shutil
 import subprocess
 from pathlib import Path
 
-from . import bootloader, gpuconfig, i18n
+from . import bootloader, gpuconfig, i18n, mkinitcpio
 from .pacman import run
 from .sysedit import sudo_write
 
@@ -54,12 +53,11 @@ def _swap_offset() -> str:
 def _ensure_resume_hook() -> bool:
     """Add the resume hook before fsck on busybox initramfs; True if changed."""
     text = gpuconfig.MKINITCPIO.read_text(encoding="utf-8")
-    match = re.search(r"^HOOKS=\(([^)]*)\)", text, re.MULTILINE)
-    if match is None:
+    hooks = mkinitcpio.read_array(text, "HOOKS")
+    if hooks is None:
         print(t("msg.hooks_missing"))
         return False
 
-    hooks = match.group(1).split()
     if "systemd" in hooks:
         print(t("msg.resume_systemd"))
         return False
@@ -71,8 +69,8 @@ def _ensure_resume_hook() -> bool:
         hooks.insert(hooks.index("fsck"), "resume")
     else:
         hooks.append("resume")
-    new_text = f"{text[:match.start(1)]}{' '.join(hooks)}{text[match.end(1):]}"
-    return sudo_write(gpuconfig.MKINITCPIO, new_text) == 0
+    new_text = mkinitcpio.set_array(text, "HOOKS", hooks)
+    return new_text is not None and sudo_write(gpuconfig.MKINITCPIO, new_text) == 0
 
 
 def configure() -> int:
