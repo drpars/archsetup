@@ -48,7 +48,7 @@ import subprocess
 from datetime import date
 from pathlib import Path
 
-from . import hardware, i18n, mkinitcpio, pacman, sysedit
+from . import hardware, i18n, mkinitcpio, pacman, secureboot, sysedit
 from .pacman import run
 from .prompt import ask_yes
 
@@ -338,10 +338,14 @@ def configure() -> int:
     rc |= run(["sudo", "mkinitcpio", "-P"])
 
     # What was written is not what is in force: report the produced images.
-    for path, size in sorted(_sizes(_images()).items()):
+    produced = _images()
+    for path, size in sorted(_sizes(produced).items()):
         was = before.get(path)
         if was:
             print(t("kms_hook.image_size", path=path,
                     before=round(was / 1024**2, 1), after=round(size / 1024**2, 1)))
+    # Asked even when -P failed: a half-written image is exactly the one whose
+    # signature is worth knowing about before the next boot.
+    rc |= secureboot.verify(produced)
     print(t("kms_hook.undo", backup=backup, conf=CONF))
     return rc

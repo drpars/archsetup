@@ -202,6 +202,13 @@ image_backup = "{path} → {backup}"
 image_size = "{path}: {before} MiB → {after} MiB"
 undo = "Geri alma: sudo cp {backup} {conf} && sudo mkinitcpio -P"
 
+[secureboot]
+signed = "Yeniden üretilen imajların imzası doğrulandı (sbctl, {count} dosya)."
+unsigned = "Yeniden üretilen şu imajlar imzasız: {paths} — Secure Boot açık, makine bir sonraki açılışta onları reddeder. Düzeltme: her yol için sudo sbctl sign -s <yol>"
+no_sbctl = "Secure Boot açık ama sbctl kurulu değil; yeniden üretilen imajların imzası doğrulanamadı. Başka bir imzalama düzeni kullanıyorsanız yeniden başlatmadan önce elle bakın."
+unreadable = "sbctl verify okunabilir bir cevap vermedi; yeniden üretilen imajların imzası doğrulanamadı. Elle: sudo sbctl verify"
+not_listed = "sbctl yeniden üretilen imajların hiçbirini görmüyor: {paths} — imzalı olup olmadıkları bilinmiyor. Yeniden başlatmadan önce: sudo sbctl verify"
+
 [sysedit]
 unchanged = "{path} zaten güncel."
 backup = "{path} farklı; yedeği {backup} olarak alınıyor."

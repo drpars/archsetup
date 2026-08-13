@@ -202,6 +202,13 @@ image_backup = "{path} → {backup}"
 image_size = "{path}: {before} MiB → {after} MiB"
 undo = "Undo: sudo cp {backup} {conf} && sudo mkinitcpio -P"
 
+[secureboot]
+signed = "Signature of the rebuilt images verified (sbctl, {count} files)."
+unsigned = "These rebuilt images are not signed: {paths} — Secure Boot is on, so the machine will reject them at the next boot. Fix: sudo sbctl sign -s <path> for each."
+no_sbctl = "Secure Boot is on but sbctl is not installed; the signature of the rebuilt images could not be verified. If you sign them some other way, check by hand before rebooting."
+unreadable = "sbctl verify gave no readable answer; the signature of the rebuilt images could not be verified. By hand: sudo sbctl verify"
+not_listed = "sbctl does not see any of the rebuilt images: {paths} — whether they are signed is unknown. Before rebooting: sudo sbctl verify"
+
 [sysedit]
 unchanged = "{path} is already up to date."
 backup = "{path} differs; backing it up as {backup}."
