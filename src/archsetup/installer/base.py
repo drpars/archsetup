@@ -7,7 +7,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..core import i18n, mirrors
+from ..core import i18n, mirrors, repos
 from ..core.pacman import run
 from ..core.prompt import ask_yes
 from . import disk
@@ -16,7 +16,14 @@ from .state import state
 t = i18n.t
 
 MNT = Path("/mnt")
-KERNELS = ("linux-zen", "linux", "linux-lts", "linux-hardened", "linux-g14")
+KERNELS = (
+    "linux-zen",
+    "linux",
+    "linux-lts",
+    "linux-hardened",
+    "linux-g14",
+    "linux-ogc",
+)
 DEFAULT_KEYMAP = "trq"
 
 
@@ -86,15 +93,16 @@ def pacstrap_base() -> int:
         return 1
     kernel = KERNELS[int(raw) - 1]
 
-    # linux-g14 lives in the asus-linux repo, and pacstrap resolves against
-    # the *live* pacman.conf — without [g14] here the package is simply
-    # "target not found" and the whole pacstrap step fails.
-    if kernel == G14_KERNEL and not has_g14(LIVE_PACMAN_CONF):
-        print(t("inst.g14_needed"))
-        if not ask_yes(t("inst.g14_add_q")):
-            print(t("inst.g14_refused"))
+    # An out-of-tree kernel lives in a third-party repo, and pacstrap resolves
+    # against the *live* pacman.conf — without that repo here the package is
+    # simply "target not found" and the whole pacstrap step fails.
+    repo = kernel_repo(kernel)
+    if repo is not None and not has_repo(LIVE_PACMAN_CONF, repo.name):
+        print(t("inst.repo_needed", repo=repo.name, kernel=kernel))
+        if not ask_yes(t("inst.repo_add_q", repo=repo.name, server=repo.server)):
+            print(t("inst.repo_refused", repo=repo.name))
             return 1
-        if add_g14_repo_live() != 0:
+        if add_kernel_repo_live(repo) != 0:
             return 1
 
     packages = ["base", "base-devel", "terminus-font", kernel]
@@ -107,10 +115,10 @@ def pacstrap_base() -> int:
     rc = run(["pacstrap", str(MNT), *packages])
     if rc == 0:
         state.kernel = kernel
-        if kernel == G14_KERNEL:
+        if repo is not None:
             # The installed system needs the repo too, or its kernel has
             # no source for updates.
-            rc |= add_g14_repo()
+            rc |= add_kernel_repo(repo)
     return rc
 
 
@@ -154,50 +162,68 @@ def enable_multilib() -> int:
     return run(["arch-chroot", str(MNT), "pacman", "-Sy"])
 
 
-# asus-linux'un AÇIK imzalama anahtarının parmak izi; sunucudan `--recv-keys`
-# ile çekilir. gitleaks `generic-api-key` ile eşliyor, sır değil. Muafiyet
-# işareti satırın kendisinde olmak zorunda -- üst satıra yazılırsa gitleaks
-# görmez ve kanca commit'i durdurur (ölçüldü 2026-08-06).
-G14_KEY = "8F654886F17D497FEFE3DB448B15A6B0E9A3FA35"  # gitleaks:allow
-G14_REPO = "\n[g14]\nServer = https://arch.asus-linux.org\n"
-G14_KERNEL = "linux-g14"
 LIVE_PACMAN_CONF = Path("/etc/pacman.conf")
 
+# Which third-party repository each out-of-tree kernel comes from. There are
+# two now: [g14] stopped publishing on 2026-07-19 and stands at 7.1.4, while
+# [ogc] carries linux-ogc 7.1.8 and is where asus-linux's packager moved.
+# Both stay on offer -- [g14] still serves a kernel that boots and nothing has
+# announced its retirement -- but see core.repos for why the order they land
+# in, not the version they carry, is the thing that can go wrong.
+KERNEL_REPOS = {
+    "linux-g14": repos.G14,
+    "linux-ogc": repos.OGC,
+}
 
-def has_g14(conf: Path) -> bool:
+
+def kernel_repo(kernel: str) -> repos.Repo | None:
+    return KERNEL_REPOS.get(kernel)
+
+
+def has_repo(conf: Path, name: str) -> bool:
     try:
-        return "[g14]" in conf.read_text(encoding="utf-8")
+        return repos.has(conf.read_text(encoding="utf-8"), name)
     except OSError:
         return False
 
 
-def _add_g14(conf: Path, prefix: list[str]) -> int:
-    """Add [g14] to one pacman.conf.
+def _add_repo(repo: repos.Repo, conf: Path, prefix: list[str]) -> int:
+    """Add one third-party repository to one pacman.conf.
 
     `prefix` is the arch-chroot invocation for the target, or empty to
     act on the live environment. The repo line is written only after the
-    key is trusted — appending it first would make every later `pacman
+    key is trusted — writing it first would make every later `pacman
     -Sy` fail on an unknown signature, including pacstrap's own.
     """
-    if has_g14(conf):
+    if has_repo(conf, repo.name):
         print(t("virt.already", path=conf))
         return 0
-    rc = run([*prefix, "pacman-key", "--recv-keys", G14_KEY])
-    rc |= run([*prefix, "pacman-key", "--lsign-key", G14_KEY])
+    rc = run([*prefix, "pacman-key", "--recv-keys", repo.key])
+    rc |= run([*prefix, "pacman-key", "--lsign-key", repo.key])
     if rc != 0:
-        print(t("inst.g14_key_failed"))
+        print(t("inst.repo_key_failed", repo=repo.name))
         return rc
-    with open(conf, "a", encoding="utf-8") as fh:
-        fh.write(G14_REPO)
-    print(f"{conf} <- [g14]")
+    text = conf.read_text(encoding="utf-8")
+    # Above any sibling publishing the same names, below the official ones.
+    conf.write_text(repos.insert(text, repo, above=("g14",)), encoding="utf-8")
+    print(f"{conf} <- [{repo.name}]")
     return run([*prefix, "pacman", "-Sy"])
 
 
-def add_g14_repo() -> int:
+def add_kernel_repo(repo: repos.Repo) -> int:
     """Target system, so the installed machine can keep updating the kernel."""
-    return _add_g14(MNT / "etc/pacman.conf", ["arch-chroot", str(MNT)])
+    return _add_repo(repo, MNT / "etc/pacman.conf", ["arch-chroot", str(MNT)])
 
 
-def add_g14_repo_live() -> int:
-    """Live ISO: pacstrap resolves linux-g14 against *this* pacman.conf."""
-    return _add_g14(LIVE_PACMAN_CONF, [])
+def add_kernel_repo_live(repo: repos.Repo) -> int:
+    """Live ISO: pacstrap resolves the kernel against *this* pacman.conf."""
+    return _add_repo(repo, LIVE_PACMAN_CONF, [])
+
+
+def add_asus_repo() -> int:
+    """Menu entry: the ASUS repository, for the tools rather than for a kernel.
+
+    [ogc] rather than [g14] because this is the one still publishing, and
+    because a kernel that needs [g14] gets it from pacstrap_base anyway.
+    """
+    return add_kernel_repo(repos.OGC)

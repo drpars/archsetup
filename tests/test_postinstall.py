@@ -373,7 +373,7 @@ def test_wait_online_skipped_without_networkd(tmp_path, monkeypatch, runlog):
     assert runlog.calls == []
 
 
-def test_asus_g14_routing(tmp_path, monkeypatch):
+def test_asus_repo_routing(tmp_path, monkeypatch):
     installs, enables = [], []
     monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
     monkeypatch.setattr(asus.pacman, "is_installed", lambda p: p == "power-profiles-daemon")
@@ -381,42 +381,77 @@ def test_asus_g14_routing(tmp_path, monkeypatch):
     monkeypatch.setattr(asus.prompt, "ask_yes", lambda q: False)
 
     conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n[g14]\nServer = x\n")
+    conf.write_text("[options]\n[ogc]\nServer = x\n")
     monkeypatch.setattr(asus, "PACMAN_CONF", conf)
     asus.install()
     assert "asusctl" in installs[0][0]  # repo'dan
 
+    # [g14] tek başına yetmiyor: asusctl'i oradan çözmek 2026-04 derlemesini
+    # almak demek. Kullanıcı [ogc] eklemeyi reddettiği için AUR'a düşüyor.
+    conf.write_text("[options]\n[g14]\nServer = x\n")
+    asus.install()
+    assert "asusctl" in installs[1][1]
+
     conf.write_text("[options]\n")
     asus.install()
-    assert "asusctl" in installs[1][1]  # depo reddedildi -> AUR'dan
-    assert enables == ["power-profiles-daemon"] * 2  # yalnız kurulu paketin servisi
-    # supergfxctl artık varsayılan kümede değil (upstream aşamalı olarak kaldırıyor)
+    assert "asusctl" in installs[2][1]  # depo reddedildi -> AUR'dan
+    assert enables == ["power-profiles-daemon"] * 3  # yalnız kurulu paketin servisi
+    # supergfxctl artık varsayılan kümede değil (upstream arşivledi)
     assert all("supergfxctl" not in repo + aur for repo, aur in installs)
 
 
-def test_asus_g14_setup_appends_stanza(tmp_path, monkeypatch, fake_write, runlog):
+def test_asus_repo_setup_keeps_official_first(tmp_path, monkeypatch, fake_write, runlog):
     conf = tmp_path / "pacman.conf"
     conf.write_text("[options]\n[core]\nInclude = /etc/pacman.d/mirrorlist\n")
     monkeypatch.setattr(asus, "PACMAN_CONF", conf)
     monkeypatch.setattr(asus, "run", runlog)
     monkeypatch.setattr(asus, "sudo_write", fake_write)
 
-    assert asus.setup_g14_repo() is True
+    assert asus.setup_repo() is True
     text = conf.read_text()
-    assert "[g14]" in text
-    # [core] önce gelmeli: resmi depolar [g14] karşısında önceliğini korur
-    assert text.index("[core]") < text.index("[g14]")
-    assert ["sudo", "pacman-key", "--lsign-key", asus.G14_KEY] in runlog.calls
+    assert "[ogc]" in text
+    # [core] önce gelmeli: resmi depolar üçüncü taraf karşısında önceliğini korur
+    assert text.index("[core]") < text.index("[ogc]")
+    assert ["sudo", "pacman-key", "--lsign-key", asus.REPO.key] in runlog.calls
 
 
-def test_asus_g14_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
+def test_asus_repo_setup_outranks_g14(tmp_path, monkeypatch, fake_write, runlog):
+    """Sıra sürümü yener: sona eklenen [ogc] hiç görünmez, asusctl [g14]'ten gelir."""
+    conf = tmp_path / "pacman.conf"
+    conf.write_text(
+        "[options]\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[g14]\nServer = y\n"
+    )
+    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+    monkeypatch.setattr(asus, "run", runlog)
+    monkeypatch.setattr(asus, "sudo_write", fake_write)
+
+    assert asus.setup_repo() is True
+    text = conf.read_text()
+    assert text.index("[core]") < text.index("[ogc]") < text.index("[g14]")
+    assert text.count("[g14]") == 1
+
+
+def test_asus_repo_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
     conf = tmp_path / "pacman.conf"
     conf.write_text("[options]\n")
     monkeypatch.setattr(asus, "PACMAN_CONF", conf)
     monkeypatch.setattr(asus, "run", lambda cmd, **kw: 1)
 
-    assert asus.setup_g14_repo() is False
-    assert "[g14]" not in conf.read_text()
+    assert asus.setup_repo() is False
+    assert "[ogc]" not in conf.read_text()
+
+
+def test_asus_supergfx_never_uses_a_repo(tmp_path, monkeypatch):
+    """Ölçüldü 2026-08-13: supergfxctl ne [g14]'te ne [ogc]'de var, yalnız AUR'da."""
+    installs = []
+    monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
+    monkeypatch.setattr(asus.pacman, "is_installed", lambda p: False)
+    conf = tmp_path / "pacman.conf"
+    conf.write_text("[options]\n[ogc]\nServer = x\n")
+    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+
+    assert asus.install_supergfx() == 0
+    assert installs == [((), ("supergfxctl",))]
 
 
 def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):

@@ -47,8 +47,10 @@ rEFInd, Secure Boot) → yeniden başlat.
 
 Ek paketler sistem yapılandırmasından **önce** gelir: sbctl, efibootmgr ve
 mikrokod oradan kurulur, chroot adımları da bunlara dayanır. `linux-g14`
-seçilirse [g14] deposu pacstrap'ten önce canlı ortama, kurulumdan sonra da
-hedefe eklenir — depo olmadan çekirdek ne kurulabilir ne güncellenebilir.
+ya da `linux-ogc` seçilirse o çekirdeğin deposu ([g14] ya da [ogc]) pacstrap'ten
+önce canlı ortama, kurulumdan sonra da hedefe eklenir — depo olmadan çekirdek ne
+kurulabilir ne güncellenebilir. [ogc] her zaman [g14]'ün **üstüne** yazılır:
+pacman bir adı dosyada önce gelen depodan çözer, sürüme bakmaz.
 
 Bölüm seçiminde EFI bölümünün **tipi** de denetlenir: "Linux filesystem"
 olarak bırakılmış bir FAT32 bölümü biçimlenir, bağlanır ve dosyaları alır;
@@ -339,9 +341,9 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       yazılır — UKI (`/etc/kernel/cmdline`), systemd-boot girdileri
       (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
       ve rEFInd (`refind_linux.conf`)
-- [x] ASUS ROG/TUF araçları: [g14] deposunu kurma (anahtar + pacman.conf),
+- [x] ASUS ROG/TUF araçları: [ogc] deposunu kurma (anahtar + pacman.conf),
       asusctl/rog-control-center, servisler; supergfxctl ayrı bir isteğe
-      bağlı görev (upstream aşamalı olarak kaldırıyor)
+      bağlı görev (upstream arşivledi, paket yalnız AUR'da)
 - [x] NVIDIA hibrit dizüstü güç yönetimi ([asus-linux.org rehberi](https://asus-linux.org/guides/arch-guide/)): S0ix + runtime PM için
       `modprobe.d`/`udev` kuralları, Turing/Ampere ayrımı, nvidia-suspend/
       resume/hibernate/powerd servisleri

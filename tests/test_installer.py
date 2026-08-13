@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from archsetup.core import i18n
+from archsetup.core import i18n, repos
 from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
 from archsetup.installer.state import state
 
@@ -333,10 +333,10 @@ def test_refind_conf(boot_env, monkeypatch):
     assert "single" in text
 
 
-# --- [g14] repository ------------------------------------------------------
+# --- third-party kernel repositories ---------------------------------------
 
 
-def _g14_env(tmp_path, monkeypatch, runlog, live_text="[core]\n"):
+def _repo_env(tmp_path, monkeypatch, runlog, live_text="[core]\n"):
     live = tmp_path / "pacman.conf"
     live.write_text(live_text)
     (tmp_path / "etc").mkdir(exist_ok=True)
@@ -349,42 +349,70 @@ def _g14_env(tmp_path, monkeypatch, runlog, live_text="[core]\n"):
     return live
 
 
-def test_g14_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog):
+@pytest.mark.parametrize("kernel", ["linux-g14", "linux-ogc"])
+def test_kernel_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog, kernel):
     """pacstrap resolves against the *live* pacman.conf.
 
-    Without [g14] there, linux-g14 is simply "target not found" and the
-    whole base install fails.
+    Without the kernel's repository there the package is simply "target not
+    found" and the whole base install fails. Both out-of-tree kernels take
+    this path, and they come from two different repositories.
     """
-    live = _g14_env(tmp_path, monkeypatch, runlog)
+    live = _repo_env(tmp_path, monkeypatch, runlog)
     monkeypatch.setattr(base, "ask_yes", lambda q: True)
-    _feed(monkeypatch, base, [str(base.KERNELS.index(base.G14_KERNEL) + 1)])
+    _feed(monkeypatch, base, [str(base.KERNELS.index(kernel) + 1)])
 
+    name = base.kernel_repo(kernel).name
     assert base.pacstrap_base() == 0
     commands = [" ".join(call) for call in runlog.calls]
     lsign = next(i for i, c in enumerate(commands) if "--lsign-key" in c)
     pacstrap = next(i for i, c in enumerate(commands) if c.startswith("pacstrap"))
     assert lsign < pacstrap
-    assert "[g14]" in live.read_text()
+    assert f"[{name}]" in live.read_text()
     # The installed system needs the repo too, or its kernel has no updates.
-    assert "[g14]" in (tmp_path / "etc" / "pacman.conf").read_text()
+    assert f"[{name}]" in (tmp_path / "etc" / "pacman.conf").read_text()
 
 
-def test_g14_refusal_aborts_instead_of_failing_in_pacstrap(tmp_path, monkeypatch, runlog):
-    _g14_env(tmp_path, monkeypatch, runlog)
+def test_ogc_lands_above_g14_not_at_the_end(tmp_path, monkeypatch, runlog):
+    """Order beats version: appended below [g14], [ogc] would never be read."""
+    live = _repo_env(
+        tmp_path, monkeypatch, runlog, live_text="[core]\n\n[g14]\nServer = y\n"
+    )
+    monkeypatch.setattr(base, "ask_yes", lambda q: True)
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-ogc") + 1)])
+
+    assert base.pacstrap_base() == 0
+    text = live.read_text()
+    assert text.index("[core]") < text.index("[ogc]") < text.index("[g14]")
+
+
+def test_kernel_repo_refusal_aborts_instead_of_failing_in_pacstrap(
+    tmp_path, monkeypatch, runlog
+):
+    _repo_env(tmp_path, monkeypatch, runlog)
     monkeypatch.setattr(base, "ask_yes", lambda q: False)
-    _feed(monkeypatch, base, [str(base.KERNELS.index(base.G14_KERNEL) + 1)])
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-g14") + 1)])
 
     assert base.pacstrap_base() == 1
     assert runlog.calls == []
 
 
-def test_g14_repo_line_withheld_when_the_key_fails(tmp_path, monkeypatch):
+def test_stock_kernel_needs_no_repository(tmp_path, monkeypatch, runlog):
+    """linux-zen is in [extra]; nothing may be asked or written for it."""
+    live = _repo_env(tmp_path, monkeypatch, runlog)
+    monkeypatch.setattr(base, "ask_yes", lambda q: False)
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-zen") + 1)])
+
+    assert base.pacstrap_base() == 0
+    assert live.read_text() == "[core]\n"
+
+
+def test_kernel_repo_line_withheld_when_the_key_fails(tmp_path, monkeypatch):
     """A repo pacman cannot verify breaks every later -Sy, pacstrap included."""
     conf = tmp_path / "pacman.conf"
     conf.write_text("[core]\n")
     monkeypatch.setattr(base, "run", lambda cmd, **kw: 1)
-    assert base._add_g14(conf, []) != 0
-    assert "[g14]" not in conf.read_text()
+    assert base._add_repo(repos.OGC, conf, []) != 0
+    assert "[ogc]" not in conf.read_text()
 
 
 # --- Secure Boot -----------------------------------------------------------

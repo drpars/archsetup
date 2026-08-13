@@ -738,7 +738,7 @@ def make_target_menu() -> MenuScreen:
         _run_item("adduser", "inst.adduser", "useradd + wheel", chroot.add_user),
         _run_item("swapfile", "inst.swapfile", "/swapfile", chroot.create_swapfile),
         _run_item("multilib", "inst.multilib", "pacman.conf [multilib]", base.enable_multilib),
-        _run_item("g14", "inst.g14", "asus-linux [g14]", base.add_g14_repo),
+        _run_item("ogc", "inst.ogc", "OpenGamingCollective [ogc]", base.add_asus_repo),
         _run_item("fstab", "inst.fstab", "genfstab", base.genfstab),
         MenuItem(
             "bootloader", t("inst.bootloader_title"), "systemd-boot / GRUB / rEFInd",
