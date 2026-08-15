@@ -17,10 +17,21 @@ what has to outrank what.
 supergfxctl is deliberately not part of the default set and no longer could
 be: its upstream is archived too, and measured 2026-08-13 it is in neither
 [g14] nor [ogc], so it is an AUR build wherever it comes from. Its successor
-is cardwire, which is in [ogc] -- but cardwire hides the GPU from userspace
-rather than binding it to vfio-pci, and whether that covers the passthrough
-case this task's own note cites is unmeasured. So the task stays, says what
-happened, and prescribes nothing.
+cardwire is in [ogc], and measured 2026-08-15 out of the package contents it
+does not cover the case this task exists for: the eBPF program hooks three
+things -- lsm/file_open, lsm/inode_getattr, lsm/inode_permission -- and all
+three deny access to the device node, while nothing in the binary binds
+vfio-pci. It hides the GPU instead of handing it over, so it is not a
+stand-in for the passthrough half. The task stays, says what happened, and
+prescribes nothing.
+
+cardwire is not in the catalog either, and the D-Bus name is a second reason
+on top of that one. Its policy claims net.hadess.SwitcherooControl, which is
+the name switcheroo-control owns -- the package REPO_PACKAGES installs and
+SERVICE_OWNERS enables. Nothing in its .PKGINFO declares
+replaces/conflicts/provides, so pacman would take both without a word, and
+what happens when the two land together is unmeasured. A name this module
+fills itself is not the place to ship an unmeasured collision.
 
 NVIDIA laptop power management lives in core.nvidia_laptop.
 """
