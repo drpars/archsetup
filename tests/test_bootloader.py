@@ -144,6 +144,10 @@ def hib_env(gpu_env, monkeypatch, fake_write, runlog):
     # would stop on a question and the suite would answer it from real stdin.
     monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 32 * 2**30)
     monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
+    # Pinned for the same reason: unpinned, the NVIDIA gate reads the real
+    # /etc/mkinitcpio.conf.d and the suite answers from the machine under it.
+    # Empty here today, which is exactly how this class of leak stays invisible.
+    monkeypatch.setattr(hibernate, "CONF_D", gpu_env / "mkinitcpio.conf.d")
     swapfile = gpu_env / "swapfile"
     swapfile.write_text("x")
     monkeypatch.setattr(hibernate, "SWAPFILE", str(swapfile))
@@ -224,3 +228,79 @@ def test_hibernate_does_not_ask_when_swap_cannot_be_measured(hib_env, monkeypatc
 
     assert hibernate.configure() == 0
     assert "resume=UUID=NEW-UUID" in cmdline.read_text()
+
+
+@pytest.fixture
+def nv_env(hib_env, monkeypatch):
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    return hib_env
+
+
+def test_hibernate_offers_to_drop_nvidia_from_modules(nv_env, monkeypatch, capsys):
+    """NVIDIA in the resume kernel refuses to freeze, so the image never lands.
+
+    Measured on this laptop: the image was read back at full speed and then
+    nv_pmops_freeze returned -5, because no systemd unit has written
+    /proc/driver/nvidia/suspend inside an initramfs. Taking the modules out
+    made the same machine hibernate and return on the same boot id.
+    """
+    mk = nv_env / "mkinitcpio.conf"
+    mk.write_text("MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm amdgpu)\nHOOKS=(base systemd block fsck)\n")
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
+
+    assert hibernate.configure() == 0
+    assert "MODULES=(amdgpu)" in mk.read_text()
+    assert "resume=UUID=NEW-UUID" in (nv_env / "cmdline").read_text()
+    assert hibernate.run.calls == [["sudo", "mkinitcpio", "-P"]]
+    assert "nv_pmops_freeze" in capsys.readouterr().out
+
+
+def test_hibernate_keeps_nvidia_when_the_answer_is_no(nv_env, monkeypatch):
+    """A refusal leaves the machine as it was; the parameters are still written.
+
+    Early KMS is worth having to someone who never hibernates, so this is a
+    question, not a removal -- and a run with no one to answer takes "no".
+    """
+    mk = nv_env / "mkinitcpio.conf"
+    mk.write_text("MODULES=(nvidia amdgpu)\nHOOKS=(base systemd block fsck)\n")
+    asked: list[str] = []
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: bool(asked.append(prompt)))
+
+    assert hibernate.configure() == 0
+    # Asserting only that nothing changed would pass with the gate deleted;
+    # what makes this a guard is that the question was put at all.
+    assert asked, "kapı hiç sormadı"
+    assert "MODULES=(nvidia amdgpu)" in mk.read_text()
+    assert "resume=UUID=NEW-UUID" in (nv_env / "cmdline").read_text()
+
+
+def test_hibernate_does_not_ask_without_nvidia_modules(nv_env, monkeypatch):
+    """amdgpu alone freezes fine; the gate fires on a measured negative only."""
+    mk = nv_env / "mkinitcpio.conf"
+    mk.write_text("MODULES=(amdgpu)\nHOOKS=(base systemd block fsck)\n")
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: pytest.fail("sorulmamali"))
+
+    assert hibernate.configure() == 0
+    assert "MODULES=(amdgpu)" in mk.read_text()
+
+
+def test_hibernate_will_not_rewrite_a_drop_in_it_does_not_own(nv_env, monkeypatch, capsys):
+    """A drop-in wins MODULES, and editing the main file would not remove it.
+
+    The gate has to read the effective text to see the modules at all, but
+    what it may write back is only the main file -- so when the modules come
+    from a drop-in it says so rather than making a change that does nothing.
+    """
+    mk = nv_env / "mkinitcpio.conf"
+    mk.write_text("MODULES=(amdgpu)\nHOOKS=(base systemd block fsck)\n")
+    conf_d = nv_env / "mkinitcpio.conf.d"
+    conf_d.mkdir()
+    (conf_d / "10-nvidia.conf").write_text("MODULES=(amdgpu nvidia nvidia_drm)\n")
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
+
+    assert hibernate.configure() == 0
+    assert "MODULES=(amdgpu)" in mk.read_text()
+    assert "MODULES=(amdgpu nvidia nvidia_drm)" in (conf_d / "10-nvidia.conf").read_text()
+    assert "drop-in" in capsys.readouterr().out

@@ -25,6 +25,7 @@ t = i18n.t
 
 SWAPFILE = "/swapfile"
 IMAGE_SIZE = Path("/sys/power/image_size")
+CONF_D = Path("/etc/mkinitcpio.conf.d")
 
 
 def _swapfile_active() -> bool:
@@ -105,6 +106,58 @@ def _swap_is_big_enough() -> bool:
     return False
 
 
+def _drop_nvidia_from_initramfs() -> bool:
+    """Offer to take the NVIDIA modules out of MODULES; True if the file changed.
+
+    A driver's .freeze callback only runs where that driver is bound, so what
+    breaks resume is not early KMS in general but NVIDIA being loaded in the
+    *resume* kernel -- the one the initramfs starts, where no systemd unit has
+    written /proc/driver/nvidia/suspend to save VRAM. Measured on this laptop:
+    the image was read back at full speed and then
+
+        NVRM: GPU 0000:01:00.0: PreserveVideoMemoryAllocations module parameter
+        is set. System Power Management attempted without driver procfs suspend
+        interface.
+        nvidia 0000:01:00.0: PM: pci_pm_freeze(): nv_pmops_freeze returns -5
+
+    and the restore unwound -- which reads from outside as "hibernation just
+    doesn't work". With MODULES=(amdgpu) the same machine hibernated and came
+    back on the same boot id.
+
+    This task owns the question because this task writes the resume= line that
+    creates the requirement, the same rule that put xorg-xsetroot in the sddm
+    task rather than in the catalogue. core.gpuconfig keeps adding the modules:
+    early KMS is worth having on a machine that never hibernates, and what was
+    measured is not "NVIDIA early KMS is bad".
+
+    A question rather than a removal, and the prompt names the cost. Runs with
+    no one to answer read as "no", which leaves the machine as it was.
+    """
+    text = gpuconfig.MKINITCPIO.read_text(encoding="utf-8")
+    effective = mkinitcpio.read_array(
+        mkinitcpio.effective_text(gpuconfig.MKINITCPIO, CONF_D), "MODULES"
+    )
+    guilty = [mod for mod in effective or [] if mod in gpuconfig.NVIDIA_MODULES]
+    if not guilty:
+        return False
+
+    print(t("msg.resume_nvidia_in_initramfs", modules=" ".join(guilty)))
+    if not ask_yes(t("msg.resume_nvidia_drop_q")):
+        print(t("msg.resume_nvidia_kept"))
+        return False
+
+    # Only the main file is ours to edit; a drop-in belongs to whoever put it
+    # there, and rewriting MODULES here would not remove what it re-adds.
+    own = mkinitcpio.read_array(text, "MODULES") or []
+    if not [mod for mod in own if mod in gpuconfig.NVIDIA_MODULES]:
+        print(t("msg.resume_nvidia_drop_in"))
+        return False
+
+    kept = [mod for mod in own if mod not in gpuconfig.NVIDIA_MODULES]
+    new_text = mkinitcpio.set_array(text, "MODULES", kept)
+    return new_text is not None and sudo_write(gpuconfig.MKINITCPIO, new_text) == 0
+
+
 def _ensure_resume_hook() -> bool:
     """Add the resume hook before fsck on busybox initramfs; True if changed."""
     text = gpuconfig.MKINITCPIO.read_text(encoding="utf-8")
@@ -146,6 +199,8 @@ def configure() -> int:
         print(t("msg.swap_params_failed"))
         return 1
 
+    modules_changed = _drop_nvidia_from_initramfs()
+
     params = [f"resume=UUID={uuid}", f"resume_offset={offset}"]
     result = bootloader.add_kernel_params(
         params, replace_prefixes=("resume=", "resume_offset=")
@@ -153,7 +208,7 @@ def configure() -> int:
     hooks_changed = _ensure_resume_hook()
 
     rc = 0
-    if result.needs_mkinitcpio or hooks_changed:
+    if result.needs_mkinitcpio or hooks_changed or modules_changed:
         rc = mkinitcpio.regenerate()
     if result.regen_cmd is not None:
         rc |= run(list(result.regen_cmd))
