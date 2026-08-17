@@ -194,17 +194,105 @@ def test_wallpapers_refuses_an_unexpected_repo_layout(dot_env, monkeypatch):
 
 
 def test_sddm_silent(tmp_path, monkeypatch, fake_write):
+    installed = []
+    cap = []
     monkeypatch.setattr(sddm, "sudo_write", fake_write)
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: True)
-    monkeypatch.setattr(sddm.pacman, "install", lambda repo, aur: 0)
+    monkeypatch.setattr(
+        sddm.pacman, "install", lambda repo, aur: installed.append((repo, aur)) or 0
+    )
     monkeypatch.setattr(sddm, "SDDM_CONF", tmp_path / "sddm.conf")
     monkeypatch.setattr(sddm, "install_avatar", lambda: 0)
+    monkeypatch.setattr(sddm, "install_cursor_cap", lambda: cap.append(True) or 0)
 
     assert sddm.install_silent() == 0
     assert "Current=silent" in (tmp_path / "sddm.conf").read_text()
+    # The cursor theme line carries an undeclared dependency; see install_silent.
+    assert installed == [(["xorg-xsetroot"], ["sddm-silent-theme"])]
+    assert cap == [True]
+
+    # Declining the config declines the cursor file with it: it names the same
+    # theme, and half of it applied is a greeter with two different cursors.
+    (tmp_path / "sddm.conf").write_text("[Theme]\nCurrent=elsewhere\n")
+    monkeypatch.setattr(sddm, "ask_yes", lambda prompt: False)
+    cap.clear()
+    assert sddm.install_silent() == 0
+    assert cap == []
 
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: False)
     assert sddm.install_silent() == 1
+
+
+def test_sddm_cursor_theme_is_one_name():
+    """Both greeter cursor paths must be told the same theme.
+
+    sddm.conf feeds the root arrow (libXcursor, via XCURSOR_THEME) and the cap
+    file feeds the theme's own cursorShapes (libxcb-cursor, which never reads
+    that variable). Hardcoding either one is invisible until you look at the
+    login screen, so the two names come from one constant.
+    """
+    assert f"CursorTheme={sddm.CURSOR_THEME}\n" in sddm.SILENT_CONF
+    assert f"Inherits={sddm.CURSOR_THEME}\n" in sddm.CURSOR_CAP
+
+
+def _passwd_stub(line):
+    def run(cmd, **kwargs):
+        assert cmd == ["getent", "passwd", sddm.GREETER_USER]
+        return SimpleNamespace(returncode=0 if line else 2, stdout=line)
+
+    return run
+
+
+def test_sddm_cursor_cap(tmp_path, monkeypatch):
+    home = tmp_path / "var" / "lib" / "sddm"
+    home.mkdir(parents=True)
+    dirs, placed = [], []
+    # GECOS holds spaces ("SDDM Greeter Account") -- a whitespace split would
+    # fold three fields into one and hand back the wrong home.
+    monkeypatch.setattr(
+        sddm.subprocess,
+        "run",
+        _passwd_stub(f"sddm:x:959:959:SDDM Greeter Account:{home}:/usr/bin/nologin\n"),
+    )
+    monkeypatch.setattr(
+        sddm, "sudo_mkdir", lambda p, o, m: dirs.append((p, o, m)) or 0
+    )
+    monkeypatch.setattr(
+        sddm, "sudo_install", lambda p, c, o, m: placed.append((p, c, o, m)) or 0
+    )
+
+    assert sddm.install_cursor_cap() == 0
+    assert dirs == [
+        (home / ".local", "sddm", "700"),
+        (home / ".local" / "share", "sddm", "700"),
+        (home / ".local" / "share" / "icons", "sddm", "700"),
+        (home / ".local" / "share" / "icons" / "default", "sddm", "700"),
+    ]
+    target, content, owner, mode = placed[0]
+    assert target == home / sddm.CURSOR_CAP_RELATIVE
+    assert f"Inherits={sddm.CURSOR_THEME}" in content
+    assert (owner, mode) == ("sddm", "644")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "",                                        # no such account
+        "sddm:x:959:959::/var/lib/absent:/bin/nologin\n",  # home not on disk
+        "sddm:x:959:959::\n",                      # passwd entry without a home
+    ],
+)
+def test_sddm_cursor_cap_without_a_home(monkeypatch, line):
+    """No home, no file -- and no failure: the theme itself still installed."""
+    monkeypatch.setattr(sddm.subprocess, "run", _passwd_stub(line))
+    monkeypatch.setattr(
+        sddm, "sudo_mkdir", lambda p, o, m: pytest.fail("yazilmamaliydi")
+    )
+    monkeypatch.setattr(
+        sddm, "sudo_install", lambda p, c, o, m: pytest.fail("yazilmamaliydi")
+    )
+
+    assert sddm.install_cursor_cap() == 0
 
 
 @pytest.fixture
@@ -554,6 +642,33 @@ def test_write_with_backup_backs_up_differing_file(tmp_path, monkeypatch, fake_w
     runlog.calls.clear()
     assert sysedit.write_with_backup(modprobe, "new content\n") == (0, False)
     assert runlog.calls == []
+
+
+def test_sudo_install_hands_install_a_readable_source(tmp_path, monkeypatch):
+    """The temp file has to still exist, and be flushed, when install(1) runs."""
+    target = tmp_path / "index.theme"
+    seen = []
+
+    def runner(cmd, **kwargs):
+        seen.append(cmd)
+        assert cmd[:2] == ["sudo", "install"]
+        # Read it the way install(1) would: from the path, at call time.
+        assert Path(cmd[-2]).read_text(encoding="utf-8") == "Inherits=X\n"
+        return 0
+
+    monkeypatch.setattr(sysedit, "run", runner)
+    assert sysedit.sudo_install(target, "Inherits=X\n", "sddm", "644") == 0
+    assert seen[0][2:-2] == ["-o", "sddm", "-g", "sddm", "-m", "644"]
+    assert seen[0][-1] == str(target)
+
+
+def test_sudo_mkdir_makes_one_directory(tmp_path, monkeypatch, runlog):
+    monkeypatch.setattr(sysedit, "run", runlog)
+    assert sysedit.sudo_mkdir(tmp_path / "icons", "sddm", "700") == 0
+    assert runlog.calls == [
+        ["sudo", "install", "-d", "-o", "sddm", "-g", "sddm", "-m", "700",
+         str(tmp_path / "icons")]
+    ]
 
 
 def test_nvidia_laptop_requires_driver(monkeypatch):

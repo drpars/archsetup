@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 
 from . import i18n
@@ -20,6 +21,43 @@ def sudo_write(path: Path, content: str) -> int:
         stdout=subprocess.DEVNULL,
     )
     return proc.returncode
+
+
+def sudo_install(path: Path, content: str, owner: str, mode: str) -> int:
+    """Place `content` at `path` owned by `owner`, not by root.
+
+    sudo_write() leaves root:root behind, which is what /etc wants and what
+    another account's home does not: the file is only useful there if that
+    account can read it. install(1) sets owner and mode as part of the copy,
+    so the file is never briefly owned by the wrong user, and a failed sudo
+    leaves whatever was there untouched.
+
+    The content goes through a temporary file because install(1) takes a
+    source path, not stdin; `sudo tee` plus `sudo chown` would be two
+    privileged calls and one window where the file has the wrong owner.
+    """
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", prefix="archsetup-"
+    ) as tmp:
+        tmp.write(content)
+        tmp.flush()
+        return run(
+            ["sudo", "install", "-o", owner, "-g", owner, "-m", mode,
+             tmp.name, str(path)]
+        )
+
+
+def sudo_mkdir(path: Path, owner: str, mode: str) -> int:
+    """Create one directory owned by `owner` (parents must already exist).
+
+    Deliberately not `install -D` / `mkdir -p`: those create the missing
+    parents with the default mode and root ownership, which for a chain
+    inside someone else's home is the wrong answer for every link but the
+    last. Callers walk the chain and name each link.
+    """
+    return run(
+        ["sudo", "install", "-d", "-o", owner, "-g", owner, "-m", mode, str(path)]
+    )
 
 
 def write_with_backup(
