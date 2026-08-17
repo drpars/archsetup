@@ -471,7 +471,7 @@ def _pin_iwd_to_authentication_only() -> None:
 
 
 def enable_services() -> int:
-    """Enable services for installed packages + DHCP via systemd-networkd.
+    """Enable services for installed packages, TRIM + DHCP via systemd-networkd.
 
     Wireless needs as much care here as wired. iwd associates but does
     not address the link unless EnableNetworkConfiguration is on, and
@@ -487,6 +487,16 @@ def enable_services() -> int:
     for pkg, service in SERVICE_OWNERS:
         if _target_has(pkg):
             rc |= run(["systemctl", "--root", str(MNT), "enable", service])
+
+    # Not in SERVICE_OWNERS: fstrim.timer comes from util-linux, which is in
+    # base, so there is always a unit here and the package gate would be a
+    # tautology. Nor is it gated on a disk that supports discard -- the unit
+    # util-linux ships already runs `fstrim --quiet-unsupported`, so on a
+    # machine with none it is a weekly no-op that prints nothing, and a gate
+    # here would be archsetup deciding again what the tool already decides.
+    # Why any of this, and why the timer rather than `discard` in fstab:
+    # core/trim.py.
+    rc |= run(["systemctl", "--root", str(MNT), "enable", "fstrim.timer"])
 
     if not _target_has("networkmanager") and ask_yes(t("inst.networkd_q")):
         network_dir = MNT / "etc/systemd/network"

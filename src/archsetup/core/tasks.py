@@ -33,6 +33,7 @@ from . import (
     pacman,
     sddm,
     ssh,
+    trim,
     uki,
     virt,
     waydroid,
@@ -248,6 +249,12 @@ TASKS: tuple[Task, ...] = (
         "coredump-cap",
         "task.coredump_cap",
         coredump.configure,
+        group="system",
+    ),
+    Task(
+        "ssd-trim",
+        "task.ssd_trim",
+        trim.configure,
         group="system",
     ),
     Task(

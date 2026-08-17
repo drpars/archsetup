@@ -25,6 +25,7 @@ from archsetup.core import (
     sddm,
     sysedit,
     tasks,
+    trim,
     virt,
     waydroid,
 )
@@ -780,6 +781,85 @@ def test_ethernet_pm_rule_matches_only_what_was_measured():
     # kurali sessizce yok sayar ve disaridan "kural ise yaramadi" gibi gorunur.
     assert ethernet_pm.UDEV_RULES.suffix == ".rules"
     assert ethernet_pm.UDEV_RULES.parent == Path("/etc/udev/rules.d")
+
+
+def _block_device(block, name: str, limit: str, hardware: bool = True):
+    (block / name / "queue").mkdir(parents=True)
+    (block / name / "queue" / "discard_max_bytes").write_text(f"{limit}\n")
+    if hardware:
+        (block / name / "device").mkdir()
+
+
+@pytest.fixture
+def fake_block(tmp_path, monkeypatch):
+    """/sys/block as this machine reports it: an SSD, an HDD, a loop device.
+
+    The loop device is the point. Measured here, loop0 reports
+    discard_max_bytes=131072, so counting queues alone would call an
+    HDD-only machine trimmable as soon as anything mounts an AppImage.
+    """
+    block = tmp_path / "block"
+    _block_device(block, "nvme0n1", "2199023255040")
+    _block_device(block, "sda", "0")
+    _block_device(block, "loop0", "131072", hardware=False)
+
+    monkeypatch.setattr(trim, "BLOCK", block)
+    return block
+
+
+def test_trim_enables_the_timer_and_runs_the_first_pass(
+    monkeypatch, fake_block, capsys
+):
+    """`enable --now` arms the timer; it does not trim anything.
+
+    Measured: a freshly enabled fstrim.timer put its first elapse 6 days
+    out, so a task that only enabled it would report success over a disk
+    that stays untrimmed for a week.
+    """
+    calls = []
+    monkeypatch.setattr(trim, "enable_now", lambda unit: calls.append(unit) or 0)
+    monkeypatch.setattr(trim, "run", lambda cmd, **kw: calls.append(cmd) or 0)
+    monkeypatch.setattr(trim, "_state", lambda unit: "enabled")
+    monkeypatch.setattr(trim, "_result", lambda unit: "success")
+
+    assert trim.configure() == 0
+    assert calls == [
+        "fstrim.timer",
+        ["sudo", "systemctl", "start", "fstrim.service"],
+    ]
+    assert "nvme0n1" in capsys.readouterr().out
+
+
+def test_trim_fails_when_the_unit_did_not_end_up_enabled(
+    monkeypatch, fake_block, capsys
+):
+    monkeypatch.setattr(trim, "enable_now", lambda unit: 0)
+    monkeypatch.setattr(trim, "_state", lambda unit: "masked")
+    monkeypatch.setattr(trim, "run", lambda cmd, **kw: pytest.fail("kirpma kosmamali"))
+
+    assert trim.configure() != 0
+    assert "masked" in capsys.readouterr().out
+
+
+def test_trim_without_a_capable_disk_enables_nothing(tmp_path, monkeypatch):
+    """An HDD plus a loop mount is not a machine that needs TRIM.
+
+    Both halves matter: the spinning disk cannot discard, and the loop
+    device says it can. Only the queue attribute would enable the timer here.
+    """
+    block = tmp_path / "block"
+    _block_device(block, "sda", "0")
+    _block_device(block, "loop0", "131072", hardware=False)
+    monkeypatch.setattr(trim, "BLOCK", block)
+    monkeypatch.setattr(
+        trim, "enable_now", lambda unit: pytest.fail("hicbir sey etkinlestirilmemeli")
+    )
+
+    assert trim.configure() == 1
+
+
+def test_trim_lists_hardware_disks_only(fake_block):
+    assert trim.capable_disks() == ["nvme0n1"]
 
 
 @pytest.fixture

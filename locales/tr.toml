@@ -243,6 +243,13 @@ done = "Ses DSP'si kuruldu. Kulaklık takınca preset otomatik olarak Flat'e ge�
 [coredump]
 done = "Çekirdek dökümü tavanı 1 GB olarak ayarlandı: {path}"
 
+[trim]
+no_device = "Bu makinede discard bildiren disk yok; fstrim'in kırpacağı bir şey de olmaz."
+capable = "Discard bildiren diskler: {disks}"
+not_enabled = "{unit} etkinleştirilemedi (durum: {state}). Elle: sudo systemctl enable --now {unit}"
+done = "{unit} etkin; boş bloklar haftada bir kırpılacak."
+first_pass = "İlk geçiş şimdi çalıştırıldı ({unit}: {result}); zamanlayıcının kendi ilk ateşlemesi bir hafta sonraya düşüyordu. Kırpılan miktar: journalctl -u {unit}"
+
 [ethernet_pm]
 no_device = "Bu makinede Realtek 2.5GbE denetleyicisi (10ec:8125) yok; kuralın üzerinde çalışacağı bir cihaz bulunmuyor."
 not_laptop = "Bu makine dizüstü değil (şasi: {chassis}). Buradaki kazanç pil kazancı: kablo takılıyken link hiç düşmez, denetleyici hiç uykuya girmez, kural yalnızca uyanma yolunu değiştirir."
@@ -438,6 +445,8 @@ audio_dsp = "Hoparlör Ses DSP'si"
 audio_dsp_desc = "EasyEffects + ROG G513RM preseti; kulaklıkta otomatik devre dışı"
 coredump_cap = "Çekirdek Dökümü Tavanı"
 coredump_cap_desc = "systemd-coredump 1 GB ile sınırlanır (varsayılan: 4 GiB)"
+ssd_trim = "SSD TRIM Zamanlayıcısı"
+ssd_trim_desc = "Haftalık fstrim.timer'ı etkinleştirir; SSD yazma yükseltmesini azaltır"
 iwd_netconfig = "iwd Ağ Yapılandırması"
 iwd_netconfig_desc = "Adres/DNS işini networkd'ye bırakır; resolved çakışmasını giderir"
 bat_cache = "bat Önbelleğini Oluştur"

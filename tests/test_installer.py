@@ -231,6 +231,22 @@ def test_enable_services_networkd_fallback(tmp_path, monkeypatch, runlog):
     assert ["systemctl", "--root", str(tmp_path), "enable", "NetworkManager"] in runlog.calls
 
 
+def test_enable_services_turns_trim_on(tmp_path, monkeypatch, runlog):
+    """No install ever enabled fstrim.timer, so every SSD ran without TRIM.
+
+    Ungated on purpose: util-linux is in base, and its unit already skips
+    filesystems that cannot be trimmed.
+    """
+    (tmp_path / "etc").mkdir()
+    (tmp_path / "usr").mkdir()
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "run", runlog)
+    monkeypatch.setattr(chroot, "_target_has", lambda p: p == "networkmanager")
+
+    assert chroot.enable_services() == 0
+    assert ["systemctl", "--root", str(tmp_path), "enable", "fstrim.timer"] in runlog.calls
+
+
 def test_pickers_sources(tmp_path, monkeypatch):
     monkeypatch.setattr(pickers, "MNT", tmp_path)
     # keymaps

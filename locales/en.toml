@@ -243,6 +243,13 @@ done = "Audio DSP installed. The preset switches to Flat when headphones are plu
 [coredump]
 done = "Core dump storage capped at 1 GB: {path}"
 
+[trim]
+no_device = "No disk on this machine advertises discard; there would be nothing for fstrim to trim."
+capable = "Disks advertising discard: {disks}"
+not_enabled = "{unit} was not enabled (state: {state}). By hand: sudo systemctl enable --now {unit}"
+done = "{unit} is enabled; free blocks are trimmed once a week."
+first_pass = "Ran the first pass now ({unit}: {result}); the timer's own first elapse was a week away. How much was trimmed: journalctl -u {unit}"
+
 [ethernet_pm]
 no_device = "No Realtek 2.5GbE controller (10ec:8125) on this machine; there is nothing for the rule to act on."
 not_laptop = "This machine is not a laptop (chassis: {chassis}). The payoff here is battery: with a cable plugged in the link never drops, the controller never autosuspends, and the rule changes nothing but the wake path."
@@ -438,6 +445,8 @@ audio_dsp = "Speaker Audio DSP"
 audio_dsp_desc = "EasyEffects + ROG G513RM preset; bypassed on headphones"
 coredump_cap = "Core Dump Cap"
 coredump_cap_desc = "Limit systemd-coredump to 1 GB (default: 4 GiB)"
+ssd_trim = "SSD TRIM Timer"
+ssd_trim_desc = "Enable the weekly fstrim.timer; cuts SSD write amplification"
 iwd_netconfig = "iwd Network Configuration"
 iwd_netconfig_desc = "Leave addressing/DNS to networkd; clears the resolved conflict"
 bat_cache = "Build bat Cache"
