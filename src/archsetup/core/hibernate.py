@@ -18,11 +18,13 @@ from pathlib import Path
 
 from . import bootloader, gpuconfig, i18n, mkinitcpio
 from .pacman import run
+from .prompt import ask_yes
 from .sysedit import sudo_write
 
 t = i18n.t
 
 SWAPFILE = "/swapfile"
+IMAGE_SIZE = Path("/sys/power/image_size")
 
 
 def _swapfile_active() -> bool:
@@ -48,6 +50,59 @@ def _swap_offset() -> str:
         if fields and fields[0] == "0:":
             return fields[3].rstrip(".:")
     return ""
+
+
+def _swap_bytes() -> int:
+    """Every active swap area, not just the swapfile.
+
+    The image goes wherever the kernel finds room, so a machine with a swap
+    partition alongside the file is not short just because the file is.
+    """
+    out = subprocess.run(
+        ["swapon", "--show=SIZE", "--bytes", "--noheadings"],
+        capture_output=True,
+        text=True,
+    )
+    total = 0
+    for line in out.stdout.split():
+        try:
+            total += int(line)
+        except ValueError:
+            continue
+    return total
+
+
+def _image_size() -> int:
+    try:
+        return int(IMAGE_SIZE.read_text())
+    except (OSError, ValueError):
+        return 0
+
+
+def _swap_is_big_enough() -> bool:
+    """Ask, on a measured negative, before promising hibernation.
+
+    /sys/power/image_size is the kernel's own target for the image, 2/5 of
+    RAM by default (measured here: 0.396). Swap smaller than that number
+    cannot hold even the image the kernel is aiming to produce -- and the
+    failure is not a refusal at hibernate time. Measured on this laptop:
+    swap 8.0 GiB against a 10.76 GiB target, systemd's own precheck passed
+    because memory happened to be mostly free, the kernel entered
+    hibernation, and the machine cold-booted 2.5 minutes later.
+
+    A question rather than a refusal: a machine kept deliberately lean can
+    still hibernate, and the caller may only want the resume parameters
+    written. Non-interactive runs read as "no", which is the safe direction
+    for a task whose failure mode is a lost session.
+    """
+    swap, image = _swap_bytes(), _image_size()
+    if not swap or not image or swap >= image:
+        return True
+    print(t("msg.swap_too_small", swap=swap // 2**20, image=image // 2**20))
+    if ask_yes(t("msg.swap_continue_q")):
+        return True
+    print(t("msg.cancelled"))
+    return False
 
 
 def _ensure_resume_hook() -> bool:
@@ -81,6 +136,9 @@ def configure() -> int:
     if shutil.which("filefrag") is None:
         if run(["sudo", "pacman", "-S", "--needed", "e2fsprogs"]) != 0:
             return 1
+
+    if not _swap_is_big_enough():
+        return 0
 
     uuid = _swap_uuid()
     offset = _swap_offset()

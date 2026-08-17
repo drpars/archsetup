@@ -30,9 +30,21 @@ MODPROBE_CONF = Path("/etc/modprobe.d/nvidia.conf")
 UDEV_RULES = Path("/etc/udev/rules.d/80-nvidia-pm.rules")
 
 # These three preserve VRAM across sleep and are NOT laptop-specific: any
-# machine that suspends wants them, desktops included. PreserveVideoMemory-
-# Allocations only declares the intent -- the thing that actually writes VRAM
-# out is nvidia-sleep.sh, and these units are what call it.
+# machine that suspends wants them, desktops included. They are what calls
+# nvidia-sleep.sh, which is what writes to /proc/driver/nvidia/suspend.
+#
+# NVreg_PreserveVideoMemoryAllocations is deliberately not in the options
+# below, and the reason is the driver flavour rather than anything about
+# these units. The driver README: "When the open kernel modules are in use,
+# this is handled automatically. To unlock the full functionality of the
+# interface with the proprietary driver, [...] nvidia.ko needs to be loaded
+# with the NVreg_PreserveVideoMemoryAllocations=1 module parameter."
+# data/postinstall/drivers.toml offers only nvidia-open*, so every machine
+# archsetup sets up is on the open modules. Measured on one of them (610.57,
+# nvidia-open-dkms, nothing in modprobe.d naming it): the live value in
+# /proc/driver/nvidia/params is 2 -- neither the 0 default nor a user-set 1,
+# which is the driver having handled it. Writing =1 here would restate what
+# the driver already decided, on the only machines this code runs on.
 SLEEP_SERVICES = (
     "nvidia-suspend.service",
     "nvidia-resume.service",

@@ -247,6 +247,42 @@ def test_enable_services_turns_trim_on(tmp_path, monkeypatch, runlog):
     assert ["systemctl", "--root", str(tmp_path), "enable", "fstrim.timer"] in runlog.calls
 
 
+def _meminfo(tmp_path, mem_kb: int):
+    path = tmp_path / "meminfo"
+    path.write_text(f"MemTotal:       {mem_kb} kB\nMemFree:         100 kB\n")
+    return path
+
+
+def test_swapfile_default_follows_ram(tmp_path, monkeypatch, runlog):
+    """A flat 8192 MiB while archsetup writes resume= is a promise it cannot keep.
+
+    Measured on a 27.2 GiB laptop: swap 8.0 GiB against an image target of
+    10.76 GiB, and hibernation there entered and never came back.
+    """
+    monkeypatch.setattr(chroot, "MEMINFO", _meminfo(tmp_path, 28474852))
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(chroot, "run", runlog)
+    _feed(monkeypatch, chroot, [""])  # varsayilani kabul et
+
+    assert chroot.create_swapfile() == 0
+    dd = next(c for c in runlog.calls if c[0] == "dd")
+    assert f"count={28474852 // 1024}" in dd
+
+
+def test_swapfile_falls_back_when_ram_cannot_be_read(tmp_path, monkeypatch, runlog):
+    """An unmeasurable machine keeps the behaviour it used to get."""
+    monkeypatch.setattr(chroot, "MEMINFO", tmp_path / "absent")
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(chroot, "run", runlog)
+    _feed(monkeypatch, chroot, [""])
+
+    assert chroot.create_swapfile() == 0
+    dd = next(c for c in runlog.calls if c[0] == "dd")
+    assert f"count={chroot.SWAP_FALLBACK_MIB}" in dd
+
+
 def test_pickers_sources(tmp_path, monkeypatch):
     monkeypatch.setattr(pickers, "MNT", tmp_path)
     # keymaps

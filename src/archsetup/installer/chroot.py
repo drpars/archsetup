@@ -184,10 +184,47 @@ def add_user() -> int:
     return rc
 
 
+MEMINFO = Path("/proc/meminfo")
+
+# Only reached when MemTotal cannot be read. The old unconditional default,
+# kept as the fallback so a machine that cannot be measured still gets the
+# behaviour it used to get.
+SWAP_FALLBACK_MIB = 8192
+
+
+def ram_mib() -> int | None:
+    """MemTotal in MiB -- the live ISO runs on the machine being installed."""
+    try:
+        for line in MEMINFO.read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
 def create_swapfile() -> int:
+    """Size the swapfile from RAM, because hibernation is what needs it.
+
+    The default used to be a flat 8192 MiB whatever the machine had, and
+    archsetup writes resume=/resume_offset= unconditionally -- so it
+    promised hibernation and then sized the one thing hibernation depends
+    on by a constant. Measured on a 27.2 GiB laptop: swap 8.0 GiB against
+    /sys/power/image_size 10.76 GiB, i.e. the image the kernel *aims* for
+    already did not fit, and hibernation there entered and never came back.
+
+    RAM is the default rather than 2/5 of it. 2/5 is what the kernel targets
+    (measured: image_size/MemTotal = 0.396) but it is a target, not a bound
+    -- what does not compress down stays in the image. The number is shown
+    and can be overridden; guessing low is what fails silently.
+    """
     if not target_ready():
         return 1
-    raw = input(f"{t('inst.swapsize_q')} [8192]: ").strip() or "8192"
+    ram = ram_mib()
+    default = ram or SWAP_FALLBACK_MIB
+    if ram:
+        print(t("inst.swap_sizing", ram=ram, target=ram * 2 // 5))
+    raw = input(f"{t('inst.swapsize_q')} [{default}]: ").strip() or str(default)
     if not raw.isdigit() or int(raw) < 1:
         print(t("inst.invalid"))
         return 1

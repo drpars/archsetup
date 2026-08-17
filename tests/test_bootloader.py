@@ -139,6 +139,11 @@ def hib_env(gpu_env, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(hibernate, "_swapfile_active", lambda: True)
     monkeypatch.setattr(hibernate, "_swap_uuid", lambda: "NEW-UUID")
     monkeypatch.setattr(hibernate, "_swap_offset", lambda: "555555")
+    # Pinned, or the adequacy check reads the machine under the test: this
+    # laptop has 8 GiB of swap against an 11 GiB image target, so the task
+    # would stop on a question and the suite would answer it from real stdin.
+    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 32 * 2**30)
+    monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
     swapfile = gpu_env / "swapfile"
     swapfile.write_text("x")
     monkeypatch.setattr(hibernate, "SWAPFILE", str(swapfile))
@@ -172,3 +177,50 @@ def test_hibernate_systemd_hook_skipped(hib_env, monkeypatch):
 def test_hibernate_requires_swapfile(hib_env, monkeypatch):
     monkeypatch.setattr(hibernate, "SWAPFILE", str(hib_env / "missing"))
     assert hibernate.configure() == 1
+
+
+def test_hibernate_stops_when_swap_cannot_hold_the_image(hib_env, monkeypatch, capsys):
+    """Swap under the kernel's own image target is a measured negative.
+
+    It never surfaces as a refusal at hibernate time -- measured on this
+    laptop, systemd's precheck passed, the kernel entered hibernation and
+    the machine cold-booted 2.5 minutes later. So the task asks, and a run
+    with no one to answer takes the safe side.
+    """
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 8 * 2**30)
+    monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: False)
+
+    assert hibernate.configure() == 0
+    assert "resume=" not in cmdline.read_text()
+    assert "8192" in capsys.readouterr().out
+
+
+def test_hibernate_proceeds_when_the_answer_is_yes(hib_env, monkeypatch):
+    """A lean machine can still hibernate; the check is a question."""
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd block fsck)\n")
+    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 8 * 2**30)
+    monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
+
+    assert hibernate.configure() == 0
+    assert "resume=UUID=NEW-UUID" in cmdline.read_text()
+
+
+def test_hibernate_does_not_ask_when_swap_cannot_be_measured(hib_env, monkeypatch):
+    """An unreadable /sys/power/image_size is not evidence of a problem."""
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd block fsck)\n")
+    monkeypatch.setattr(hibernate, "_image_size", lambda: 0)
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: pytest.fail("sorulmamali"))
+
+    assert hibernate.configure() == 0
+    assert "resume=UUID=NEW-UUID" in cmdline.read_text()
