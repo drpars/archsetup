@@ -455,8 +455,33 @@ def test_secure_boot_signs_what_the_firmware_loads(sb_env, monkeypatch, runlog):
     assert f"{chroot.SDBOOT_SRC}.signed" in {
         call[call.index("-o") + 1] for call in runlog.calls if "-o" in call
     }
-    hook = sb_env / "etc/initcpio/post/uki-sbctl"
-    assert hook.stat().st_mode & 0o111
+
+
+def test_secure_boot_keeps_the_uki_out_of_the_sbctl_database(sb_env, monkeypatch, runlog):
+    """-s records a permanent entry, and a UKI dies with its kernel.
+
+    Nothing removes it on an mkinitcpio-preset machine, and sbctl's
+    PostTransaction pacman hook runs `sign-all`, so the dangling entry
+    fails every later transaction. Measured 2026-08-17 with linux-g14.
+    """
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    assert chroot.setup_secure_boot() == 0
+
+    uki = next(c for c in runlog.calls if c[-1] == "/efi/EFI/Linux/arch.efi")
+    assert uki == ["sbctl", "sign", "/efi/EFI/Linux/arch.efi"]
+    # ...while the long-lived boot binaries do get recorded.
+    assert ["sbctl", "sign", "-s", "/efi/EFI/BOOT/BOOTX64.EFI"] in runlog.calls
+
+
+def test_secure_boot_plants_no_resigning_hook(sb_env, monkeypatch, runlog):
+    """sbctl already signs each rebuilt UKI from its own mkinitcpio post hook.
+
+    Ours ran `sbctl sign-all`, which walks the database and therefore
+    skipped the very file mkinitcpio had just built.
+    """
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    assert chroot.setup_secure_boot() == 0
+    assert not (sb_env / "etc/initcpio/post").exists()
 
 
 def test_secure_boot_refuses_outside_setup_mode(sb_env, monkeypatch, runlog):

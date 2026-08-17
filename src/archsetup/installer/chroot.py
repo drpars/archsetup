@@ -613,7 +613,19 @@ def setup_secure_boot() -> int:
     for preset in _presets():  # every kernel, not just the first alphabetically
         uki = default_uki_path(preset)
         if uki and (MNT / uki.lstrip("/")).is_file():
-            rc |= chroot_run(["sbctl", "sign", "-s", uki])
+            # No -s here, unlike the boot binaries above. sbctl's database is
+            # a permanent list and a UKI is not permanent: it dies with its
+            # kernel, and on an mkinitcpio-preset machine nothing takes the
+            # entry back out -- sbctl's own remove-file runs from
+            # kernel-install.d, which this layout never calls. The leftover
+            # entry then fails `sbctl sign-all`, which sbctl ships as a pacman
+            # PostTransaction hook, so *every* later transaction ends in an
+            # error. Measured 2026-08-17: removing linux-g14 left its UKI in
+            # files.json and zz-sbctl.hook reported "failed signing ... does
+            # not exist" from then on. The entry buys nothing either -- the
+            # package's mkinitcpio post hook re-signs the UKI by path on
+            # every rebuild.
+            rc |= chroot_run(["sbctl", "sign", uki])
             signed_uki = True
     if not signed_uki:
         print(t("inst.sb_no_uki"))
@@ -626,11 +638,13 @@ def setup_secure_boot() -> int:
             )
         rc |= chroot_run(["sbctl", "sign", "-s", "/efi/shellx64.efi"])
 
-    # Re-sign automatically whenever mkinitcpio rebuilds a UKI.
-    hook = MNT / "etc/initcpio/post/uki-sbctl"
-    hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_text("#!/usr/bin/env bash\nsbctl sign-all\n", encoding="utf-8")
-    hook.chmod(0o755)
+    # No re-signing hook of our own. sbctl ships two already: a mkinitcpio
+    # post hook that signs the image it was just handed ($3, the UKI), and
+    # the pacman hook above. What used to live here -- /etc/initcpio/post/
+    # uki-sbctl running `sbctl sign-all` -- walks the *database*, so it never
+    # touched the UKI mkinitcpio had just built. Measured on a live machine
+    # (pacman.log 2026-08-15): on every rebuild it reported the four boot
+    # binaries as "already signed" and the package's hook did the real work.
 
     print(f"\n{t('inst.sb_verify')}")
     chroot_run(["sbctl", "verify"])  # report only: unrelated ESP files may fail
