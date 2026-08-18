@@ -408,7 +408,10 @@ def resize() -> int:
             ceiling=ceiling,
         )
     )
-    default = str((ram // 2**20) or (current // 2**20))
+    # The current size, not RAM: pressing enter has to be the answer that
+    # changes nothing. Measured on this laptop, where swap is 28672 MiB and
+    # RAM is 27807 -- a RAM default would have quietly shrunk it.
+    default = str(current // 2**20)
     raw = input(f"{t('msg.swap_resize_q')} [{default}]: ").strip() or default
     if not raw.isdigit() or int(raw) < 1:
         print(t("msg.invalid_size"))

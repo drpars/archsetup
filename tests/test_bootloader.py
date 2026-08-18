@@ -515,3 +515,17 @@ def test_resize_below_ram_asks(resize_env, monkeypatch, runlog):
 
     assert hibernate.resize() == 0
     assert not [c for c in runlog.calls if c[1] in ("fallocate", "truncate")]
+
+
+def test_resize_default_is_the_current_size(resize_env, monkeypatch, runlog):
+    """Enter has to be the answer that changes nothing.
+
+    Caught by a real run rather than by this suite: on the laptop this was
+    written on, swap is 28672 MiB against 27807 MiB of RAM, and a RAM-shaped
+    default meant pressing enter would quietly shrink it.
+    """
+    monkeypatch.setattr(hibernate.hardware, "ram_bytes", lambda: 128 * 2**20)
+    _answer(monkeypatch, "")
+
+    assert hibernate.resize() == 0
+    assert not [c for c in runlog.calls if c[1] in ("fallocate", "truncate")]
