@@ -304,3 +304,214 @@ def test_hibernate_will_not_rewrite_a_drop_in_it_does_not_own(nv_env, monkeypatc
     assert "MODULES=(amdgpu)" in mk.read_text()
     assert "MODULES=(amdgpu nvidia nvidia_drm)" in (conf_d / "10-nvidia.conf").read_text()
     assert "drop-in" in capsys.readouterr().out
+
+
+# --- removal: the half the module header was missing ------------------------
+
+
+def test_remove_kernel_params_drops_them(boot_paths, monkeypatch):
+    """Removal is not a second mechanism, it is _merge() with nothing to add."""
+    cmdline = boot_paths / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=309248 quiet\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+
+    result = bootloader.remove_kernel_params(("resume=", "resume_offset="))
+    assert result.changed and result.needs_mkinitcpio
+    assert cmdline.read_text().split() == ["root=UUID=abc", "rw", "quiet"]
+
+
+def test_remove_kernel_params_is_a_no_op_when_absent(boot_paths, monkeypatch, capsys):
+    """And it says so in the sentence that fits: absent, not "already set"."""
+    cmdline = boot_paths / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+
+    assert bootloader.remove_kernel_params(("resume=", "resume_offset=")).changed is False
+    assert cmdline.read_text() == "root=UUID=abc rw\n"
+    assert "resume=" in capsys.readouterr().out
+
+
+def test_removal_does_not_invent_an_options_line(boot_paths, monkeypatch):
+    """An entry with no options line has nothing to remove.
+
+    Writing one would put an empty `options ` into a file that was correct
+    as it stood.
+    """
+    entries = boot_paths / "entries"
+    entries.mkdir(exist_ok=True)
+    entry = entries / "arch.conf"
+    entry.write_text("title Arch\nlinux /vmlinuz-linux\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", boot_paths / "absent")
+    monkeypatch.setattr(bootloader, "SDBOOT_ENTRIES", entries)
+
+    assert bootloader.remove_kernel_params(("resume=",)).changed is False
+    assert "options" not in entry.read_text()
+
+
+def test_btrfs_offset_comes_from_map_swapfile(monkeypatch):
+    """filefrag and map-swapfile disagree on btrfs, and only one is right.
+
+    Measured on a loopback btrfs holding one NOCOW swapfile: filefrag's first
+    extent said 86880 where `btrfs inspect-internal map-swapfile -r` said
+    115136. Trusting filefrag there writes a plausible, wrong resume_offset
+    and nothing reports it until a resume that does not come back.
+    """
+    seen = []
+
+    class Out:
+        def __init__(self, text):
+            self.stdout = text
+
+    def fake_run(cmd, **kwargs):
+        seen.append(cmd)
+        if cmd[0] == "findmnt":
+            return Out("btrfs\n")
+        if "map-swapfile" in cmd:
+            return Out("115136\n")
+        return Out(" 0:  0.. 32767: 86880.. 119647: 32768: last,eof\n")
+
+    monkeypatch.setattr(hibernate.subprocess, "run", fake_run)
+    assert hibernate._swap_offset() == "115136"
+    assert not any("filefrag" in c for c in seen)
+
+
+def test_ext4_offset_still_comes_from_filefrag(monkeypatch):
+    """Measured on this laptop: 309248, the number resume_offset wants."""
+
+    class Out:
+        def __init__(self, text):
+            self.stdout = text
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "findmnt":
+            return Out("ext4\n")
+        return Out(" 0:  0.. 32767: 309248.. 342015: 32768: last,eof\n")
+
+    monkeypatch.setattr(hibernate.subprocess, "run", fake_run)
+    assert hibernate._swap_offset() == "309248"
+
+
+@pytest.fixture
+def rm_env(hib_env, monkeypatch, runlog):
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
+    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda: True)
+    return hib_env
+
+
+def test_remove_takes_the_file_and_the_parameters(rm_env, monkeypatch, runlog):
+    cmdline = rm_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=1 quiet\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (rm_env / "mkinitcpio.conf").write_text("HOOKS=(base udev resume fsck)\n")
+
+    assert hibernate.remove() == 0
+    assert cmdline.read_text().split() == ["root=UUID=abc", "rw", "quiet"]
+    assert "resume" not in (rm_env / "mkinitcpio.conf").read_text()
+    assert ["sudo", "swapoff", hibernate.SWAPFILE] in runlog.calls
+    assert ["sudo", "rm", "-f", hibernate.SWAPFILE] in runlog.calls
+
+
+def test_remove_updates_boot_config_before_deleting_the_file(rm_env, monkeypatch, runlog):
+    """The dangerous state is a boot config pointing at a file that is gone.
+
+    Deleting first leaves it if the rebuild then fails; this order leaves
+    hibernation merely unconfigured, which costs a feature and not a boot.
+    """
+    cmdline = rm_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=1\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (rm_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd fsck)\n")
+
+    assert hibernate.remove() == 0
+    names = [c for c in runlog.calls]
+    rebuild = names.index(["sudo", "mkinitcpio", "-P"])
+    delete = names.index(["sudo", "rm", "-f", hibernate.SWAPFILE])
+    assert rebuild < delete
+
+
+def test_remove_cleans_parameters_a_hand_deletion_left(rm_env, monkeypatch, runlog):
+    """The state worth being able to clean: file gone, resume= still there."""
+    cmdline = rm_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=1\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(rm_env / "gone"))
+    (rm_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd fsck)\n")
+
+    assert hibernate.remove() == 0
+    assert "resume" not in cmdline.read_text()
+    assert not [c for c in runlog.calls if c[:2] == ["sudo", "rm"]]
+
+
+def test_remove_does_nothing_when_there_is_nothing_to_remove(rm_env, monkeypatch, runlog):
+    cmdline = rm_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(rm_env / "gone"))
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: pytest.fail("sorulmamali"))
+
+    assert hibernate.remove() == 0
+    assert runlog.calls == []
+
+
+# --- resize -----------------------------------------------------------------
+
+
+@pytest.fixture
+def resize_env(hib_env, monkeypatch, runlog):
+    swapfile = hib_env / "swapfile"
+    swapfile.write_bytes(b"x" * (64 * 2**20))
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(swapfile))
+    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda: True)
+    monkeypatch.setattr(hibernate, "_free_bytes", lambda: 512 * 2**20)
+    monkeypatch.setattr(hibernate.hardware, "ram_bytes", lambda: 0)
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=1\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd fsck)\n")
+    return hib_env
+
+
+def _answer(monkeypatch, value):
+    monkeypatch.setattr(hibernate, "input", lambda prompt="": value, raising=False)
+
+
+def test_resize_grows_with_fallocate_and_rewrites_the_offset(resize_env, monkeypatch, runlog):
+    """The size is the easy half; the offset is the half a hand-run guesses."""
+    _answer(monkeypatch, "192")
+    monkeypatch.setattr(hibernate, "_swap_offset", lambda: "778899")
+
+    assert hibernate.resize() == 0
+    assert ["sudo", "fallocate", "-l", "192M", hibernate.SWAPFILE] in runlog.calls
+    assert ["sudo", "mkswap", hibernate.SWAPFILE] in runlog.calls
+    assert "resume_offset=778899" in (resize_env / "cmdline").read_text()
+
+
+def test_resize_shrinks_with_truncate(resize_env, monkeypatch, runlog):
+    """Measured: `fallocate -l` smaller than the file returns 0 and does nothing.
+
+    192M file, `fallocate -l 64M`, rc=0, size still 201326592 -- so a shrink
+    written with fallocate would report success and leave the old size.
+    """
+    _answer(monkeypatch, "32")
+
+    assert hibernate.resize() == 0
+    assert ["sudo", "truncate", "-s", "32M", hibernate.SWAPFILE] in runlog.calls
+    assert not [c for c in runlog.calls if c[1] == "fallocate"]
+
+
+def test_resize_refuses_above_the_ceiling(resize_env, monkeypatch, runlog):
+    """The file's own space plus what is free; growing needs the difference."""
+    _answer(monkeypatch, "9000")
+
+    assert hibernate.resize() == 1
+    assert not [c for c in runlog.calls if c[1] in ("fallocate", "truncate")]
+
+
+def test_resize_below_ram_asks(resize_env, monkeypatch, runlog):
+    monkeypatch.setattr(hibernate.hardware, "ram_bytes", lambda: 128 * 2**20)
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: False)
+    _answer(monkeypatch, "96")
+
+    assert hibernate.resize() == 0
+    assert not [c for c in runlog.calls if c[1] in ("fallocate", "truncate")]

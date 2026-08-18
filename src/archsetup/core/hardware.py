@@ -115,3 +115,22 @@ def is_laptop() -> bool | None:
     if not word:
         return None
     return word in {"laptop", "convertible", "detachable", "tablet", "handset"}
+
+
+MEMINFO = Path("/proc/meminfo")
+
+
+def ram_bytes() -> int:
+    """MemTotal, or 0 when it cannot be read.
+
+    One reader rather than one per caller: the installer sizes the swapfile
+    from it and the hibernate task compares against it, and those two numbers
+    disagreeing would be a bug nobody would look for.
+    """
+    try:
+        for line in MEMINFO.read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemTotal:"):
+                return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0

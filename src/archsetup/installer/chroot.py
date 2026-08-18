@@ -184,8 +184,6 @@ def add_user() -> int:
     return rc
 
 
-MEMINFO = Path("/proc/meminfo")
-
 # Only reached when MemTotal cannot be read. The old unconditional default,
 # kept as the fallback so a machine that cannot be measured still gets the
 # behaviour it used to get.
@@ -194,13 +192,63 @@ SWAP_FALLBACK_MIB = 8192
 
 def ram_mib() -> int | None:
     """MemTotal in MiB -- the live ISO runs on the machine being installed."""
+    return (hardware.ram_bytes() // 2**20) or None
+
+
+def _target_free_mib() -> int:
+    """Free megabytes on the filesystem that will hold the swapfile, or 0.
+
+    The root of the target, not the ESP: /swapfile lands next to /, and
+    _esp_free_mb() above answers a different question about a different
+    filesystem.
+    """
     try:
-        for line in MEMINFO.read_text(encoding="utf-8").splitlines():
-            if line.startswith("MemTotal:"):
-                return int(line.split()[1]) // 1024
-    except (OSError, ValueError, IndexError):
-        pass
-    return None
+        st = os.statvfs(MNT)
+    except OSError:
+        return 0
+    return (st.f_bavail * st.f_frsize) // (1024 * 1024)
+
+
+def _fstype(path: Path) -> str:
+    out = subprocess.run(
+        ["findmnt", "-no", "FSTYPE", "-T", str(path)], capture_output=True, text=True
+    )
+    return out.stdout.strip()
+
+
+def _write_swapfile(path: Path, size_mib: int) -> int:
+    """Create the swapfile the way the target filesystem needs it.
+
+    Two filesystem facts, both measured on loopback images (kernel
+    7.1.8-zen1-3-zen, btrfs-progs v7.1):
+
+    - On btrfs a copy-on-write file cannot be swap. This step's own sequence
+      -- dd, then mkswap, then swapon -- returns 0, 0 and then EINVAL, which
+      means every btrfs install this installer ever performed produced a
+      swapfile it could not turn on. `chattr +C` fixes it, but only on a file
+      with nothing in it yet: on a file that already holds bytes it returns 0,
+      sets no flag (lsattr shows none) and swapon still fails. So the flag
+      goes on an empty file, before anything is written, and the old file is
+      removed rather than reused for the same reason.
+    - fallocate produced a working swapfile on both ext4 and btrfs (mkswap and
+      swapon both 0) without writing the bytes, which on a RAM-sized swapfile
+      is the difference between an instant step and writing tens of gigabytes.
+      dd stays as the fallback because select_partitions() also offers ext2,
+      ext3 and jfs, where fallocate is not supported -- and its exit code is
+      a cheaper way to find that out than a table of filesystems to maintain.
+    """
+    rc = run(["rm", "-f", str(path)])
+    rc |= run(["touch", str(path)])
+    if _fstype(path.parent) == "btrfs":
+        rc |= run(["chattr", "+C", str(path)])
+    if run(["fallocate", "-l", f"{size_mib}M", str(path)]) != 0:
+        print(t("inst.swap_fallocate_fallback"))
+        rc |= run(["dd", "if=/dev/zero", f"of={path}", "bs=1M",
+                   f"count={size_mib}", "status=progress"])
+    rc |= run(["chmod", "600", str(path)])
+    rc |= run(["mkswap", str(path)])
+    rc |= run(["swapon", str(path)])
+    return rc
 
 
 def create_swapfile() -> int:
@@ -222,18 +270,34 @@ def create_swapfile() -> int:
         return 1
     ram = ram_mib()
     default = ram or SWAP_FALLBACK_MIB
+    free = _target_free_mib()
     if ram:
         print(t("inst.swap_sizing", ram=ram, target=ram * 2 // 5))
+    if free:
+        print(t("inst.swap_ceiling", free=free))
     raw = input(f"{t('inst.swapsize_q')} [{default}]: ").strip() or str(default)
     if not raw.isdigit() or int(raw) < 1:
         print(t("inst.invalid"))
         return 1
-    rc = run(["dd", "if=/dev/zero", f"of={MNT}/swapfile", "bs=1M",
-              f"count={raw}", "status=progress"])
-    rc |= run(["chmod", "600", f"{MNT}/swapfile"])
-    rc |= run(["mkswap", f"{MNT}/swapfile"])
-    rc |= run(["swapon", f"{MNT}/swapfile"])
-    return rc
+
+    size = int(raw)
+    # The ceiling is measured rather than trusted: dd into a full filesystem
+    # fails partway and leaves a short swapfile that mkswap will happily
+    # accept, so the number is checked before anything is written.
+    if free and size > free:
+        print(t("inst.swap_too_big", want=size, free=free))
+        return 1
+    # Below RAM is allowed but not silent. RAM is the only size that
+    # guarantees hibernation -- the image cannot exceed what is in memory,
+    # and how far it compresses is a property of the workload, not of the
+    # install -- so a smaller number is a bet, and the person making it
+    # should be the one told what it buys.
+    if ram and size < ram:
+        print(t("inst.swap_below_ram", want=size, ram=ram))
+        if not ask_yes(t("inst.swap_below_ram_q")):
+            print(t("inst.cancelled"))
+            return 1
+    return _write_swapfile(MNT / "swapfile", size)
 
 
 def _presets() -> list[Path]:

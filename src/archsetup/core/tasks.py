@@ -199,6 +199,18 @@ TASKS: tuple[Task, ...] = (
         group="system",
     ),
     Task(
+        "swap-resize",
+        "task.swap_resize",
+        hibernate.resize,
+        group="system",
+    ),
+    Task(
+        "swap-remove",
+        "task.swap_remove",
+        hibernate.remove,
+        group="system",
+    ),
+    Task(
         "nvim-dotfiles",
         "task.nvim_dotfiles",
         dotfiles.install_nvim,

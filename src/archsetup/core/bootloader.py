@@ -80,6 +80,19 @@ def _merge(
     return kept + missing
 
 
+def _nothing_to_do(params: list[str], replace: tuple[str, ...]) -> None:
+    """Report a no-op, in the sentence that fits which call this was.
+
+    An empty `params` is a removal, and "already set" is the wrong thing to
+    say about a parameter that is already gone -- with nothing to join it
+    also prints a message with an empty slot.
+    """
+    if params:
+        print(t("msg.param_present", param=" ".join(params)))
+    else:
+        print(t("msg.param_absent", param=" ".join(replace)))
+
+
 def _sdboot_entry_files() -> list[Path]:
     return [
         p for p in sorted(SDBOOT_ENTRIES.glob("*.conf")) if "fallback" not in p.stem
@@ -90,7 +103,7 @@ def _add_uki(params: list[str], replace: tuple[str, ...]) -> bool:
     cmdline = CMDLINE.read_text(encoding="utf-8").strip()
     merged = _merge(cmdline.split(), params, replace)
     if merged is None:
-        print(t("msg.param_present", param=" ".join(params)))
+        _nothing_to_do(params, replace)
         return False
     return sudo_write(CMDLINE, " ".join(merged) + "\n") == 0
 
@@ -101,6 +114,11 @@ def _add_sdboot(params: list[str], replace: tuple[str, ...]) -> bool:
         text = entry.read_text(encoding="utf-8")
         match = re.search(r"^options[ \t]+(.*)$", text, re.MULTILINE)
         if match is None:
+            # Nothing to remove from an entry that has no options line, and
+            # writing one would add an empty `options ` to a file that was
+            # correct as it stood.
+            if not params:
+                continue
             new_text = f"{text.rstrip()}\noptions {' '.join(params)}\n"
         else:
             merged = _merge(match.group(1).split(), params, replace)
@@ -110,7 +128,7 @@ def _add_sdboot(params: list[str], replace: tuple[str, ...]) -> bool:
         if sudo_write(entry, new_text) == 0:
             changed = True
     if not changed:
-        print(t("msg.param_present", param=" ".join(params)))
+        _nothing_to_do(params, replace)
     return changed
 
 
@@ -122,7 +140,7 @@ def _add_grub(params: list[str], replace: tuple[str, ...]) -> bool:
         return False
     merged = _merge(match.group(1).split(), params, replace)
     if merged is None:
-        print(t("msg.param_present", param=" ".join(params)))
+        _nothing_to_do(params, replace)
         return False
     new_text = f"{text[:match.start(1)]}{' '.join(merged)}{text[match.end(1):]}"
     return sudo_write(GRUB_DEFAULT, new_text) == 0
@@ -142,7 +160,7 @@ def _add_refind(params: list[str], replace: tuple[str, ...]) -> bool:
                     changed = True
         out_lines.append(line)
     if not changed:
-        print(t("msg.param_present", param=" ".join(params)))
+        _nothing_to_do(params, replace)
         return False
     return sudo_write(REFIND_CONF, "\n".join(out_lines) + "\n") == 0
 
@@ -165,6 +183,23 @@ def add_kernel_params(
         return ParamResult(_add_refind(params, replace_prefixes))
     print(t("msg.bootloader_unknown"))
     return ParamResult(False)
+
+
+def remove_kernel_params(prefixes: tuple[str, ...]) -> ParamResult:
+    """Drop every parameter matching `prefixes`, wherever this machine keeps them.
+
+    Not a second mechanism: _merge() already drops the matching tokens and
+    already returns None when there were none, so removal is the code that was
+    there all along, called with nothing to add. Measured against a cmdline
+    holding `resume=UUID=... resume_offset=...`: both leave, the rest is
+    untouched, and a cmdline holding neither reports no change.
+
+    It gets its own name because the call site is where this has to be
+    readable -- add_kernel_params([], ...) looks like a mistake -- and because
+    the four writers need to know which sentence to print when there is
+    nothing to do.
+    """
+    return add_kernel_params([], replace_prefixes=prefixes)
 
 
 def current_params() -> str:

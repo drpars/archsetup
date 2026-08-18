@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from archsetup.core import i18n, repos
+from archsetup.core import hardware, i18n, repos
 from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
 from archsetup.installer.state import state
 
@@ -253,34 +253,116 @@ def _meminfo(tmp_path, mem_kb: int):
     return path
 
 
-def test_swapfile_default_follows_ram(tmp_path, monkeypatch, runlog):
+@pytest.fixture
+def swap_env(tmp_path, monkeypatch, runlog):
+    """create_swapfile() with the machine under the test held still.
+
+    Pinned rather than read: _target_free_mib() would statvfs the suite's own
+    tmpdir and _fstype() would answer for whatever filesystem the runner is
+    on, so the ceiling test and the btrfs test would both pass or fail by
+    accident of where the suite was checked out.
+    """
+    monkeypatch.setattr(hardware, "MEMINFO", _meminfo(tmp_path, 28474852))
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(chroot, "run", runlog)
+    monkeypatch.setattr(chroot, "_target_free_mib", lambda: 200000)
+    monkeypatch.setattr(chroot, "_fstype", lambda path: "ext4")
+    return tmp_path
+
+
+def test_swapfile_default_follows_ram(swap_env, monkeypatch, runlog):
     """A flat 8192 MiB while archsetup writes resume= is a promise it cannot keep.
 
     Measured on a 27.2 GiB laptop: swap 8.0 GiB against an image target of
     10.76 GiB, and hibernation there entered and never came back.
     """
-    monkeypatch.setattr(chroot, "MEMINFO", _meminfo(tmp_path, 28474852))
-    monkeypatch.setattr(chroot, "MNT", tmp_path)
-    monkeypatch.setattr(chroot, "target_ready", lambda: True)
-    monkeypatch.setattr(chroot, "run", runlog)
     _feed(monkeypatch, chroot, [""])  # varsayilani kabul et
 
     assert chroot.create_swapfile() == 0
-    dd = next(c for c in runlog.calls if c[0] == "dd")
-    assert f"count={28474852 // 1024}" in dd
+    alloc = next(c for c in runlog.calls if c[0] == "fallocate")
+    assert f"{28474852 // 1024}M" in alloc
 
 
-def test_swapfile_falls_back_when_ram_cannot_be_read(tmp_path, monkeypatch, runlog):
+def test_swapfile_falls_back_when_ram_cannot_be_read(swap_env, monkeypatch, runlog):
     """An unmeasurable machine keeps the behaviour it used to get."""
-    monkeypatch.setattr(chroot, "MEMINFO", tmp_path / "absent")
-    monkeypatch.setattr(chroot, "MNT", tmp_path)
-    monkeypatch.setattr(chroot, "target_ready", lambda: True)
-    monkeypatch.setattr(chroot, "run", runlog)
+    monkeypatch.setattr(hardware, "MEMINFO", swap_env / "absent")
     _feed(monkeypatch, chroot, [""])
 
     assert chroot.create_swapfile() == 0
-    dd = next(c for c in runlog.calls if c[0] == "dd")
-    assert f"count={chroot.SWAP_FALLBACK_MIB}" in dd
+    alloc = next(c for c in runlog.calls if c[0] == "fallocate")
+    assert f"{chroot.SWAP_FALLBACK_MIB}M" in alloc
+
+
+def test_swapfile_refuses_a_size_the_target_cannot_hold(swap_env, monkeypatch, runlog):
+    """The ceiling is checked before anything is written.
+
+    A swapfile that does not fit is written short and mkswap accepts it
+    anyway, so nothing reports the problem until hibernation needs the room.
+    """
+    monkeypatch.setattr(chroot, "_target_free_mib", lambda: 4096)
+    _feed(monkeypatch, chroot, ["8192"])
+
+    assert chroot.create_swapfile() == 1
+    assert not [c for c in runlog.calls if c[0] in ("fallocate", "dd", "mkswap")]
+
+
+def test_swapfile_below_ram_is_a_question_not_a_refusal(swap_env, monkeypatch, runlog):
+    """Smaller than RAM is a bet, and the person making it gets told so.
+
+    A lean machine may still want it, so this asks; a run with no one to
+    answer takes the side that does not silently promise hibernation.
+    """
+    _feed(monkeypatch, chroot, ["4096"])
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: False)
+
+    assert chroot.create_swapfile() == 1
+    assert not [c for c in runlog.calls if c[0] == "fallocate"]
+
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: True)
+    _feed(monkeypatch, chroot, ["4096"])
+    assert chroot.create_swapfile() == 0
+    assert next(c for c in runlog.calls if c[0] == "fallocate")[2] == "4096M"
+
+
+def test_swapfile_on_btrfs_is_marked_nocow_while_still_empty(swap_env, monkeypatch, runlog):
+    """Measured: a COW file cannot be swap, and the flag will not go on later.
+
+    dd and mkswap both return 0 on btrfs and swapon then fails with EINVAL,
+    so every btrfs install this tool performed produced a swapfile it could
+    not turn on. `chattr +C` fixes it only on a file with nothing in it --
+    on one that already holds bytes it returns 0 and sets no flag -- so the
+    order here is load-bearing, not cosmetic.
+    """
+    monkeypatch.setattr(chroot, "_fstype", lambda path: "btrfs")
+    _feed(monkeypatch, chroot, [""])
+
+    assert chroot.create_swapfile() == 0
+    names = [c[0] for c in runlog.calls]
+    assert "chattr" in names
+    assert names.index("chattr") < names.index("fallocate")
+    assert names.index("touch") < names.index("chattr")
+
+
+def test_swapfile_falls_back_to_dd_where_fallocate_is_unsupported(swap_env, monkeypatch):
+    """ext2/ext3/jfs are on the menu, and fallocate does not work there.
+
+    Its exit code is the check rather than a list of filesystems to keep in
+    step with disk.ROOT_FS.
+    """
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        return 1 if cmd[0] == "fallocate" else 0
+
+    monkeypatch.setattr(chroot, "run", run)
+    monkeypatch.setattr(chroot, "ask_yes", lambda prompt: True)
+    _feed(monkeypatch, chroot, ["1024"])
+
+    assert chroot.create_swapfile() == 0
+    dd = next(c for c in calls if c[0] == "dd")
+    assert "count=1024" in dd
 
 
 def test_pickers_sources(tmp_path, monkeypatch):
