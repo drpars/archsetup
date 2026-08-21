@@ -46,26 +46,6 @@ id = "hyprland"
   name = "rofi"
 
   [[category.packages]]
-  name = "walker"
-  aur = true
-  default = false
-
-  [[category.packages]]
-  name = "elephant"
-  aur = true
-  default = false
-
-  [[category.packages]]
-  name = "elephant-desktopapplications"
-  aur = true
-  default = false
-
-  [[category.packages]]
-  name = "elephant-archlinuxpkgs"
-  aur = true
-  default = false
-
-  [[category.packages]]
   name = "waybar"
 
   [[category.packages]]
@@ -80,11 +60,6 @@ id = "hyprland"
   [[category.packages]]
   name = "pacman-contrib"
   note = { tr = "checkupdates komutunu getirir; waybar güncelleme göstergesi buna dayanır", en = "provides checkupdates, which the waybar update indicator depends on" }
-
-  [[category.packages]]
-  name = "wleave-git"
-  aur = true
-  default = false
 
   [[category.packages]]
   name = "wlogout"
@@ -273,12 +248,6 @@ id = "plasma"
   [[category.packages]]
   name = "discover"
   note = { tr = "Grafiksel paket yöneticisi (Uygulama Mağazası) + güncelleme bildirimi", en = "Graphical package manager (app store) + update notifier" }
-
-  [[category.packages]]
-  name = "sddm-conf-git"
-  aur = true
-  note = { tr = "SDDM yapılandırma aracı", en = "SDDM configuration tool" }
-  default = false
 
 [[category]]
 id = "gnome"
