@@ -5,6 +5,7 @@ reporting, not what happens to be in the mirrors on the day this runs.
 """
 
 import subprocess
+import time
 
 import pytest
 
@@ -25,9 +26,18 @@ WORLD = {
 }
 
 
+# What pacman.conf is pretending to hold. g14 is in it so the stale-index
+# tests below keep testing staleness; the test that takes it out is the one
+# about a leftover database.
+CONFIGURED_REPOS = {"core", "extra", "multilib", "g14"}
+
+
 @pytest.fixture(autouse=True)
 def fake_pacman(monkeypatch):
     def run(cmd, **kwargs):
+        if cmd[:2] == ["pacman-conf", "--repo-list"]:
+            body = "".join(f"{repo}\n" for repo in sorted(CONFIGURED_REPOS))
+            return subprocess.CompletedProcess(cmd, 0, body, "")
         flag, name = cmd[1], cmd[-1]
         exists, is_group, resolves = WORLD.get(name, (False, False, None))
         if flag == "-Si":
@@ -179,6 +189,20 @@ AUR_WORLD = {
     "stale-pkg": {"Name": "stale-pkg", "Maintainer": "x", "OutOfDate": 1735689600},
     # Graduated into extra/: WORLD knows it, so pacman -Si will succeed.
     "mesa": {"Name": "mesa", "Maintainer": "x", "OutOfDate": None},
+    # The three corners of the "unwatched" pair. Timestamps are relative,
+    # because the thing under test is an age.
+    "unwatched-pkg": {
+        "Name": "unwatched-pkg", "Maintainer": "x", "OutOfDate": None,
+        "NumVotes": 2, "LastModified": int(time.time() - 900 * 86400),
+    },
+    "few-votes-fresh-pkg": {
+        "Name": "few-votes-fresh-pkg", "Maintainer": "x", "OutOfDate": None,
+        "NumVotes": 2, "LastModified": int(time.time() - 10 * 86400),
+    },
+    "many-votes-old-pkg": {
+        "Name": "many-votes-old-pkg", "Maintainer": "x", "OutOfDate": None,
+        "NumVotes": 200, "LastModified": int(time.time() - 900 * 86400),
+    },
 }
 
 
@@ -225,6 +249,40 @@ def test_orphan_and_outdated_are_notes_not_failures(tmp_path, fake_aur):
     assert findings["stale-pkg"].notes == (pkgaudit.OUTDATED,)
 
 
+def test_unwatched_needs_both_halves(tmp_path, fake_aur):
+    """Few votes and long untouched is a signal; either one alone is not.
+
+    A -git PKGBUILD barely changes because it does not have to, and a niche
+    package can be kept perfectly by one person -- so flagging on either
+    axis turns the warning into wallpaper. Measured on this catalogue
+    (2026-08-21, 28 AUR entries): the pair flags five, either alone twelve.
+    """
+    _write(tmp_path, "a.toml", _aur_toml(
+        "unwatched-pkg", "few-votes-fresh-pkg", "many-votes-old-pkg"))
+    findings = {f.name: f for f in pkgaudit.audit(tmp_path, aur=True)}
+
+    assert findings["few-votes-fresh-pkg"].notes == ()
+    assert findings["many-votes-old-pkg"].notes == ()
+    note, = findings["unwatched-pkg"].notes
+    assert note.startswith(pkgaudit.UNWATCHED)
+    # The numbers travel with the tag: what to do about an entry differs at
+    # 2 votes and 900 days from what to do at 9 votes and 400.
+    assert "2 votes" in note and "900d" in note
+    assert findings["unwatched-pkg"].status == pkgaudit.AUR_OK
+
+
+def test_unwatched_survives_an_aur_reply_without_the_fields(tmp_path, fake_aur):
+    """Older RPC replies carry no NumVotes/LastModified; absence is not zero.
+
+    Reading a missing NumVotes as 0 votes would flag every entry the field
+    is missing from -- a warning produced by the shape of the reply rather
+    than by the package.
+    """
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git"))
+    findings = {f.name: f for f in pkgaudit.audit(tmp_path, aur=True)}
+    assert findings["kmscon-git"].notes == ()
+
+
 def test_unreachable_aur_does_not_become_a_pile_of_missing(tmp_path, monkeypatch):
     """The difference between "we could not ask" and "it is gone" is the
     whole point: a dropped connection must not condemn every AUR entry."""
@@ -260,6 +318,56 @@ def test_stale_databases_reported(tmp_path):
     stale = pkgaudit.stale_databases(days=7, sync_dir=tmp_path)
     assert [name for name, _ in stale] == ["g14"]
     assert stale[0][1] >= 10
+
+
+def test_a_leftover_database_of_a_removed_repo_is_not_stale_data(
+        tmp_path, capsys, monkeypatch):
+    """pacman never deletes the sync database of a repo left out of pacman.conf.
+
+    So the file sits there ageing forever and nothing ever refreshes it.
+    Measured on this laptop: g14.db was 32 days old and warned about on
+    every audit while [g14] had already been removed from pacman.conf --
+    pacman was not reading the file at all. A warning that fires on data
+    nobody reads teaches the reader to skip the one that fires on data
+    they do.
+    """
+    import os
+    import time
+
+    _write(tmp_path, "a.toml", '[[category]]\nid = "demo"\n'
+                               '  [[category.packages]]\n  name = "plocate"\n')
+    db = tmp_path / "g14.db"
+    db.write_text("x")
+    long_ago = time.time() - 30 * 86400
+    os.utime(db, (long_ago, long_ago))
+    monkeypatch.setattr(pkgaudit, "configured_repos", lambda: {"core", "extra"})
+
+    assert pkgaudit.report(pkgaudit.audit(tmp_path), sync_dir=tmp_path) == 0
+    assert "g14" not in capsys.readouterr().out
+
+
+def test_an_unanswerable_repo_list_judges_every_database(tmp_path, monkeypatch):
+    """With no answer, check every database rather than none of them."""
+    import os
+    import time
+
+    db = tmp_path / "g14.db"
+    db.write_text("x")
+    long_ago = time.time() - 30 * 86400
+    os.utime(db, (long_ago, long_ago))
+    monkeypatch.setattr(pkgaudit, "configured_repos", lambda: None)
+
+    stale = pkgaudit.stale_databases(days=7, sync_dir=tmp_path)
+    assert [name for name, _ in stale] == ["g14"]
+
+
+def test_configured_repos_is_none_when_pacman_conf_fails(monkeypatch):
+    """Distinguishable from "no repositories", which would skip every check."""
+    monkeypatch.setattr(
+        pkgaudit.subprocess, "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"),
+    )
+    assert pkgaudit.configured_repos() is None
 
 
 def test_a_clean_report_still_warns_about_a_stale_index(tmp_path, capsys):

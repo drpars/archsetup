@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 import tomllib
 import urllib.error
 import urllib.parse
@@ -59,9 +60,26 @@ AUR_OK = "aur-ok"
 AUR_MISSING = "aur-missing"
 AUR_IN_REPO = "aur-in-repo"
 
-# Secondary AUR notes; an entry can carry both.
+# Secondary AUR notes; an entry can carry several.
 ORPHAN = "orphan"
 OUTDATED = "outdated"
+UNWATCHED = "unwatched"
+
+# What "unwatched" means, as two numbers rather than a feeling. Neither
+# axis says anything on its own: a -git PKGBUILD barely changes because it
+# does not have to (wlogout, 77 votes, untouched for 850 days, is fine),
+# and a niche package can be kept perfectly by one person (walker,
+# 26 votes, touched 35 days ago). It is the pair that describes an entry
+# nobody is looking at -- which is the profile the 2026 "Atomic Arch"
+# campaign adopted and poisoned, one step before the orphan flag catches it.
+#
+# The numbers are a line drawn through this catalogue's own measured
+# spread (2026-08-21, 28 AUR entries): votes ran 1..2366 with nine entries
+# in single digits, and days-since-packaging ran 0..1582 with a clear gap
+# between 347 and 442. Together they flag five entries; either alone
+# flags twelve, which is wallpaper rather than a warning.
+LOW_VOTES = 10
+AUR_STALE_DAYS = 365
 
 FATAL = (MISSING, AUR_MISSING)
 
@@ -144,6 +162,23 @@ def aur_info(names: list[str]) -> dict[str, dict] | None:
     return found
 
 
+def _unwatched(info: dict) -> str | None:
+    """The note for an entry that is both little-voted and long untouched.
+
+    Carries the two numbers, because the tag alone cannot be acted on: what
+    to do about a package differs at 2 votes and 1582 days from what to do
+    at 9 votes and 400.
+    """
+    votes = info.get("NumVotes") or 0
+    modified = info.get("LastModified")
+    if votes >= LOW_VOTES or not modified:
+        return None
+    days = int((time.time() - modified) // 86400)
+    if days < AUR_STALE_DAYS:
+        return None
+    return f"{UNWATCHED} {votes} votes/{days}d"
+
+
 def _classify_aur(name: str, info: dict | None) -> tuple[str, tuple[str, ...]]:
     # Ask the repositories first, whatever the AUR said. A package that
     # graduated usually has its AUR entry deleted afterwards as a duplicate,
@@ -158,6 +193,9 @@ def _classify_aur(name: str, info: dict | None) -> tuple[str, tuple[str, ...]]:
         notes.append(ORPHAN)
     if info.get("OutOfDate"):
         notes.append(OUTDATED)
+    unwatched = _unwatched(info)
+    if unwatched:
+        notes.append(unwatched)
     # Still in the AUR but also in the repos: nothing breaks, but aur = true
     # rebuilds from source what already ships as a signed binary.
     return (AUR_IN_REPO if in_repo else AUR_OK), tuple(notes)
@@ -202,6 +240,22 @@ def audit(data_dir: Path | None = None, aur: bool = False) -> list[Finding]:
     return findings
 
 
+def configured_repos() -> set[str] | None:
+    """The repositories pacman actually reads, or None if that cannot be asked.
+
+    None rather than an empty set on failure: with no answer the honest move
+    is to judge every database, not to declare every database irrelevant.
+    pacman-conf ships in the pacman package itself, so the failure branch is
+    about a broken config, not a missing tool.
+    """
+    out = subprocess.run(
+        ["pacman-conf", "--repo-list"], capture_output=True, text=True
+    )
+    if out.returncode != 0:
+        return None
+    return {line.strip() for line in out.stdout.split() if line.strip()}
+
+
 def stale_databases(days: int = STALE_AFTER_DAYS,
                     sync_dir: Path | None = None) -> list[tuple[str, int]]:
     """(repo name, age in days) for sync databases older than `days`.
@@ -209,13 +263,22 @@ def stale_databases(days: int = STALE_AFTER_DAYS,
     Without this the audit can report a clean bill of health from an index
     that predates the rename it was meant to catch -- a wrong answer that
     looks exactly like a right one.
-    """
-    import time
 
+    Only databases belonging to a configured repository count. pacman never
+    deletes the sync database of a repository taken out of pacman.conf, so
+    the file sits there ageing forever and nothing ever refreshes it --
+    measured here, g14.db was 32 days old and reported as stale while [g14]
+    had already been removed from pacman.conf and pacman was not reading the
+    file at all. A warning that fires on data nobody is reading teaches the
+    reader to skip the one that fires on data they are.
+    """
     root = sync_dir or SYNC_DIR
+    repos = configured_repos()
     now = time.time()
     stale = []
     for db in sorted(root.glob("*.db")):
+        if repos is not None and db.stem not in repos:
+            continue
         try:
             age = int((now - db.stat().st_mtime) // 86400)
         except OSError:
