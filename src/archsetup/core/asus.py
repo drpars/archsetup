@@ -16,16 +16,16 @@ the end of a file that still carries [g14] would leave asusctl resolving from
 a 2026-04 build forever. core.repos owns that rule; this module only says what
 has to outrank what.
 
-supergfxctl is deliberately not part of the default set and no longer could
-be: its upstream is archived too, and measured 2026-08-13 it is in neither
-[g14] nor [ogc], so it is an AUR build wherever it comes from. Its successor
-cardwire is in [ogc], and measured 2026-08-15 out of the package contents it
-does not cover the case this task exists for: the eBPF program hooks three
-things -- lsm/file_open, lsm/inode_getattr, lsm/inode_permission -- and all
-three deny access to the device node, while nothing in the binary binds
-vfio-pci. It hides the GPU instead of handing it over, so it is not a
-stand-in for the passthrough half. The task stays, says what happened, and
-prescribes nothing.
+supergfxctl is gone from this module as of 2026-08-21, and neither it nor a
+replacement is coming back. Its upstream is archived; measured 2026-08-13 it
+is in neither [g14] nor [ogc], so it was an AUR build wherever it came from,
+and it was the last AUR-only package any task here installed by itself.
+Its successor cardwire is in [ogc] and does not stand in: measured
+2026-08-15 out of the package contents, the eBPF program hooks
+lsm/file_open, lsm/inode_getattr and lsm/inode_permission and all three deny
+access to the device node, while nothing in the binary binds vfio-pci. It
+hides the GPU instead of handing it over. The passthrough half has an owner
+and it is not this tool -- see vfioctl.
 
 cardwire is not in the catalog either, and the D-Bus name is a second reason
 on top of that one. Its policy claims net.hadess.SwitcherooControl, which is
@@ -59,7 +59,6 @@ OUTRANKS = (repos.OUTRANKED,)
 
 ASUS_PACKAGES = ("asusctl", "rog-control-center")
 REPO_PACKAGES = ("power-profiles-daemon", "switcheroo-control", "brightnessctl")
-SUPERGFX_PACKAGES = ("supergfxctl",)
 
 # service -> owning package
 SERVICE_OWNERS = {
@@ -157,20 +156,4 @@ def install() -> int:
             rc |= services.enable(service)
 
     print(t("asus.nvidia_hint"))
-    return rc
-
-
-def install_supergfx() -> int:
-    """Optional, and now on borrowed time: upstream archived the project.
-
-    This used to install from [g14] when that repository was configured. It
-    could not have worked: measured 2026-08-13, supergfxctl is in neither
-    [g14] nor [ogc], so the repository path was a `pacman -S` for a name no
-    repository carries. It is an AUR build, and only that.
-    """
-    print(t("asus.supergfx_note"))
-    print(t("asus.supergfx_archived"))
-    rc = pacman.install([], [*SUPERGFX_PACKAGES])
-    if pacman.is_installed("supergfxctl"):
-        rc |= services.enable("supergfxd")
     return rc

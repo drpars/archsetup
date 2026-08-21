@@ -163,9 +163,7 @@ repo_setup_q = "Add the [{repo}] repository ({server})? asusctl's upstream moved
 key_failed = "Could not import the [{repo}] signing key; repository not added."
 upgrade_skipped = "The system upgrade did not run; [{repo}] is set up and usable anyway. Run `sudo pacman -Syu` later."
 above_g14 = "[ogc] was written ABOVE [g14]: pacman resolves a name from the first repository in the file, regardless of version."
-supergfx_archived = "supergfxctl's upstream is archived and the package is in no repository; it only builds from the AUR. Its successor cardwire (in [ogc]) does NOT stand in for the passthrough case: measured 2026-08-15, it hides the GPU from userspace and never binds vfio-pci. archsetup does not install it, and it would claim the same D-Bus name as switcheroo-control."
 pacman_conf_unreadable = "Could not read {path}; repository not added."
-supergfx_note = "supergfxctl is no longer recommended; install it only for VM passthrough or a dGPU that will not power down."
 nvidia_hint = "On a hybrid NVIDIA laptop, also run the 'NVIDIA Laptop Power Management' task."
 
 [nvidia_laptop]
@@ -315,6 +313,8 @@ vfioctl_done = "vfioctl installed. There is no automatic update channel: it is n
 [waydroid]
 missing = "waydroid is not installed; install it from Applications > Common Applications first."
 builtin = "The kernel ships binder built in; the DKMS module was skipped and only the service enabled."
+headers_needed = "This kernel's headers are not installed, and a DKMS build fails silently without them (pacman still reports success). Installing alongside: {package}"
+headers_unknown = "This kernel's headers are not installed and the package name could not be determined: /usr/lib/modules/{release}/pkgbase is unreadable. Installing the DKMS module without headers would fail the build silently and the binder device would never appear, so this stopped instead. Install your kernel's -headers package and try again."
 done = "Waydroid binder configured. Reboot before running it!"
 
 [ssh]
@@ -477,8 +477,6 @@ nvidia_laptop_power = "NVIDIA Laptop Power Management"
 nvidia_laptop_power_desc = "modprobe.d + udev rules for S0ix/runtime PM and the nvidia services"
 nvidia_sleep = "NVIDIA Sleep Units"
 nvidia_sleep_desc = "Preserve VRAM across suspend and hibernate (desktops too)"
-asus_supergfx = "supergfxctl (optional)"
-asus_supergfx_desc = "GPU mode switching; only for VM passthrough or dGPU issues"
 network_sharing = "Network Sharing (Samba/Avahi)"
 network_sharing_desc = "Samba configuration, sambashare group, mDNS and services"
 wait_online_timeout = "Shorten Network Wait"

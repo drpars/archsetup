@@ -568,17 +568,15 @@ def test_asus_repo_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
     assert "[ogc]" not in conf.read_text()
 
 
-def test_asus_supergfx_never_uses_a_repo(tmp_path, monkeypatch):
-    """Ölçüldü 2026-08-13: supergfxctl ne [g14]'te ne [ogc]'de var, yalnız AUR'da."""
-    installs = []
-    monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
-    monkeypatch.setattr(asus.pacman, "is_installed", lambda p: False)
-    conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n[ogc]\nServer = x\n")
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
+def test_supergfxctl_is_gone_from_the_tool(tmp_path):
+    """Kaldırıldı 2026-08-21: üstkaynak arşivli, hiçbir depoda yok, yalnız AUR.
 
-    assert asus.install_supergfx() == 0
-    assert installs == [((), ("supergfxctl",))]
+    Görev de sabit de kalktı. Adı geri getiren bir değişiklik burada durur --
+    yoksa "yeniden ekleyelim" sessizce kabul edilebilir bir öneri olur.
+    """
+    assert not hasattr(asus, "install_supergfx")
+    assert not hasattr(asus, "SUPERGFX_PACKAGES")
+    assert "asus-supergfx" not in {task.id for task in tasks.TASKS}
 
 
 def test_nvidia_laptop_configure(tmp_path, monkeypatch, fake_write, runlog):
@@ -1156,6 +1154,24 @@ def test_vfioctl_stops_without_base_devel(monkeypatch):
     assert called == []
 
 
+def _pin_kernel_tree(tmp_path, monkeypatch, *, headers: bool, pkgbase: str | None):
+    """Pin what the DKMS branch reads off /usr/lib/modules.
+
+    Unpinned it answers from the machine under the test -- which today has
+    the headers installed, so the branch that matters would silently never
+    run. Same leak the chassis check, the Samba tests and repo_usable() each
+    shipped once.
+    """
+    release = os.uname().release
+    tree = tmp_path / "modules" / release
+    tree.mkdir(parents=True)
+    if headers:
+        (tree / "build").mkdir()
+    if pkgbase is not None:
+        (tree / "pkgbase").write_text(f"{pkgbase}\n")
+    monkeypatch.setattr(waydroid, "KERNEL_MODULES", tmp_path / "modules")
+
+
 def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
     """Built-in binder must skip the DKMS module, whatever the kernel is called.
 
@@ -1175,6 +1191,7 @@ def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
     monkeypatch.setattr(waydroid.services, "enable", lambda n: enables.append(n) or 0)
     monkeypatch.setattr(waydroid, "MODULES_LOAD", tmp_path / "ml.conf")
     monkeypatch.setattr(waydroid, "MODPROBE", tmp_path / "mp.conf")
+    _pin_kernel_tree(tmp_path, monkeypatch, headers=True, pkgbase="linux-hardened")
 
     assert waydroid.setup() == 0
     assert installs == []
@@ -1190,6 +1207,70 @@ def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
         (tmp_path / "mp.conf").read_text()
         == "options binder_linux devices=binder,hwbinder,vndbinder\n"
     )
+
+
+@pytest.fixture
+def dkms_env(tmp_path, monkeypatch, fake_write):
+    """setup() on the branch only linux-hardened reaches, everything pinned."""
+    procfs = tmp_path / "filesystems"
+    procfs.write_text("nodev\tsysfs\n\text4\n")   # no binder -> DKMS path
+    state = SimpleNamespace(installs=[], enables=[])
+    monkeypatch.setattr(waydroid, "sudo_write", fake_write)
+    monkeypatch.setattr(waydroid, "FILESYSTEMS", procfs)
+    monkeypatch.setattr(waydroid.pacman, "is_installed", lambda p: p == "waydroid")
+    monkeypatch.setattr(
+        waydroid.pacman, "install",
+        lambda r, a: state.installs.append((tuple(r), tuple(a))) or 0,
+    )
+    monkeypatch.setattr(
+        waydroid.services, "enable", lambda n: state.enables.append(n) or 0
+    )
+    monkeypatch.setattr(waydroid, "MODULES_LOAD", tmp_path / "ml.conf")
+    monkeypatch.setattr(waydroid, "MODPROBE", tmp_path / "mp.conf")
+    return state
+
+
+def test_waydroid_pulls_the_headers_the_dkms_build_needs(
+        tmp_path, monkeypatch, dkms_env):
+    """A DKMS package with no headers installs fine and builds nothing.
+
+    pacman reports success, the module never appears, and the symptom shows
+    up much later as a device that was never created. The name is derived
+    from the kernel's own pkgbase rather than a table -- no table here ever
+    knew linux-ogc-headers.
+    """
+    _pin_kernel_tree(tmp_path, monkeypatch, headers=False, pkgbase="linux-hardened")
+
+    assert waydroid.setup() == 0
+    assert dkms_env.installs == [
+        (("python-pyclip", "linux-hardened-headers"), ("binder_linux-dkms",))
+    ]
+
+
+def test_waydroid_leaves_the_headers_alone_when_they_are_there(
+        tmp_path, monkeypatch, dkms_env):
+    """The question asked is whether modules/<release>/build exists, not
+    whether some package name is installed."""
+    _pin_kernel_tree(tmp_path, monkeypatch, headers=True, pkgbase="linux-hardened")
+
+    assert waydroid.setup() == 0
+    assert dkms_env.installs == [(("python-pyclip",), ("binder_linux-dkms",))]
+
+
+def test_waydroid_stops_when_it_cannot_name_the_headers(
+        tmp_path, monkeypatch, dkms_env, capsys):
+    """Headers missing and pkgbase unreadable: stopping beats installing.
+
+    Going ahead has a known outcome -- a success message and no module --
+    which is harder to diagnose than a task that says what it needs.
+    """
+    _pin_kernel_tree(tmp_path, monkeypatch, headers=False, pkgbase=None)
+
+    assert waydroid.setup() == 1
+    assert dkms_env.installs == []
+    assert not (tmp_path / "mp.conf").exists()
+    assert dkms_env.enables == []
+    assert "pkgbase" in capsys.readouterr().out
 
 
 def test_binderfs_is_not_binder(tmp_path, monkeypatch):

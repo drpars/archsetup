@@ -163,9 +163,7 @@ repo_setup_q = "[{repo}] deposu ({server}) eklensin mi? asusctl'in üstkaynağı
 key_failed = "[{repo}] imzalama anahtarı alınamadı; depo eklenmedi."
 upgrade_skipped = "Sistem yükseltmesi yapılmadı; [{repo}] yine de kuruldu ve kullanılabilir. Yükseltmeyi sonra `sudo pacman -Syu` ile yapın."
 above_g14 = "[ogc], [g14]'ün ÜSTÜNE yazıldı: pacman bir adı dosyada önce gelen depodan çözer, sürüme bakmaz."
-supergfx_archived = "supergfxctl'in üstkaynağı arşivlendi ve paket hiçbir depoda yok; yalnızca AUR'dan derlenir. Halefi cardwire ([ogc]'de) vfio devrinin yerini TUTMUYOR: 2026-08-15'te ölçüldü, GPU'yu kullanıcı alanından gizliyor ve vfio-pci'ye hiç bind etmiyor. archsetup onu kurmuyor; ayrıca switcheroo-control ile aynı D-Bus adını isterdi."
 pacman_conf_unreadable = "{path} okunamadı; depo eklenmedi."
-supergfx_note = "supergfxctl artık önerilmiyor; yalnızca VM geçişi veya dGPU kapanmama sorunu için kurun."
 nvidia_hint = "NVIDIA hibrit dizüstünüz varsa 'NVIDIA Dizüstü Güç Yönetimi' görevini de çalıştırın."
 
 [nvidia_laptop]
@@ -315,6 +313,8 @@ vfioctl_done = "vfioctl kuruldu. Otomatik güncelleme kanalı yok: AUR'da olmad�
 [waydroid]
 missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
 builtin = "Çekirdek binder'ı yerleşik veriyor; DKMS modülü kurulmadı, yalnızca servis etkinleştirildi."
+headers_needed = "Bu çekirdeğin başlıkları kurulu değil; DKMS derlemesi onlarsız sessizce düşer (pacman yine 'başarılı' der). Birlikte kuruluyor: {package}"
+headers_unknown = "Bu çekirdeğin başlıkları kurulu değil ve paket adı belirlenemedi: /usr/lib/modules/{release}/pkgbase okunamıyor. DKMS modülü başlıksız kurulsaydı derleme sessizce düşer ve binder aygıtı hiç oluşmazdı; onun için durduk. Çekirdeğinizin -headers paketini kurup tekrar deneyin."
 done = "Waydroid binder yapılandırıldı. Çalıştırmadan önce yeniden başlatın!"
 
 [ssh]
@@ -477,8 +477,6 @@ nvidia_laptop_power = "NVIDIA Dizüstü Güç Yönetimi"
 nvidia_laptop_power_desc = "S0ix/runtime PM için modprobe.d + udev kuralları ve nvidia servisleri"
 nvidia_sleep = "NVIDIA Uyku Birimleri"
 nvidia_sleep_desc = "Askiya alma/hazirda bekletmede VRAM korumasi (masaustu dahil)"
-asus_supergfx = "supergfxctl (isteğe bağlı)"
-asus_supergfx_desc = "GPU modu değiştirme; yalnızca VM geçişi veya dGPU sorunları için"
 network_sharing = "Ağ Paylaşımı (Samba/Avahi)"
 network_sharing_desc = "Samba yapılandırması, sambashare grubu, mDNS ve servisler"
 wait_online_timeout = "Ağ Bekleme Süresini Kısalt"
