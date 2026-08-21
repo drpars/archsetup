@@ -1,4 +1,4 @@
-"""kmscon virtual console: AUR install + per-TTY systemd unit swap.
+"""kmscon virtual console: package install + per-TTY systemd unit swap.
 
 kmscon replaces agetty on one VT with a KMS terminal: TrueType fonts,
 full Unicode, XKB keyboard layouts and a scrollback buffer, none of which
@@ -8,8 +8,16 @@ laid out keyboard matters most.
 
 Two things about the package are easy to get wrong:
 
-* The AUR package is **kmscon-git**. Plain `kmscon` was dropped; asking
-  for it fails with "target not found" before anything is configured.
+* The package is `extra/kmscon`, not the AUR. That was the other way round
+  until 2026-08-21, and the reason it changed is that the note saying
+  "plain kmscon was dropped, asking for it fails with target not found"
+  had gone stale: upstream moved to github.com/kmscon/kmscon and Arch
+  packages the tagged releases again. Measured that day -- extra had
+  10.0.1-1 while the AUR kmscon-git built v9.2.1.r377 of the same tree,
+  the two file lists were identical down to kmscon-launch-gui, and all 26
+  option names this file writes exist in v10.0.1's src/kmscon_conf.c.
+  kmscon-git provides and conflicts with kmscon, so a machine that already
+  has it is asked before the swap rather than ending up with both.
 * kmscon does not read the system keymap. With no xkb-layout in its own
   config, libxkbcommon falls back to `us` — so a machine whose VTs are
   Turkish gets a US console the moment kmscon takes over. Setting the
@@ -35,14 +43,7 @@ t = i18n.t
 CONFIG = Path("/etc/kmscon/kmscon.conf")
 VCONSOLE = Path("/etc/vconsole.conf")
 
-PACKAGE = "kmscon-git"
-
-# kmscon-git's PKGBUILD forgets `check` in makedepends, so no AUR helper
-# knows to pull it in and meson stops with
-#   ERROR: Dependency "check" not found, tried pkgconfig
-# after the sources are already fetched. Installing it from the repo first
-# costs one small package and turns a failed build into a working one.
-BUILD_DEPS = ["check"]
+PACKAGE = "kmscon"
 
 FONT = "JetBrainsMono Nerd Font Mono"
 FONT_PACKAGE = "ttf-jetbrains-mono-nerd"
@@ -164,7 +165,7 @@ def install() -> int:
         print(t("msg.cancelled"))
         return 1
 
-    rc = pacman.install(BUILD_DEPS, [PACKAGE])
+    rc = pacman.install([PACKAGE], [])
     if rc != 0:
         return rc
 

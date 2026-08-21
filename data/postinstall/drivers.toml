@@ -127,8 +127,3 @@ id = "sound"
   [[category.packages]]
   name = "easyeffects"
   default = false
-
-  [[category.packages]]
-  name = "jamesdsp-pipewire-bin"
-  aur = true
-  default = false

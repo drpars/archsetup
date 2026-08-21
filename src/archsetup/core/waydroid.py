@@ -51,7 +51,15 @@ def setup() -> int:
         print(t("waydroid.builtin"))
         return services.enable("waydroid-container")
 
-    rc = pacman.install([], ["binder_linux-dkms", "python-pyclip"])
+    # python-pyclip goes in the repository list: it is extra/python-pyclip
+    # 0.7.0, and its AUR record no longer exists at all -- a promoted package
+    # gets its AUR entry deleted as a duplicate (measured 2026-08-21, the RPC
+    # returns nothing for the name). It worked anyway because AUR helpers
+    # resolve repository names too, which is precisely why nothing reported
+    # it. The two lists are kept apart so a dead name in one cannot take the
+    # other down, and a repository package riding in the AUR transaction
+    # gives that up for free.
+    rc = pacman.install(["python-pyclip"], ["binder_linux-dkms"])
     if rc != 0:
         return rc
 

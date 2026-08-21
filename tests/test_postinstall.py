@@ -358,10 +358,10 @@ def test_kmscon(tmp_path, monkeypatch, fake_write, runlog):
     assert kmscon.install() == 0
     assert ("d", "getty@tty4.service") in services_log
     assert ("e", "kmsconvt@tty4.service") in services_log
-    # Düz "kmscon" AUR'dan kalktı; eski ad "target not found" ile döner.
-    # check depodan önce gelmeli: kmscon-git onu makedepends'e yazmadığı için
-    # AUR yardımcısı kurmaz ve meson "Dependency check not found" ile durur.
-    assert installed == [(["check"], ["kmscon-git"])]
+    # Depodan, AUR'dan değil: extra/kmscon 10.0.1 aynı upstream'i paketliyor
+    # (ölçüldü 2026-08-21, dosya listeleri birebir). AUR listesinin boş
+    # kalması testin yarısı -- kmscon-git'e dönen bir değişiklik burada durur.
+    assert installed == [(["kmscon"], [])]
 
 
 def test_kmscon_takes_the_keyboard_from_vconsole(tmp_path, monkeypatch):
@@ -1168,7 +1168,10 @@ def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
     monkeypatch.setattr(waydroid, "sudo_write", fake_write)
     monkeypatch.setattr(waydroid, "FILESYSTEMS", procfs)
     monkeypatch.setattr(waydroid.pacman, "is_installed", lambda p: p == "waydroid")
-    monkeypatch.setattr(waydroid.pacman, "install", lambda r, a: installs.append(tuple(a)) or 0)
+    monkeypatch.setattr(
+        waydroid.pacman, "install",
+        lambda r, a: installs.append((tuple(r), tuple(a))) or 0,
+    )
     monkeypatch.setattr(waydroid.services, "enable", lambda n: enables.append(n) or 0)
     monkeypatch.setattr(waydroid, "MODULES_LOAD", tmp_path / "ml.conf")
     monkeypatch.setattr(waydroid, "MODPROBE", tmp_path / "mp.conf")
@@ -1180,7 +1183,9 @@ def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):
 
     procfs.write_text("nodev\tsysfs\n\text4\n")
     assert waydroid.setup() == 0
-    assert installs == [("binder_linux-dkms", "python-pyclip")]
+    # python-pyclip is extra/python-pyclip and has no AUR record left at
+    # all; only binder_linux-dkms belongs in the AUR transaction.
+    assert installs == [(("python-pyclip",), ("binder_linux-dkms",))]
     assert (
         (tmp_path / "mp.conf").read_text()
         == "options binder_linux devices=binder,hwbinder,vndbinder\n"
