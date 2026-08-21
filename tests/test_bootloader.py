@@ -132,17 +132,22 @@ def test_nvidia_560_skips_param_steps(gpu_env, monkeypatch):
     assert not (gpu_env / "nvidia.conf").exists()
 
 
+def pin_swap(monkeypatch, *areas):
+    """Pin what swapon reports, so no test reads the machine under it."""
+    monkeypatch.setattr(hibernate, "_swap_areas", lambda: list(areas))
+
+
 @pytest.fixture
 def hib_env(gpu_env, monkeypatch, fake_write, runlog):
     monkeypatch.setattr(hibernate, "sudo_write", fake_write)
     monkeypatch.setattr(hibernate, "run", runlog)
-    monkeypatch.setattr(hibernate, "_swapfile_active", lambda: True)
-    monkeypatch.setattr(hibernate, "_swap_uuid", lambda: "NEW-UUID")
-    monkeypatch.setattr(hibernate, "_swap_offset", lambda: "555555")
+    monkeypatch.setattr(hibernate, "_swap_uuid", lambda path: "NEW-UUID")
+    monkeypatch.setattr(hibernate, "_swap_offset", lambda path: "555555")
     # Pinned, or the adequacy check reads the machine under the test: this
     # laptop has 8 GiB of swap against an 11 GiB image target, so the task
     # would stop on a question and the suite would answer it from real stdin.
-    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 32 * 2**30)
+    pin_swap(monkeypatch, hibernate.SwapArea(str(gpu_env / "swapfile"),
+                                             hibernate.FILE, 32 * 2**30))
     monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
     # Pinned for the same reason: unpinned, the NVIDIA gate reads the real
     # /etc/mkinitcpio.conf.d and the suite answers from the machine under it.
@@ -178,9 +183,109 @@ def test_hibernate_systemd_hook_skipped(hib_env, monkeypatch):
     assert " resume" not in hooks_line
 
 
-def test_hibernate_requires_swapfile(hib_env, monkeypatch):
-    monkeypatch.setattr(hibernate, "SWAPFILE", str(hib_env / "missing"))
+def test_hibernate_requires_some_active_swap(hib_env, monkeypatch):
+    pin_swap(monkeypatch)
     assert hibernate.configure() == 1
+
+
+def test_hibernate_configures_a_swap_partition(hib_env, monkeypatch, capsys):
+    """A swap partition is the easier half, and it used to be refused.
+
+    disk.select_partitions() offers one and the installer turns it on, so a
+    machine archsetup itself built could reach the one task that exists to
+    make it hibernate and be told there is no /swapfile.
+
+    The partition takes no resume_offset=, and must not keep a stale one:
+    __find_hibernation_swap_type() matches on
+    `device == sis->bdev->bd_dev && first_se(sis)->start_block == offset`,
+    and a block device's only extent is add_swap_extent(sis, 0, sis->max, 0)
+    -- start_block 0. A leftover offset makes that lookup return -ENODEV.
+    """
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=309248\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd block fsck)\n")
+    pin_swap(monkeypatch, hibernate.SwapArea("/dev/nvme0n1p3",
+                                             hibernate.PARTITION, 32 * 2**30))
+    monkeypatch.setattr(hibernate, "_area_uuid", lambda dev: "PART-UUID")
+    # A partition has no offset to derive, so neither of these may be reached.
+    monkeypatch.setattr(hibernate, "_swap_offset",
+                        lambda path: pytest.fail("bolumde offset aranmamali"))
+    monkeypatch.setattr(hibernate, "_ensure_offset_tool",
+                        lambda path: pytest.fail("bolumde arac kurulmamali"))
+
+    assert hibernate.configure() == 0
+    tokens = cmdline.read_text().split()
+    assert "resume=UUID=PART-UUID" in tokens
+    assert not [tok for tok in tokens if tok.startswith("resume_offset=")]
+    assert "/dev/nvme0n1p3" in capsys.readouterr().out
+
+
+def test_hibernate_will_not_guess_between_swap_areas(hib_env, monkeypatch, capsys):
+    """Two areas and neither is ours: the kernel uses one, so someone must say which.
+
+    The image is not spread over whatever is mounted. swsusp_swap_check()
+    resolves resume= to a single swap type and every page goes through
+    alloc_swapdev_block(root_swap), so naming the wrong device here is
+    exactly the failure this task exists to prevent.
+    """
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    pin_swap(
+        monkeypatch,
+        hibernate.SwapArea("/dev/sda2", hibernate.PARTITION, 8 * 2**30),
+        hibernate.SwapArea("/var/swap", hibernate.FILE, 32 * 2**30),
+    )
+
+    assert hibernate.configure() == 1
+    assert "resume=" not in cmdline.read_text()
+    out = capsys.readouterr().out
+    assert "/dev/sda2" in out and "/var/swap" in out
+
+
+def test_hibernate_prefers_the_swapfile_it_made(hib_env, monkeypatch):
+    """With a partition alongside, /swapfile is the one this tool sizes."""
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd block fsck)\n")
+    pin_swap(
+        monkeypatch,
+        hibernate.SwapArea("/dev/sda2", hibernate.PARTITION, 8 * 2**30),
+        hibernate.SwapArea(str(hib_env / "swapfile"), hibernate.FILE, 32 * 2**30),
+    )
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(hib_env / "swapfile"))
+
+    assert hibernate.configure() == 0
+    tokens = cmdline.read_text().split()
+    assert "resume=UUID=NEW-UUID" in tokens and "resume_offset=555555" in tokens
+
+
+def test_hibernate_measures_the_resume_area_not_every_area(hib_env, monkeypatch):
+    """A big second area does not make a small resume target adequate.
+
+    This check used to sum every active area, on the belief that the image
+    goes wherever the kernel finds room. It does not: enough_swap() asks
+    count_swap_pages(root_swap, 1) about the resume device alone. Summed,
+    the 40 GiB here would have passed silently against an 11 GiB image.
+    """
+    cmdline = hib_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    pin_swap(
+        monkeypatch,
+        hibernate.SwapArea(str(hib_env / "swapfile"), hibernate.FILE, 8 * 2**30),
+        hibernate.SwapArea("/dev/sda2", hibernate.PARTITION, 32 * 2**30),
+    )
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(hib_env / "swapfile"))
+    monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
+    asked: list[str] = []
+    monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: bool(asked.append(prompt)))
+
+    assert hibernate.configure() == 0
+    assert asked, "kucuk resume hedefi sorulmadan gecti"
+    assert "resume=" not in cmdline.read_text()
 
 
 def test_hibernate_stops_when_swap_cannot_hold_the_image(hib_env, monkeypatch, capsys):
@@ -194,7 +299,8 @@ def test_hibernate_stops_when_swap_cannot_hold_the_image(hib_env, monkeypatch, c
     cmdline = hib_env / "cmdline"
     cmdline.write_text("root=UUID=abc rw\n")
     monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
-    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 8 * 2**30)
+    pin_swap(monkeypatch, hibernate.SwapArea(str(hib_env / "swapfile"),
+                                             hibernate.FILE, 8 * 2**30))
     monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
     monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: False)
 
@@ -209,7 +315,8 @@ def test_hibernate_proceeds_when_the_answer_is_yes(hib_env, monkeypatch):
     cmdline.write_text("root=UUID=abc rw\n")
     monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
     (hib_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd block fsck)\n")
-    monkeypatch.setattr(hibernate, "_swap_bytes", lambda: 8 * 2**30)
+    pin_swap(monkeypatch, hibernate.SwapArea(str(hib_env / "swapfile"),
+                                             hibernate.FILE, 8 * 2**30))
     monkeypatch.setattr(hibernate, "_image_size", lambda: 11 * 2**30)
     monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
 
@@ -371,7 +478,7 @@ def test_btrfs_offset_comes_from_map_swapfile(monkeypatch):
         return Out(" 0:  0.. 32767: 86880.. 119647: 32768: last,eof\n")
 
     monkeypatch.setattr(hibernate.subprocess, "run", fake_run)
-    assert hibernate._swap_offset() == "115136"
+    assert hibernate._swap_offset("/swapfile") == "115136"
     assert not any("filefrag" in c for c in seen)
 
 
@@ -388,13 +495,13 @@ def test_ext4_offset_still_comes_from_filefrag(monkeypatch):
         return Out(" 0:  0.. 32767: 309248.. 342015: 32768: last,eof\n")
 
     monkeypatch.setattr(hibernate.subprocess, "run", fake_run)
-    assert hibernate._swap_offset() == "309248"
+    assert hibernate._swap_offset("/swapfile") == "309248"
 
 
 @pytest.fixture
 def rm_env(hib_env, monkeypatch, runlog):
     monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
-    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda: True)
+    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda path: True)
     return hib_env
 
 
@@ -442,6 +549,32 @@ def test_remove_cleans_parameters_a_hand_deletion_left(rm_env, monkeypatch, runl
     assert not [c for c in runlog.calls if c[:2] == ["sudo", "rm"]]
 
 
+def test_remove_does_not_offer_to_delete_a_file_that_is_not_there(rm_env, monkeypatch):
+    """A swap partition has no file to take away, and the prompt must not claim one.
+
+    remove() never touches a device, so on a partition machine what it undoes
+    is the configuration. The same branch covers a hand-deleted swapfile.
+    Asserted on the message key rather than its text, so it holds in either
+    locale.
+    """
+    cmdline = rm_env / "cmdline"
+    cmdline.write_text("root=UUID=abc rw resume=UUID=OLD resume_offset=1\n")
+    monkeypatch.setattr(bootloader, "CMDLINE", cmdline)
+    monkeypatch.setattr(hibernate, "SWAPFILE", str(rm_env / "gone"))
+    (rm_env / "mkinitcpio.conf").write_text("HOOKS=(base systemd fsck)\n")
+    keys: list[str] = []
+    spoken = hibernate.t
+    monkeypatch.setattr(
+        hibernate, "t", lambda key, **fmt: keys.append(key) or spoken(key, **fmt)
+    )
+
+    assert hibernate.remove() == 0
+    assert "msg.swap_remove_plan_params" in keys
+    assert "msg.swap_remove_plan" not in keys
+    assert "msg.swap_params_removed" in keys
+    assert "msg.swap_removed" not in keys
+
+
 def test_remove_does_nothing_when_there_is_nothing_to_remove(rm_env, monkeypatch, runlog):
     cmdline = rm_env / "cmdline"
     cmdline.write_text("root=UUID=abc rw\n")
@@ -461,7 +594,7 @@ def resize_env(hib_env, monkeypatch, runlog):
     swapfile = hib_env / "swapfile"
     swapfile.write_bytes(b"x" * (64 * 2**20))
     monkeypatch.setattr(hibernate, "SWAPFILE", str(swapfile))
-    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda: True)
+    monkeypatch.setattr(hibernate, "_ensure_offset_tool", lambda path: True)
     monkeypatch.setattr(hibernate, "_free_bytes", lambda: 512 * 2**20)
     monkeypatch.setattr(hibernate.hardware, "ram_bytes", lambda: 0)
     monkeypatch.setattr(hibernate, "ask_yes", lambda prompt: True)
@@ -479,7 +612,7 @@ def _answer(monkeypatch, value):
 def test_resize_grows_with_fallocate_and_rewrites_the_offset(resize_env, monkeypatch, runlog):
     """The size is the easy half; the offset is the half a hand-run guesses."""
     _answer(monkeypatch, "192")
-    monkeypatch.setattr(hibernate, "_swap_offset", lambda: "778899")
+    monkeypatch.setattr(hibernate, "_swap_offset", lambda path: "778899")
 
     assert hibernate.resize() == 0
     assert ["sudo", "fallocate", "-l", "192M", hibernate.SWAPFILE] in runlog.calls
