@@ -46,11 +46,15 @@ biçimlendir → bağla → pacstrap → **ek paketler** → sistem yapılandır
 rEFInd, Secure Boot) → yeniden başlat.
 
 Ek paketler sistem yapılandırmasından **önce** gelir: sbctl, efibootmgr ve
-mikrokod oradan kurulur, chroot adımları da bunlara dayanır. `linux-g14`
-ya da `linux-ogc` seçilirse o çekirdeğin deposu ([g14] ya da [ogc]) pacstrap'ten
-önce canlı ortama, kurulumdan sonra da hedefe eklenir — depo olmadan çekirdek ne
-kurulabilir ne güncellenebilir. [ogc] her zaman [g14]'ün **üstüne** yazılır:
-pacman bir adı dosyada önce gelen depodan çözer, sürüme bakmaz.
+mikrokod oradan kurulur, chroot adımları da bunlara dayanır. `linux-ogc`
+seçilirse deposu ([ogc]) pacstrap'ten önce canlı ortama, kurulumdan sonra da
+hedefe eklenir — depo olmadan çekirdek ne kurulabilir ne güncellenebilir.
+`linux-g14` ve [g14] 2026-08-21'de kaldırıldı: depo 2026-07-19'dan beri yayın
+yapmıyor, yani oradan kurulan çekirdek kurulduğu anda güncelleme almayı
+bırakıyordu. Eski bir kurulumdan kalmış [g14] **silinmez** (o çekirdeği
+çalıştıran makine tek kaynağını kaybederdi) ama [ogc] her zaman onun
+**üstüne** yazılır: pacman bir adı dosyada önce gelen depodan çözer, sürüme
+bakmaz.
 
 Bölüm seçiminde EFI bölümünün **tipi** de denetlenir: "Linux filesystem"
 olarak bırakılmış bir FAT32 bölümü biçimlenir, bağlanır ve dosyaları alır;

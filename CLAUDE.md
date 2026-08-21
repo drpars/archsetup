@@ -30,8 +30,9 @@ okunduğunda "dolu" görünüp `.githooks/` yokken commit uyarısız geçtiği i
 ayarı tek başına doğrulamak da yetmez. CI bu işi yapmıyor (yalnız test ve paket
 denetimi) ve zaten push'tan **sonra** bakardı; sır için o geç. Yanlış alarm
 satırın **kendisine** `# gitleaks:allow` yazılarak susturulur — üst satıra
-yazmak işe yaramaz (ölçüldü 2026-08-06). `G14_KEY` böyle muaf: asus-linux'un
-açık imzalama anahtarının parmak izi, `generic-api-key` ile eşleşiyor.
+yazmak işe yaramaz (ölçüldü 2026-08-06). `core/repos.py`'deki `OGC` anahtarı
+böyle muaf: deponun açık imzalama anahtarının parmak izi `generic-api-key` ile
+eşleşiyor.
 
 **`tr.toml` ve `en.toml` anahtar kümeleri birebir aynı olmak zorunda.**
 `test_locale_files_have_identical_keys` bunu zorluyor. Yeni metin eklerken
@@ -162,8 +163,8 @@ dosyasından yapılır (4 bayt öznitelik başlığı + değer), `efivar` binary
 gerekmez.
 
 **pacstrap canlı ortamın `pacman.conf`'unu kullanır.** Hedefteki depoyu
-eklemek pacstrap'e yardım etmez; `linux-g14` gibi depo dışı bir çekirdek
-için [g14] önce `/etc/pacman.conf`'a girmeli. Depo satırı anahtar
+eklemek pacstrap'e yardım etmez; `linux-ogc` gibi depo dışı bir çekirdek
+için [ogc] önce `/etc/pacman.conf`'a girmeli. Depo satırı anahtar
 güvenilir kılınmadan yazılırsa sonraki her `-Sy` imza hatası verir.
 
 **`xdg-user-dir` yapılandırılmamış klasör için `$HOME` döner.** Hata

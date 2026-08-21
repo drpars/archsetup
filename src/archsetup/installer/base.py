@@ -21,7 +21,6 @@ KERNELS = (
     "linux",
     "linux-lts",
     "linux-hardened",
-    "linux-g14",
     "linux-ogc",
 )
 DEFAULT_KEYMAP = "trq"
@@ -164,14 +163,15 @@ def enable_multilib() -> int:
 
 LIVE_PACMAN_CONF = Path("/etc/pacman.conf")
 
-# Which third-party repository each out-of-tree kernel comes from. There are
-# two now: [g14] stopped publishing on 2026-07-19 and stands at 7.1.4, while
-# [ogc] carries linux-ogc 7.1.8 and is where asus-linux's packager moved.
-# Both stay on offer -- [g14] still serves a kernel that boots and nothing has
-# announced its retirement -- but see core.repos for why the order they land
-# in, not the version they carry, is the thing that can go wrong.
+# Which third-party repository each out-of-tree kernel comes from. One now:
+# linux-g14 and [g14] came off the offer on 2026-08-21, a month after the
+# repository last published, with linux-g14 left at 7.1.4 while [ogc] carries
+# linux-ogc 7.1.8 and is where asus-linux's packager moved. Offering a kernel
+# whose only source has gone quiet is offering a kernel that stops getting
+# security updates the moment it is installed. [g14] is still *detected* --
+# see _add_repo -- because an older archsetup put it in files that are still
+# out there.
 KERNEL_REPOS = {
-    "linux-g14": repos.G14,
     "linux-ogc": repos.OGC,
 }
 
@@ -204,8 +204,11 @@ def _add_repo(repo: repos.Repo, conf: Path, prefix: list[str]) -> int:
         print(t("inst.repo_key_failed", repo=repo.name))
         return rc
     text = conf.read_text(encoding="utf-8")
-    # Above any sibling publishing the same names, below the official ones.
-    conf.write_text(repos.insert(text, repo, above=("g14",)), encoding="utf-8")
+    # Above any sibling publishing the same names -- a [g14] an older install
+    # left behind -- and below the official ones.
+    conf.write_text(
+        repos.insert(text, repo, above=(repos.OUTRANKED,)), encoding="utf-8"
+    )
     print(f"{conf} <- [{repo.name}]")
     return run([*prefix, "pacman", "-Sy"])
 
@@ -223,7 +226,9 @@ def add_kernel_repo_live(repo: repos.Repo) -> int:
 def add_asus_repo() -> int:
     """Menu entry: the ASUS repository, for the tools rather than for a kernel.
 
-    [ogc] rather than [g14] because this is the one still publishing, and
-    because a kernel that needs [g14] gets it from pacstrap_base anyway.
+    [ogc] is the only ASUS repository archsetup writes. A [g14] already in the
+    file is outranked, not removed: a machine still running linux-g14 would be
+    left with no source for its kernel at all, and nothing here knows which
+    kernel booted.
     """
     return add_kernel_repo(repos.OGC)

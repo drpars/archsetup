@@ -64,8 +64,8 @@ def test_preset_outputs_skips_commented_assignments():
 def test_outputs_collects_every_preset_and_only_presets(tmp_path):
     preset_dir = tmp_path / "etc/mkinitcpio.d"
     preset_dir.mkdir(parents=True)
-    (preset_dir / "linux-g14.preset").write_text(
-        "PRESETS=('default')\ndefault_uki=\"/efi/g14.efi\"\n"
+    (preset_dir / "linux-ogc.preset").write_text(
+        "PRESETS=('default')\ndefault_uki=\"/efi/ogc.efi\"\n"
     )
     (preset_dir / "linux-zen.preset").write_text(
         "PRESETS=('default')\ndefault_uki=\"/efi/zen.efi\"\n"
@@ -75,7 +75,7 @@ def test_outputs_collects_every_preset_and_only_presets(tmp_path):
     (preset_dir / "linux-zen.preset.sablon").write_text(
         "PRESETS=('default')\ndefault_uki=\"/efi/nope.efi\"\n"
     )
-    assert mkinitcpio.outputs(tmp_path) == [Path("/efi/g14.efi"), Path("/efi/zen.efi")]
+    assert mkinitcpio.outputs(tmp_path) == [Path("/efi/ogc.efi"), Path("/efi/zen.efi")]
 
 
 def test_regenerate_rebuilds_and_then_asks_about_the_signature(
@@ -151,7 +151,7 @@ def kms_env(tmp_path, monkeypatch, runlog):
     conf_d.mkdir()
 
     modules_root = tmp_path / "modules"
-    for kver, drivers in (("7.1-zen", ("nouveau", "amdgpu")), ("7.1-g14", ("amdgpu",))):
+    for kver, drivers in (("7.1-zen", ("nouveau", "amdgpu")), ("7.1-ogc", ("amdgpu",))):
         drm = modules_root / kver / "kernel/drivers/gpu/drm"
         for driver in drivers:
             (drm / driver).mkdir(parents=True, exist_ok=True)
@@ -200,8 +200,8 @@ def kms_env(tmp_path, monkeypatch, runlog):
 def test_contribution_is_computed_not_guessed(kms_env):
     # The pool is what is on disk; the cache is what modprobe resolved.
     assert kms_hook.kms_contribution("7.1-zen") == {"nouveau", "amdgpu"}
-    assert kms_hook.kms_contribution("7.1-g14") == {"amdgpu"}
-    assert kms_hook.kernels() == ["7.1-g14", "7.1-zen"]
+    assert kms_hook.kms_contribution("7.1-ogc") == {"amdgpu"}
+    assert kms_hook.kernels() == ["7.1-ogc", "7.1-zen"]
     assert kms_hook.blacklisted() == {"nouveau", "nova_core"}
 
 
@@ -275,7 +275,7 @@ def test_refuses_when_no_console_would_survive(kms_env, monkeypatch, capsys):
     """No simpledrm builtin and no DRM driver in MODULES means a blind boot."""
     conf = kms_env / "mkinitcpio.conf"
     conf.write_text(conf.read_text().replace("nvidia_drm)", "nvidia_drm amdgpu)"))
-    for kver in ("7.1-zen", "7.1-g14"):
+    for kver in ("7.1-zen", "7.1-ogc"):
         (kms_env / "modules" / kver / "modules.builtin").write_text("")
     monkeypatch.setattr(kms_hook, "kms_pool", lambda kver: {"nouveau"})
     assert kms_hook.configure() == 1
@@ -315,7 +315,7 @@ def test_firmware_bytes_counts_each_blob_once(kms_env, monkeypatch):
     # And the set is shared, so a second kernel does not pay for it again.
     counted = set()
     assert kms_hook.firmware_bytes("7.1-zen", "nouveau", counted) == 2048
-    assert kms_hook.firmware_bytes("7.1-g14", "nouveau", counted) == 0
+    assert kms_hook.firmware_bytes("7.1-ogc", "nouveau", counted) == 0
 
 
 # --- secure boot verification ------------------------------------------------
@@ -381,20 +381,20 @@ def test_unsigned_fails_even_though_sbctl_exits_zero(sb_on, monkeypatch, capsys)
     payload = json.dumps(
         [
             {"file_name": "/efi/EFI/Linux/arch-linux-zen.efi", "is_signed": 0},
-            {"file_name": "/efi/EFI/Linux/arch-linux-g14.efi", "is_signed": 1},
+            {"file_name": "/efi/EFI/Linux/arch-linux-ogc.efi", "is_signed": 1},
         ]
     )
     monkeypatch.setattr(secureboot.subprocess, "run", _sbctl(payload, returncode=0))
     rc = secureboot.verify(
         [
             Path("/efi/EFI/Linux/arch-linux-zen.efi"),
-            Path("/efi/EFI/Linux/arch-linux-g14.efi"),
+            Path("/efi/EFI/Linux/arch-linux-ogc.efi"),
         ]
     )
     assert rc == 1
     out = capsys.readouterr().out
     assert "arch-linux-zen.efi" in out
-    assert "arch-linux-g14.efi" not in out
+    assert "arch-linux-ogc.efi" not in out
 
 
 def test_files_this_task_did_not_write_cannot_fail_it(sb_on, monkeypatch, capsys):

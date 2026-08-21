@@ -6,7 +6,9 @@ man 5 pacman.conf: repositories listed first take precedence over later ones
 repository that carries it, and a newer build further down the file is never
 even considered. Appending is right against the official repositories -- they
 should win -- and wrong against a second third-party repository publishing the
-same names, which is exactly the [ogc]/[g14] pair.
+same names, which is what [ogc] meets on a machine an older archsetup gave
+[g14]. Only [ogc] is written now; [g14] survives here as a name to outrank,
+without a server or a key, because it is still in the file on those machines.
 """
 
 from __future__ import annotations
@@ -34,17 +36,15 @@ OGC = Repo(
     "F79100EF8C802DAB81C323BB8EEA5962FE510E19",  # gitleaks:allow
 )
 
-# Kept, not deleted. [g14] still serves linux-g14, and nothing announces its
-# retirement -- only that it stopped publishing. Measured 2026-08-13: the
-# database on the server is byte-identical to the copy synced 2026-07-19, and
-# its asusctl is four releases and roughly four months behind [ogc]'s. The
-# fingerprint has to carry its exemption marker on its own line; gitleaks does
-# not look at the line above (measured 2026-08-06).
-G14 = Repo(
-    "g14",
-    "https://arch.asus-linux.org",
-    "8F654886F17D497FEFE3DB448B15A6B0E9A3FA35",  # gitleaks:allow
-)
+# Not a Repo any more, only a name. [g14] has published nothing since
+# 2026-07-19: measured 2026-08-13 the database on the server was byte-identical
+# to the copy synced that day, and measured 2026-08-21 on this laptop
+# /var/lib/pacman/sync/g14.db still carried its 2026-07-19 mtime after a month
+# of -Sy while ogc.db had been rewritten the same afternoon. So archsetup
+# stopped offering it and dropped its address and key. The name stays because
+# `insert` needs something to outrank: a machine that already has the stanza
+# keeps it, and without this [ogc] would land underneath and never be read.
+OUTRANKED = "g14"
 
 
 def stanza(repo: Repo) -> str:

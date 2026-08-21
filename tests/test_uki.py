@@ -187,7 +187,7 @@ def test_a_machine_that_does_not_boot_by_uki_is_refused(env, capsys):
 
 
 def test_nothing_to_do_when_every_preset_already_builds_one(env, runlog):
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", CONVERTED)
     before = env.text("linux-zen")
 
@@ -200,7 +200,7 @@ def test_nothing_to_do_when_every_preset_already_builds_one(env, runlog):
 
 def test_a_missing_command_line_stops_before_anything_is_written(env, capsys):
     (env.root / "etc/kernel/cmdline").unlink()
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
 
     assert uki.configure() == 1
@@ -212,7 +212,7 @@ def test_a_command_line_drop_in_counts_as_one(env):
     (env.root / "etc/kernel/cmdline").unlink()
     (env.root / "etc/cmdline.d").mkdir()
     (env.root / "etc/cmdline.d/10-root.conf").write_text("root=PARTUUID=abc rw\n")
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
     env.build("linux-zen")
 
@@ -220,7 +220,7 @@ def test_a_command_line_drop_in_counts_as_one(env):
 
 
 def test_a_preset_without_the_line_is_refused_rather_than_half_converted(env, capsys):
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     (env.dir / "linux-hand.preset").write_text(
         "PRESETS=('default')\ndefault_image=\"/boot/initramfs-linux-hand.img\"\n"
     )
@@ -233,7 +233,7 @@ def test_a_preset_without_the_line_is_refused_rather_than_half_converted(env, ca
 
 
 def test_the_new_kernel_gets_what_the_booting_one_has(env, runlog, capsys):
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
     produced = env.build("linux-zen")
 
@@ -245,7 +245,7 @@ def test_the_new_kernel_gets_what_the_booting_one_has(env, runlog, capsys):
     assert '\nALL_config="/etc/mkinitcpio.conf"' in text
     assert "\ndefault_options=" in text
     # The preset that already booted is not touched.
-    assert env.text("linux-g14") == CONVERTED.format(base="linux-g14", esp=env.esp)
+    assert env.text("linux-ogc") == CONVERTED.format(base="linux-ogc", esp=env.esp)
     assert ["sudo", "mkinitcpio", "-P"] in runlog.calls
     out = capsys.readouterr().out
     assert str(produced) in out
@@ -257,7 +257,7 @@ def test_the_new_kernel_gets_what_the_booting_one_has(env, runlog, capsys):
 def test_a_pass_the_reference_does_not_build_is_left_alone_and_said_so(env, capsys):
     """The reference decides which passes become UKIs, so this task can never
     be the reason a 214 MiB fallback image lands on an ESP sized for one."""
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     path = env.write("linux-zen", STOCK)
     path.write_text(_with_fallback_image(path.read_text()), encoding="utf-8")
     env.build("linux-zen")
@@ -273,7 +273,7 @@ def test_a_pass_the_reference_does_not_build_is_left_alone_and_said_so(env, caps
 
 def test_declining_writes_nothing(env, monkeypatch, runlog):
     monkeypatch.setattr(uki, "ask_yes", lambda q: False)
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
 
     assert uki.configure() == 0
@@ -282,7 +282,7 @@ def test_declining_writes_nothing(env, monkeypatch, runlog):
 
 
 def test_the_backup_is_not_a_second_preset(env, runlog):
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
     env.build("linux-zen")
 
@@ -301,7 +301,7 @@ def test_the_backup_is_not_a_second_preset(env, runlog):
 def test_an_image_the_preset_names_but_that_is_not_there_fails(env, capsys):
     """The pair matters: with one image present, sudo demonstrably worked, so
     the other one's absence is a finding rather than a failed measurement."""
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
     env.write("linux-lts", STOCK)
     env.build("linux-zen")  # linux-lts deliberately not built
@@ -313,7 +313,7 @@ def test_an_image_the_preset_names_but_that_is_not_there_fails(env, capsys):
 def test_nothing_measurable_is_reported_as_unknown_not_as_failure(env, capsys):
     """`_sudo_stat` sealed to "" is what a refused sudo looks like. Calling
     that a missing boot entry would report a failure never established."""
-    env.write("linux-g14", CONVERTED)
+    env.write("linux-ogc", CONVERTED)
     env.write("linux-zen", STOCK)
 
     assert uki.configure() == 0

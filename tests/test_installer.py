@@ -137,18 +137,20 @@ def _presets_lines(text):
     return [l for l in text.splitlines() if l.startswith("PRESETS=")]
 
 
-def test_fallback_preset_survives_the_g14_layout():
-    """linux-g14 ships PRESETS=('default') live and the pair commented out.
+def test_fallback_preset_survives_the_default_only_layout():
+    """Some presets ship PRESETS=('default') live and the pair commented out.
 
     Only uncommenting the pair would leave two live assignments, and which
     one wins is decided by their order in the file rather than on purpose.
+    The sample is the layout linux-g14 shipped, kept as the case that was
+    actually seen even though that kernel came off the offer on 2026-08-21.
     """
-    g14 = (
+    default_only = (
         "ALL_kver=\"/boot/vmlinuz-linux-g14\"\n"
         "PRESETS=('default')\n"
         "#PRESETS=('default' 'fallback')\n"
     )
-    out = chroot._enable_fallback_preset(g14)
+    out = chroot._enable_fallback_preset(default_only)
     assert _presets_lines(out) == ["PRESETS=('default' 'fallback')"]
 
 
@@ -512,14 +514,14 @@ def _repo_env(tmp_path, monkeypatch, runlog, live_text="[core]\n"):
     return live
 
 
-@pytest.mark.parametrize("kernel", ["linux-g14", "linux-ogc"])
-def test_kernel_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog, kernel):
+def test_kernel_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog):
     """pacstrap resolves against the *live* pacman.conf.
 
     Without the kernel's repository there the package is simply "target not
-    found" and the whole base install fails. Both out-of-tree kernels take
-    this path, and they come from two different repositories.
+    found" and the whole base install fails. linux-ogc is the only out-of-tree
+    kernel left on the offer; linux-g14 came off it on 2026-08-21.
     """
+    kernel = "linux-ogc"
     live = _repo_env(tmp_path, monkeypatch, runlog)
     monkeypatch.setattr(base, "ask_yes", lambda q: True)
     _feed(monkeypatch, base, [str(base.KERNELS.index(kernel) + 1)])
@@ -535,8 +537,28 @@ def test_kernel_repo_is_added_before_pacstrap(tmp_path, monkeypatch, runlog, ker
     assert f"[{name}]" in (tmp_path / "etc" / "pacman.conf").read_text()
 
 
-def test_ogc_lands_above_g14_not_at_the_end(tmp_path, monkeypatch, runlog):
-    """Order beats version: appended below [g14], [ogc] would never be read."""
+def test_g14_is_off_the_offer_but_still_a_name_to_outrank():
+    """Dropping the kernel must not drop the guard; they are separate things.
+
+    [g14] published nothing after 2026-07-19, so a linux-g14 chosen here would
+    stop getting updates the moment it was installed -- it came off the list on
+    2026-08-21 along with the repository's address and key. What could not come
+    off with it is the name: the stanza is still in /etc/pacman.conf on every
+    machine an older archsetup wrote it to, and [ogc] has to land above it.
+    """
+    assert "linux-g14" not in base.KERNELS
+    assert base.kernel_repo("linux-g14") is None
+    assert not hasattr(repos, "G14")
+    assert repos.OUTRANKED == "g14"
+
+
+def test_ogc_lands_above_a_leftover_g14_not_at_the_end(tmp_path, monkeypatch, runlog):
+    """Order beats version: appended below [g14], [ogc] would never be read.
+
+    archsetup stopped writing [g14] on 2026-08-21, which is why this case is
+    still here rather than gone with it: the stanza stays on every machine an
+    older archsetup wrote it to, and the file is what pacman reads.
+    """
     live = _repo_env(
         tmp_path, monkeypatch, runlog, live_text="[core]\n\n[g14]\nServer = y\n"
     )
@@ -553,7 +575,7 @@ def test_kernel_repo_refusal_aborts_instead_of_failing_in_pacstrap(
 ):
     _repo_env(tmp_path, monkeypatch, runlog)
     monkeypatch.setattr(base, "ask_yes", lambda q: False)
-    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-g14") + 1)])
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-ogc") + 1)])
 
     assert base.pacstrap_base() == 1
     assert runlog.calls == []

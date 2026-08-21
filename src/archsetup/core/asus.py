@@ -4,15 +4,17 @@ The upstream moved. gitlab.com/asus-linux/asusctl is archived read-only and
 its README points at the OpenGamingCollective, whose repository is [ogc];
 [g14] stopped publishing on 2026-07-19 and its asusctl has been sitting on a
 2026-04 build ever since, four releases behind. The packager named on every
-[g14] package is an OGC member, so the quiet is a change of address rather
-than abandonment -- which is also why [g14] is not treated as dead here: it
-still serves linux-g14, and nobody has announced its retirement.
+[g14] package is an OGC member, so the quiet was a change of address rather
+than abandonment. archsetup dropped [g14] on 2026-08-21, a month into that
+silence -- but dropping it changes what gets written, not what is already in
+/etc/pacman.conf, and the machines an older archsetup pointed at [g14] are
+exactly the ones this task runs on.
 
-Order is the whole risk of the switch, not the version gap. pacman resolves a
-name from the first repository that has it, regardless of version, so adding
-[ogc] the way [g14] was added -- at the end of the file -- would leave asusctl
-resolving from [g14] forever. core.repos owns that rule; this module only says
-what has to outrank what.
+That is why the ordering below is not dead code. pacman resolves a name from
+the first repository that has it, regardless of version, so writing [ogc] at
+the end of a file that still carries [g14] would leave asusctl resolving from
+a 2026-04 build forever. core.repos owns that rule; this module only says what
+has to outrank what.
 
 supergfxctl is deliberately not part of the default set and no longer could
 be: its upstream is archived too, and measured 2026-08-13 it is in neither
@@ -50,9 +52,10 @@ t = i18n.t
 PACMAN_CONF = Path("/etc/pacman.conf")
 
 REPO = repos.OGC
-# [ogc] publishes asusctl and rog-control-center under the same names as
-# [g14], so it has to sit above it or the older builds keep winning.
-OUTRANKS = ("g14",)
+# [ogc] publishes asusctl and rog-control-center under the same names a
+# leftover [g14] does, so it has to sit above it or the older builds keep
+# winning. A name, not a repos.Repo: [g14] is only ever detected now.
+OUTRANKS = (repos.OUTRANKED,)
 
 ASUS_PACKAGES = ("asusctl", "rog-control-center")
 REPO_PACKAGES = ("power-profiles-daemon", "switcheroo-control", "brightnessctl")
@@ -97,7 +100,7 @@ def setup_repo(repo: repos.Repo = REPO) -> bool:
     updated = repos.insert(text, repo, above=OUTRANKS)
     if updated != text and sudo_write(PACMAN_CONF, updated) != 0:
         return False
-    if repos.has(text, "g14"):
+    if repos.has(text, repos.OUTRANKED):
         print(t("asus.above_g14"))
 
     # -Suy refreshes the databases, and it has to be -u rather than a bare -Sy

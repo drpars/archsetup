@@ -697,8 +697,8 @@ group = "virt"
   # Off by default: the client is useless without a guest that has the card,
   # and the DKMS module builds a kernel module on every kernel update. That
   # build needs the headers for the running kernel, which no package pulls in
-  # (linux-g14-headers here) -- a DKMS package installs happily without them
-  # and fails silently. Same accepted gap as acpi_call-dkms.
+  # (linux-zen-headers on this machine) -- a DKMS package installs happily
+  # without them and fails silently. Same accepted gap as acpi_call-dkms.
   [[category.packages]]
   name = "looking-glass"
   aur = true

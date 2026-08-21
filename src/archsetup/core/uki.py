@@ -28,11 +28,12 @@ image -- 214 MiB against 33 MiB, measured on a plain linux-zen install -- lands
 on an ESP nobody sized for one. A pass left behind that way is named rather
 than silently skipped.
 
-Deliberately not predicted: the size of the image about to be built. The two
-kernels on this laptop differ by ~109 MiB because linux-zen carries nouveau and
-linux-g14 does not, so a figure derived from the existing UKI would read as a
-measurement and be wrong by a factor -- the same mistake as the three UKI sizes
-once derived from `df`. Free space is measured and printed; the size is not.
+Deliberately not predicted: the size of the image about to be built. Back when
+this laptop carried two kernels they differed by ~109 MiB, because linux-zen
+carries nouveau and the ASUS kernel does not, so a figure derived from the
+existing UKI would read as a measurement and be wrong by a factor -- the same
+mistake as the three UKI sizes once derived from `df`. Free space is measured
+and printed; the size is not.
 
 Undo is the dated copy of the preset beside itself. Safe here, unlike the
 libvirt hook directory that made write_with_backup take the argument at all:
