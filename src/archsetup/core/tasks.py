@@ -37,6 +37,7 @@ from . import (
     uki,
     virt,
     waydroid,
+    writeback,
 )
 from .pacman import run
 
@@ -267,6 +268,12 @@ TASKS: tuple[Task, ...] = (
         "ssd-trim",
         "task.ssd_trim",
         trim.configure,
+        group="system",
+    ),
+    Task(
+        "dirty-writeback",
+        "task.dirty_writeback",
+        writeback.configure,
         group="system",
     ),
     Task(

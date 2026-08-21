@@ -28,6 +28,7 @@ from archsetup.core import (
     trim,
     virt,
     waydroid,
+    writeback,
 )
 
 
@@ -1536,3 +1537,186 @@ def test_existing_wait_online_dropin_is_not_offered_again(tmp_path, monkeypatch,
     )
 
     assert network.configure() == 0
+
+
+@pytest.fixture
+def writeback_env(tmp_path, monkeypatch):
+    """A fake /proc/sys/vm and /sys/block: one USB disk plus two that must not match."""
+    vm = tmp_path / "vm"
+    vm.mkdir()
+    (vm / "dirty_ratio").write_text("20\n")
+    (vm / "dirty_background_ratio").write_text("10\n")
+    (vm / "dirty_bytes").write_text("0\n")
+
+    block = tmp_path / "block"
+    for name in ("sda", "sdb", "nvme0n1"):
+        (block / name / "bdi").mkdir(parents=True)
+        (block / name / "bdi" / "strict_limit").write_text("0\n")
+        (block / name / "bdi" / "max_bytes").write_text("5206450176\n")
+
+    monkeypatch.setattr(writeback, "PROC_VM", vm)
+    monkeypatch.setattr(writeback, "BLOCK", block)
+    monkeypatch.setattr(writeback, "SYSCTL_CONF", tmp_path / "99-dirty-writeback.conf")
+    monkeypatch.setattr(writeback, "UDEV_RULES", tmp_path / "82-usb-dirty-pages.rules")
+    monkeypatch.setattr(writeback.hardware, "ram_bytes", lambda: 29 * 1024**3)
+    # sdb is the internal SATA disk: same KERNEL glob, no ID_USB_TYPE, so the
+    # rule must not reach it. nvme0n1 fails the glob and carries the root fs.
+    usb = {"sda": "disk"}
+    monkeypatch.setattr(
+        writeback,
+        "udev_property",
+        lambda device, name: usb.get(device, "") if name == "ID_USB_TYPE" else "",
+    )
+    monkeypatch.setattr(writeback, "backing_disk", lambda mountpoint: "nvme0n1")
+    return SimpleNamespace(
+        vm=vm,
+        block=block,
+        sysctl=tmp_path / "99-dirty-writeback.conf",
+        rules=tmp_path / "82-usb-dirty-pages.rules",
+    )
+
+
+def _writeback_runner(env, *, sysctl_takes=True, rule_takes=True):
+    """Stand-in for sysctl and udev: the two things that decide whether it took."""
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        if sysctl_takes and cmd[:2] == ["sudo", "sysctl"]:
+            (env.vm / "dirty_ratio").write_text("3\n")
+            (env.vm / "dirty_background_ratio").write_text("2\n")
+        if rule_takes and cmd[:3] == ["sudo", "udevadm", "trigger"]:
+            (env.block / "sda" / "bdi" / "strict_limit").write_text("1\n")
+            # Not the number written: the kernel keeps it as a ratio and
+            # recomputes it, measured 67108864 -> 67083717.
+            (env.block / "sda" / "bdi" / "max_bytes").write_text("67083717\n")
+        return 0
+
+    run.calls = calls
+    return run
+
+
+def _wire_writeback(monkeypatch, runner, fake_write):
+    monkeypatch.setattr(writeback, "run", runner)
+    monkeypatch.setattr(sysedit, "run", runner)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+
+
+def test_writeback_files_carry_the_measured_values():
+    """Kurala giren olcut ve deger olculmus olanlardir."""
+    assert "vm.dirty_ratio = 3" in writeback.SYSCTL_CONTENT
+    assert "vm.dirty_background_ratio = 2" in writeback.SYSCTL_CONTENT
+    # Wiki'nin freeze recetesi: olculdu, ic diski 4,5 kat yavaslatiyor.
+    assert "dirty_bytes" not in writeback.SYSCTL_CONTENT
+
+    # Yorumlar disinda kalan satir: aciklama metni "removable" kelimesini
+    # gecirdigi icin olcut orada degil, kuralin kendisinde aranir.
+    rule = "\n".join(
+        line for line in writeback.UDEV_CONTENT.splitlines()
+        if line and not line.startswith("#")
+    )
+    # Olculen SATA SSD removable=0 bildiriyor ve ID_BUS'i `ata` okuyor; kural
+    # o cihazi ancak ID_USB_TYPE ile yakaliyor.
+    assert 'ENV{ID_USB_TYPE}=="disk"' in rule
+    assert "removable" not in rule
+    assert "ID_BUS" not in rule
+    assert 'ATTR{bdi/strict_limit}="1"' in rule
+    assert f'ATTR{{bdi/max_bytes}}="{writeback.MAX_BYTES}"' in rule
+    assert 'TEST=="bdi/strict_limit"' in rule
+    assert f'KERNEL=="{writeback.KERNEL_GLOB}"' in rule
+
+    # udev bu dizinde yalnizca .rules okur; baska uzanti sessizce yok sayilir.
+    assert writeback.UDEV_RULES.suffix == ".rules"
+    assert writeback.UDEV_RULES.parent == Path("/etc/udev/rules.d")
+    assert writeback.SYSCTL_CONF.parent == Path("/etc/sysctl.d")
+
+
+def test_writeback_applies_both_halves_and_reads_them_back(
+    monkeypatch, writeback_env, fake_write
+):
+    runner = _writeback_runner(writeback_env)
+    _wire_writeback(monkeypatch, runner, fake_write)
+
+    assert writeback.configure() == 0
+    assert "vm.dirty_ratio = 3" in writeback_env.sysctl.read_text()
+    assert 'ENV{ID_USB_TYPE}=="disk"' in writeback_env.rules.read_text()
+    assert ["sudo", "sysctl", "--system"] in runner.calls
+    assert ["sudo", "udevadm", "control", "--reload-rules"] in runner.calls
+    # Yalnizca USB diske dokunulur: sdb ayni KERNEL desenine uyuyor ama
+    # ID_USB_TYPE tasimiyor, nvme0n1 zaten desene uymuyor.
+    trigger = [c for c in runner.calls if c[:3] == ["sudo", "udevadm", "trigger"]]
+    assert trigger == [
+        ["sudo", "udevadm", "trigger", "--action=add", str(writeback_env.block / "sda")]
+    ]
+
+
+def test_writeback_fails_when_a_later_sysctl_file_wins(
+    monkeypatch, writeback_env, fake_write, capsys
+):
+    """Yazmak yururlukte olmak degil: sysctl.d ad sirasina gore uygulanir."""
+    _wire_writeback(monkeypatch, _writeback_runner(writeback_env, sysctl_takes=False), fake_write)
+
+    assert writeback.apply_sysctl() != 0
+    assert "dirty_ratio" in capsys.readouterr().out
+
+
+def test_writeback_fails_when_the_rule_did_not_take(
+    monkeypatch, writeback_env, fake_write, capsys
+):
+    _wire_writeback(monkeypatch, _writeback_runner(writeback_env, rule_takes=False), fake_write)
+
+    assert writeback.apply_udev() != 0
+    assert "strict_limit" in capsys.readouterr().out
+
+
+def test_writeback_skips_the_rule_when_root_is_on_a_usb_disk(
+    monkeypatch, writeback_env, fake_write
+):
+    """Kural kok diski de sinirlardi ve o hic olculmedi -- gerekceyle reddedilir."""
+    monkeypatch.setattr(writeback, "backing_disk", lambda mountpoint: "sda")
+    _wire_writeback(monkeypatch, _writeback_runner(writeback_env), fake_write)
+
+    assert writeback.apply_udev() == 0
+    assert not writeback_env.rules.exists()
+
+
+def test_writeback_writes_the_rule_with_no_disk_attached(
+    monkeypatch, writeback_env, fake_write
+):
+    """Kural gelecekteki cihaz icin: takili disk yokken de yazilir, denenemez."""
+    monkeypatch.setattr(writeback, "usb_disks", lambda: [])
+    runner = _writeback_runner(writeback_env)
+    _wire_writeback(monkeypatch, runner, fake_write)
+
+    assert writeback.apply_udev() == 0
+    assert 'ATTR{bdi/strict_limit}="1"' in writeback_env.rules.read_text()
+    assert not [c for c in runner.calls if c[:3] == ["sudo", "udevadm", "trigger"]]
+
+
+def test_writeback_names_a_byte_valued_setting_before_replacing_it(
+    monkeypatch, writeback_env, fake_write, capsys
+):
+    """vm.dirty_bytes ile oran birbirini disliyor: oran yazmak digerini sifirlar."""
+    (writeback_env.vm / "dirty_bytes").write_text("268435456\n")
+    _wire_writeback(monkeypatch, _writeback_runner(writeback_env), fake_write)
+
+    assert writeback.apply_sysctl() == 0
+    assert "268435456" in capsys.readouterr().out
+
+
+def test_writeback_lowers_the_global_ceiling_before_the_rule_fires(
+    monkeypatch, writeback_env, fake_write
+):
+    """max_bytes genel tavanin yuzdesi olarak saklaniyor, o yuzden sira tasiyici.
+
+    Olculdu: ayni 67108864, cekirdek varsayilaninda (5561 MiB tavan)
+    max_ratio=1, %3'te (834 MiB) 8. Kural once atesleseydi cihaz yanlis orani
+    saklardi ve tavan ~8 MiB'a inerdi.
+    """
+    runner = _writeback_runner(writeback_env)
+    _wire_writeback(monkeypatch, runner, fake_write)
+
+    assert writeback.configure() == 0
+    order = [c for c in runner.calls if c[:2] == ["sudo", "sysctl"] or c[:3] == ["sudo", "udevadm", "trigger"]]
+    assert order[0][:2] == ["sudo", "sysctl"]
+    assert order[-1][:3] == ["sudo", "udevadm", "trigger"]

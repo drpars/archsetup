@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from archsetup.core import hardware, i18n, repos
+from archsetup.core import hardware, i18n, repos, writeback
 from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
 from archsetup.installer.state import state
 
@@ -246,6 +246,35 @@ def test_enable_services_turns_trim_on(tmp_path, monkeypatch, runlog):
     assert chroot.enable_services() == 0
     assert ["systemctl", "--root", str(tmp_path), "enable", "fstrim.timer"] in runlog.calls
 
+
+
+def test_installer_writes_the_writeback_limits_into_the_target(tmp_path, monkeypatch):
+    """Kurulum da fstrim gibi: yoksa her makine cekirdek varsayilaniyla cikar.
+
+    Uygulanmiyor ve geri okunmuyor -- hedef calisan sistem degil; iki dosya da
+    ilk acilista yururluge girer.
+    """
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(writeback, "backing_disk", lambda mountpoint: "nvme0n1")
+
+    assert chroot.limit_writeback() == 0
+    sysctl = tmp_path / "etc/sysctl.d" / writeback.SYSCTL_CONF.name
+    rules = tmp_path / "etc/udev/rules.d" / writeback.UDEV_RULES.name
+    assert "vm.dirty_ratio = 3" in sysctl.read_text()
+    assert 'ENV{ID_USB_TYPE}=="disk"' in rules.read_text()
+
+
+def test_installer_skips_the_rule_when_the_target_boots_from_usb(tmp_path, monkeypatch):
+    """Kural kok diski de sinirlardi; o hic olculmedi, genel ayar yine yazilir."""
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "target_ready", lambda: True)
+    monkeypatch.setattr(writeback, "backing_disk", lambda mountpoint: "sda")
+    monkeypatch.setattr(writeback, "udev_property", lambda device, name: "disk")
+
+    assert chroot.limit_writeback() == 0
+    assert (tmp_path / "etc/sysctl.d" / writeback.SYSCTL_CONF.name).exists()
+    assert not (tmp_path / "etc/udev/rules.d").exists()
 
 def _meminfo(tmp_path, mem_kb: int):
     path = tmp_path / "meminfo"

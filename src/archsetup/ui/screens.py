@@ -747,6 +747,8 @@ def make_target_menu() -> MenuScreen:
         _run_item("uki", "inst.uki", "mkinitcpio preset -> UKI", chroot.gen_uki),
         _run_item("secureboot", "inst.secureboot", "sbctl", chroot.setup_secure_boot),
         _run_item("watchdog", "inst.watchdog", "nowatchdog / iTCO_wdt", chroot.disable_watchdog),
+        _run_item("writeback", "inst.writeback", "sysctl.d + udev: kirli sayfa sınırı",
+                  chroot.limit_writeback),
         _run_item("services", "inst.services", "sshd, ağ, bluetooth (systemctl --root)",
                   chroot.enable_services),
         _run_item("net-copy", "inst.net_copy", "/var/lib/iwd -> /mnt",

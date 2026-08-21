@@ -14,7 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..core import hardware, i18n, mkinitcpio
+from ..core import hardware, i18n, mkinitcpio, writeback
 from ..core.pacman import run
 from ..core.prompt import ask_yes
 
@@ -465,6 +465,46 @@ def gen_uki() -> int:
     rc = chroot_run(["mkdir", "-p", str(Path(uki).parent)])
     rc |= chroot_run(["mkinitcpio", "-P"])
     return rc
+
+
+def limit_writeback() -> int:
+    """Write the dirty-page limits into the target.
+
+    Here for the same reason fstrim.timer is enabled here: without it every
+    machine this tool installs ships with the kernel defaults, which means a
+    copy to a USB disk reports RAM speed and hides minutes of writeback in
+    the umount that follows. What was measured, and why two files rather than
+    one, is in core/writeback.py.
+
+    Nothing is applied or read back, unlike the post-install task: the target
+    is not the running system. Both files take effect on its first boot --
+    sysctl.d at boot, the udev rule on the first disk plugged in after it.
+    """
+    if not target_ready():
+        return 1
+
+    sysctl = MNT / writeback.SYSCTL_CONF.relative_to("/")
+    sysctl.parent.mkdir(parents=True, exist_ok=True)
+    sysctl.write_text(writeback.SYSCTL_CONTENT, encoding="utf-8")
+    print(f"{sysctl} <- vm.dirty_ratio={writeback.DIRTY_RATIO}")
+
+    # The rule bounds whatever it matches, and on a machine booting from a
+    # USB disk that would include the root device. The task asks the running
+    # system; here the question is asked of /mnt, which is the same system
+    # one boot earlier.
+    on_usb = writeback.root_on_usb(str(MNT))
+    if on_usb is None:
+        print(t("writeback.root_unknown", mountpoint=MNT))
+        return 1
+    if on_usb:
+        print(t("writeback.root_on_usb", disk=writeback.backing_disk(str(MNT))))
+        return 0
+
+    rules = MNT / writeback.UDEV_RULES.relative_to("/")
+    rules.parent.mkdir(parents=True, exist_ok=True)
+    rules.write_text(writeback.UDEV_CONTENT, encoding="utf-8")
+    print(f"{rules} <- strict_limit=1, max_bytes={writeback.MAX_BYTES}")
+    return 0
 
 
 def disable_watchdog() -> int:
