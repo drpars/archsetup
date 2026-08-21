@@ -301,7 +301,12 @@ summary_aur_checked = ", {count} AUR paketi denetlendi"
 summary_aur_unchecked = ", {count} AUR paketi denetlenmedi"
 aur_hint = "AUR paketlerini de denetlemek için: archsetup --check-packages --aur"
 aur_unreachable = "AUR'a ulaşılamadı; o paketler denetlenmeden geçildi."
-aur_needs_check = "--aur yalnızca --check-packages ile birlikte kullanılır."
+aur_needs_check = "--aur yalnızca --check-packages ile birlikte kullanılır (--aur-list zaten kendisi sorar)."
+list_catalogue_header = "KATALOG — data/ içinde listeli, --check-packages bunları izliyor:"
+list_tasks_header = "GÖREVLERDE — doğrudan görev kuruyor, data/ dışında ve --check-packages bunları GÖRMÜYOR:"
+list_tasks_unreadable = "Görev kaynakları okunamadı ({path}); bu koşu görevlerdeki AUR paketlerine hiç bakamadı — 'yok' demiyor."
+list_summary = "Toplam: katalogda {catalogue} ad, görevlerde {tasks} ad."
+list_legend = "Sütunlar: ad, oy, paketlemenin son değişiminden bu yana geçen gün, yer. Parantez içi işaretler: orphan (bakıcısız), outdated (eskimiş işaretli), unwatched (az oy + uzun süredir dokunulmamış), aur-in-repo (aynı ad resmi depoda da var)."
 
 [virt]
 already = "{path} zaten yapılandırılmış."

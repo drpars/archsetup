@@ -301,7 +301,12 @@ summary_aur_checked = ", {count} AUR packages checked"
 summary_aur_unchecked = ", {count} AUR packages not checked"
 aur_hint = "To check the AUR entries too: archsetup --check-packages --aur"
 aur_unreachable = "The AUR could not be reached; those packages were left unchecked."
-aur_needs_check = "--aur only works together with --check-packages."
+aur_needs_check = "--aur only works together with --check-packages (--aur-list always asks on its own)."
+list_catalogue_header = "CATALOGUE -- listed in data/, watched by --check-packages:"
+list_tasks_header = "IN TASKS -- installed by a task directly, outside data/, and NOT seen by --check-packages:"
+list_tasks_unreadable = "The task sources could not be read ({path}); this run never looked at the AUR packages in tasks -- it is not saying there are none."
+list_summary = "Total: {catalogue} names in the catalogue, {tasks} in tasks."
+list_legend = "Columns: name, votes, days since the packaging last changed, location. Flags in brackets: orphan (no maintainer), outdated (flagged out-of-date), unwatched (few votes and long untouched), aur-in-repo (the same name is in an official repository too)."
 
 [virt]
 already = "{path} already configured."

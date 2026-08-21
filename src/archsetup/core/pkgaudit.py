@@ -33,6 +33,7 @@ instead of failing the run.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import time
@@ -83,6 +84,10 @@ AUR_STALE_DAYS = 365
 
 FATAL = (MISSING, AUR_MISSING)
 
+# The task modules themselves: pacman.install() calls live here, and the AUR
+# names in them never reach data/, so nothing else in this file can see them.
+TASK_SOURCES = Path(__file__).resolve().parent
+
 SYNC_DIR = Path("/var/lib/pacman/sync")
 STALE_AFTER_DAYS = 7
 
@@ -99,6 +104,102 @@ class Finding:
     status: str
     resolved: str = ""  # the package a PROVIDED name actually resolves to
     notes: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class TaskPackage:
+    name: str
+    where: str  # core/<module>.py:<line>
+
+
+def _install_aur_arg(call: ast.Call) -> ast.expr | None:
+    """The second argument of a pacman.install(repo, aur) call, or None."""
+    if not (isinstance(call.func, ast.Attribute) and call.func.attr == "install"):
+        return None
+    return call.args[1] if len(call.args) == 2 else None
+
+
+def _literal_names(node: ast.expr, scope: dict[str, object]) -> list[str]:
+    """Package names out of an argument that is not always a literal list.
+
+    Three shapes appear in these modules and a plain-text search sees only
+    the first: a literal list, `[*CONSTANT]`, and a bare local whose value is
+    decided by an if/else. Measured 2026-08-21 -- grepping for the literal
+    form missed binder_linux-dkms and both ASUS packages, which is exactly
+    the kind of quietly short answer this listing exists to stop giving.
+    """
+    try:
+        return [str(name) for name in ast.literal_eval(node)]
+    except (ValueError, TypeError, SyntaxError):
+        pass
+    if isinstance(node, ast.List):
+        names: list[str] = []
+        for element in node.elts:
+            if isinstance(element, ast.Starred) and isinstance(element.value, ast.Name):
+                names += [str(n) for n in scope.get(element.value.id, ())]
+        return names
+    if isinstance(node, ast.Name):
+        return [str(n) for n in scope.get(node.id, ())]
+    return []
+
+
+def task_aur_packages() -> list[TaskPackage] | None:
+    """AUR names a task installs directly, or None when the sources are unreadable.
+
+    None rather than an empty list on failure. "No task installs an AUR
+    package" and "there was nothing here to read" are different answers, and
+    printing an empty section for the second one is the shape of a clean
+    negative that has not actually looked anywhere.
+    """
+    modules = sorted(TASK_SOURCES.glob("*.py"))
+    if not modules:
+        return None
+
+    found: list[TaskPackage] = []
+    for module in modules:
+        try:
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        # Module constants first, then per-function locals: `aur_pkgs` in the
+        # ASUS task is assigned in one branch of an if/else and left empty in
+        # the other, so the names only exist inside that function.
+        # Two passes, because ast.walk() is not source order and one of these
+        # names is defined in terms of another: `aur_pkgs = [*ASUS_PACKAGES]`
+        # only resolves once the module constant is already known.
+        scope: dict[str, list[str]] = {}
+        for resolve_through_scope in (False, True):
+            for node in ast.walk(tree):
+                targets = []
+                if isinstance(node, ast.Assign):
+                    targets = [t for t in node.targets if isinstance(t, ast.Name)]
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    targets = [node.target] if node.value is not None else []
+                if not targets or node.value is None:
+                    continue
+                if resolve_through_scope:
+                    names = _literal_names(node.value, scope)
+                else:
+                    try:
+                        value = ast.literal_eval(node.value)
+                    except (ValueError, TypeError, SyntaxError):
+                        continue
+                    if not isinstance(value, (list, tuple)):
+                        continue
+                    names = [str(v) for v in value]
+                for target in targets:
+                    for name in names:
+                        if name not in scope.setdefault(target.id, []):
+                            scope[target.id].append(name)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            arg = _install_aur_arg(node)
+            if arg is None:
+                continue
+            for name in _literal_names(arg, scope):
+                found.append(TaskPackage(name, f"{module.name}:{node.lineno}"))
+    return found
 
 
 def _pacman_ok(args: list[str]) -> bool:
@@ -389,6 +490,83 @@ def report(findings: list[Finding], sync_dir: Path | None = None,
     if unchecked and not aur_requested:
         print(t("pkgaudit.aur_hint"))
     return 1 if (missing or aur_missing) else 0
+
+
+def _aur_row(name: str, info: dict | None, where: str) -> str:
+    """One inventory line: what it is called, how watched it is, where it lives.
+
+    The numbers are the point. --check-packages names an AUR entry only when
+    something is wrong with it, so a healthy catalogue prints a count and
+    nothing else -- and the question "what AUR surface do we actually carry"
+    had no answer short of reading data/ by hand.
+    """
+    if info is None:
+        return f"{name:<30} {'?':>6} {'?':>7}  {where}"
+    votes = info.get("NumVotes")
+    modified = info.get("LastModified")
+    days = f"{int((time.time() - modified) // 86400)}g" if modified else "?"
+    notes = []
+    if not info.get("Maintainer"):
+        notes.append(ORPHAN)
+    if info.get("OutOfDate"):
+        notes.append(OUTDATED)
+    if _unwatched(info):
+        notes.append(UNWATCHED)
+    if _pacman_ok(["-Si", name]):
+        notes.append(AUR_IN_REPO)
+    tail = ("  (" + ", ".join(notes) + ")") if notes else ""
+    return f"{name:<30} {votes if votes is not None else '?':>6} {days:>7}  {where}{tail}"
+
+
+def list_aur(data_dir: Path | None = None) -> int:
+    """Print every AUR package this tool can install, catalogue and tasks alike.
+
+    Two sections because they are found two different ways and only one of
+    them is auditable: catalogue entries come out of data/, task packages out
+    of the call sites in core/. Keeping them apart is not cosmetic -- it says
+    which half --check-packages is watching.
+    """
+    root = data_dir or paths.DATA_DIR
+    catalogue: dict[str, list[str]] = {}
+    for path in sorted(root.rglob("*.toml")):
+        source = str(path.relative_to(root))
+        for category, name, is_aur in _entries(path):
+            if is_aur:
+                catalogue.setdefault(name, []).append(f"{source} [{category}]")
+
+    task_packages = task_aur_packages()
+    task_map: dict[str, list[str]] = {}
+    for entry in task_packages or []:
+        task_map.setdefault(entry.name, []).append(entry.where)
+
+    lookup = aur_info(sorted(set(catalogue) | set(task_map))) or {}
+    if not lookup:
+        print(t("pkgaudit.aur_unreachable"))
+        print()
+
+    _print_group(
+        "pkgaudit.list_catalogue_header",
+        [_aur_row(name, lookup.get(name), ", ".join(where))
+         for name, where in sorted(catalogue.items())],
+    )
+
+    if task_packages is None:
+        # Not the same sentence as "there are none": the sources were not
+        # readable, so this run never looked.
+        print(t("pkgaudit.list_tasks_unreadable", path=TASK_SOURCES))
+        print()
+    else:
+        _print_group(
+            "pkgaudit.list_tasks_header",
+            [_aur_row(name, lookup.get(name), ", ".join(where))
+             for name, where in sorted(task_map.items())],
+        )
+
+    print(t("pkgaudit.list_summary",
+            catalogue=len(catalogue),
+            tasks="?" if task_packages is None else len(task_map)))
+    print(t("pkgaudit.list_legend"))
+    return 0
 
 
 def run(aur: bool = False) -> int:

@@ -67,6 +67,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
             "  archsetup                 open the task menu\n"
             "  archsetup --overview      what each task does, in your language\n"
             "  archsetup --list          flat 'id title' lines, for scripts\n"
+            "  archsetup --aur-list      every AUR package, with votes and age\n"
             "  archsetup ssh-status      run one task without the menu\n"
             "\n"
             "Tasks change the machine. The tool's own settings -- language and\n"
@@ -86,6 +87,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--aur", action="store_true",
                         help="with --check-packages: also query the AUR "
                              "(needs network)")
+    parser.add_argument("--aur-list", action="store_true", dest="aur_list",
+                        help="list every AUR package this tool installs, from "
+                             "data/ and from the tasks (needs network)")
     parser.add_argument("--lang", help="interface language (tr, en, ...)")
     parser.add_argument("--installer", action="store_true",
                         help="force installer (live ISO) mode")
@@ -159,6 +163,13 @@ def main(argv: list[str] | None = None) -> int:
 
         return overview.run()
 
+    if args.aur_list:
+        # Same footing as --check-packages: reads data/, the tool's own
+        # sources and the AUR. Nothing on the machine changes.
+        from .core import pkgaudit
+
+        return pkgaudit.list_aur()
+
     if args.check_packages:
         # Deliberately before the installer/root branches: this only reads the
         # sync databases, so it is safe to run as anyone, anywhere.
@@ -168,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.aur:
         # Silently ignoring it would look like the AUR had been checked.
+        # --aur-list needs no such flag: it always asks.
         print(t("pkgaudit.aur_needs_check"), file=sys.stderr)
         return 1
 

@@ -283,6 +283,118 @@ def test_unwatched_survives_an_aur_reply_without_the_fields(tmp_path, fake_aur):
     assert findings["kmscon-git"].notes == ()
 
 
+# --- --aur-list -------------------------------------------------------------
+
+
+TASK_MODULE = """
+from . import pacman
+
+STAR_PACKAGES = ("star-aur",)
+BRANCH_PACKAGES = ("branch-aur",)
+
+
+def plain():
+    pacman.install(["repo-thing"], ["literal-aur"])
+
+
+def through_a_constant():
+    pacman.install([], [*STAR_PACKAGES])
+
+
+def through_a_branch(use_repo):
+    if use_repo:
+        aur_pkgs = []
+    else:
+        aur_pkgs = [*BRANCH_PACKAGES]
+    pacman.install(["repo-thing"], aur_pkgs)
+
+
+def repo_only():
+    pacman.install(["not-aur"], [])
+"""
+
+
+def _task_sources(tmp_path, monkeypatch, body=TASK_MODULE):
+    core = tmp_path / "core"
+    core.mkdir()
+    (core / "sometask.py").write_text(body)
+    monkeypatch.setattr(pkgaudit, "TASK_SOURCES", core)
+    return core
+
+
+def test_task_packages_survive_all_three_call_shapes(tmp_path, monkeypatch):
+    """A literal list, [*CONSTANT] and a name decided by an if/else.
+
+    Measured 2026-08-21: grepping for the literal form alone missed
+    binder_linux-dkms and both ASUS packages, so the inventory it produced was
+    quietly short -- which is the failure this listing exists to prevent.
+    """
+    _task_sources(tmp_path, monkeypatch)
+    found = {entry.name for entry in pkgaudit.task_aur_packages()}
+    # Three distinct names on purpose. Sharing one between the shapes would
+    # let a shape stop working without the assertion noticing -- the first
+    # version of this test did exactly that and passed with the branch case
+    # disabled.
+    assert found == {"literal-aur", "star-aur", "branch-aur"}
+    assert all(
+        entry.where.startswith("sometask.py:")
+        for entry in pkgaudit.task_aur_packages()
+    )
+    # The repository half of every call must stay out of an AUR inventory.
+    assert not {"repo-thing", "not-aur"} & found
+
+
+def test_unreadable_task_sources_are_not_an_empty_answer(tmp_path, monkeypatch):
+    """None, not []: "no task installs one" and "nothing was read" differ.
+
+    Printing an empty section for the second is a clean negative that never
+    looked anywhere -- the shape this workspace keeps getting caught by.
+    """
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    monkeypatch.setattr(pkgaudit, "TASK_SOURCES", empty)
+    assert pkgaudit.task_aur_packages() is None
+
+
+def test_aur_list_separates_the_half_the_audit_cannot_see(
+        tmp_path, monkeypatch, capsys, fake_aur):
+    """Two sections, because only one of them --check-packages watches."""
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git"))
+    _task_sources(tmp_path, monkeypatch)
+
+    assert pkgaudit.list_aur(data_dir=tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "kmscon-git" in out and "literal-aur" in out
+    assert "star-aur" in out and "branch-aur" in out
+    # The counts are what a reader acts on, so they are asserted, not implied.
+    assert "1" in out and "3" in out
+
+
+def test_aur_list_says_it_never_looked_rather_than_printing_nothing(
+        tmp_path, monkeypatch, capsys, fake_aur):
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git"))
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    monkeypatch.setattr(pkgaudit, "TASK_SOURCES", empty)
+
+    assert pkgaudit.list_aur(data_dir=tmp_path) == 0
+    out = capsys.readouterr().out
+    assert str(empty) in out
+    assert "kmscon-git" in out
+
+
+def test_aur_list_still_lists_when_the_aur_cannot_be_reached(
+        tmp_path, monkeypatch, capsys):
+    """Names and locations do not need the network; only the numbers do."""
+    monkeypatch.setattr(pkgaudit, "aur_info", lambda names: None)
+    _write(tmp_path, "a.toml", _aur_toml("kmscon-git"))
+    _task_sources(tmp_path, monkeypatch)
+
+    assert pkgaudit.list_aur(data_dir=tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "kmscon-git" in out and "literal-aur" in out
+
+
 def test_unreachable_aur_does_not_become_a_pile_of_missing(tmp_path, monkeypatch):
     """The difference between "we could not ask" and "it is gone" is the
     whole point: a dropped connection must not condemn every AUR entry."""
