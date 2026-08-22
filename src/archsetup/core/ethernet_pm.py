@@ -10,18 +10,25 @@ less at idle, A/B/A/B, repeat spread 0.15-0.24 W, so the difference is larger
 than the noise. Against a ~12.8 W floor that is roughly 35 minutes of battery,
 which makes it the second largest lever on this machine's power budget.
 
-The wake path was measured too, rather than assumed: the device suspends
-10.0 s after the link drops and carries ``power/wakeup=enabled`` while
-suspended -- the driver arms WAKE_PHY on every suspend -- so plugging a cable
-back in raises PME. A forced resume takes ~0.17 s.
+The wake path was measured too, and it came back the other way round. Every
+ingredient for a PME wake is in place: the device suspends 10.0 s after the
+link drops and carries ``power/wakeup=enabled`` while suspended, the
+controller reports ``PME(D3hot+,D3cold+)``, and its root port carries
+``PMEIntEna+``. A cable into a live router still did not wake it. Sampled at
+5 ms for 107 s with the cable in there was no transition at all, ``carrier``
+stayed 0, and the boot held no ``Link is Up`` line; forcing the resume brought
+the link up 2.6 s later, which is what proved the far end had been live the
+whole time.
 
-What was *not* measured is how long a suspended PHY takes to notice that
-cable, because the measurements ran with no cable attached; 0.17 s is a lower
-bound for it, not the whole of it. That risk was accepted knowingly, and it is
-also why this is gated on being a laptop. If the ethernet port is ever dead or
-slow to come up, this rule is the first thing to look at: undoing it for now
-is one write to ``power/control``, and undoing it permanently is removing the
-file.
+So the accepted risk is not a delay, it is the port staying dead until
+something else wakes the device -- and 0.17 s was only ever the forced-resume
+figure, which says nothing about cable detection. That is one observation,
+with repeats and a control arm still outstanding. The bit that would explain
+it -- whether PME-Enable is actually set while suspended -- cannot be read
+without a config-space access, and that access resumes the device, so the
+reading destroys the state it is trying to report. If the ethernet port is
+ever dead, this rule is the first thing to look at: undoing it for now is one
+write to ``power/control``, and undoing it permanently is removing the file.
 """
 
 from __future__ import annotations
@@ -57,8 +64,9 @@ UDEV_RULES = Path("/etc/udev/rules.d/81-ethernet-pm.rules")
 UDEV_CONTENT = """\
 # Written by archsetup.
 # Runtime PM for the Realtek 2.5GbE controller: it autosuspends ~10 s after the
-# link drops and wakes on PME when a cable comes back. Battery measurement and
-# the accepted risk are in core/ethernet_pm.py.
+# link drops, and a suspended PHY does not notice a cable plugged back in --
+# measured, not assumed. Battery measurement and the accepted risk are in
+# core/ethernet_pm.py.
 ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10ec", ATTR{device}=="0x8125", TEST=="power/control", ATTR{power/control}="auto"
 """
 
@@ -130,8 +138,8 @@ def _chassis_ok() -> bool:
     """The whole payoff is battery, so a desktop is asked rather than told.
 
     With a cable in it the link never drops, the device never autosuspends and
-    the rule buys nothing; pull the cable and the one thing that was not
-    measured -- how fast a sleeping PHY notices a cable -- becomes that
+    the rule buys nothing; pull the cable and the measured failure -- a
+    suspended PHY that never notices the cable coming back -- becomes that
     machine's problem in exchange for nothing. That is a warning and not a
     refusal: an unknown chassis is not a desktop, and a desktop sitting on
     wifi with an empty port is exactly where the gain would show up.
