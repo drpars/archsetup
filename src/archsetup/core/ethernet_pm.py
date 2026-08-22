@@ -13,22 +13,41 @@ which makes it the second largest lever on this machine's power budget.
 The wake path was measured too, and it came back the other way round. Every
 ingredient for a PME wake is in place: the device suspends 10.0 s after the
 link drops and carries ``power/wakeup=enabled`` while suspended, the
-controller reports ``PME(D3hot+,D3cold+)``, and its root port carries
-``PMEIntEna+``. A cable into a live router still did not wake it. Sampled at
-5 ms for 107 s with the cable in there was no transition at all, ``carrier``
-stayed 0, and the boot held no ``Link is Up`` line; forcing the resume brought
-the link up 2.6 s later, which is what proved the far end had been live the
-whole time.
+controller reports ``PME(D3hot+,D3cold+)``, its root port carries
+``PMEIntEna+``, and ``PME-Enable`` is measurably set in the sleeping device's
+own config space. A cable into a live router still does not wake it.
+
+Four observations now, and a control arm that separates the sleeping PHY from
+everything else around it. With ``power/control=auto`` the cable sat in a live
+port for 107 s once and for 60 s three more times, sampled at 5 ms, and
+produced no transition at all: ``carrier`` stayed 0, ``runtime_status`` stayed
+``suspended``, and the boot held no ``Link is Up`` line. Forcing the resume
+took 0.141-0.181 s and the link followed 2.6-3.3 s later, which is what proves
+the far end was live the whole time. With ``power/control=on`` -- same cable,
+same router, same interface, same human protocol -- the link came up in all
+three rounds *before the operator could report the plug*, 7.7 to 15 s ahead of
+it, and the device did not suspend once. The failure is the sleep, not the
+port.
 
 So the accepted risk is not a delay, it is the port staying dead until
-something else wakes the device -- and 0.17 s was only ever the forced-resume
-figure, which says nothing about cable detection. That is one observation,
-with repeats and a control arm still outstanding. The bit that would explain
-it -- whether PME-Enable is actually set while suspended -- cannot be read
-without a config-space access, and that access resumes the device, so the
-reading destroys the state it is trying to report. If the ethernet port is
-ever dead, this rule is the first thing to look at: undoing it for now is one
-write to ``power/control``, and undoing it permanently is removing the file.
+something else wakes the device; 0.17 s was only ever the forced-resume
+figure, which says nothing about cable detection. What is still unexplained is
+why: every documented prerequisite for the wake is in place and the wake does
+not happen, which leaves the driver never arming a link change as a PME source
+as the remaining suspect -- not tested here.
+
+Reading that last bit turned out to cost nothing, against the claim this file
+used to make that it could not be read at all. The device sleeps in D3hot, not
+D3cold, and config registers stay accessible there: ``lspci -vv`` printed
+``PME-Enable+`` while the 5 ms sampler recorded no transition and
+``runtime_active_time`` did not move by a millisecond. The observation does
+not destroy the state it reports, and an inference that it would -- drawn from
+a log pair that merely looked like a resume -- stood in this docstring for a
+day.
+
+If the ethernet port is ever dead, this rule is the first thing to look at:
+undoing it for now is one write to ``power/control``, and undoing it
+permanently is removing the file.
 """
 
 from __future__ import annotations
