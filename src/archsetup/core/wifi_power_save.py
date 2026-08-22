@@ -1,15 +1,31 @@
 """802.11 power save on the Intel card: the knob, and the price on its label.
 
-Two measurements meet here and neither was taken for this module. Turning
-power save off makes the link about five times quicker to answer: average RTT
-36-45 ms with it on against 7.8 ms with it off, and the jitter collapses from
-21-29 ms to 1.6 ms -- measured 2026-08-17 while chasing a remote desktop that
-felt slow, and the finding outlived the remote desktop because it touches
-every round trip the machine makes. Turning it off also costs 0.50 W at idle,
+Three measurements meet here and none was taken for this module.
+
+The cost is the firm one: turning power save off draws 0.50 W more at idle,
 about 17 minutes on a 65.9 Wh pack -- A/B/A/B, repeat spread 0.01-0.10 W,
-measured 2026-08-22. Both live in the pars notes (uzak-masaustu and archsetup
-respectively); neither is repeated here beyond the two numbers the user has
-to see before choosing.
+measured 2026-08-22.
+
+The benefit is real but smaller and less stable than the first number found
+for it. On 2026-08-17, while chasing a remote desktop that felt slow, power
+save was measured costing roughly 5x on average RTT: 36-45 ms against 7.8 ms,
+jitter 21-29 ms against 1.6 ms. **That magnitude did not reproduce.** A second
+A/B/A/B on 2026-08-22, 40 pings per arm at 1 s to the gateway, came back:
+
+    off  avg 3.32 / 3.95 ms   max  4.97 / 11.71   mdev 0.61 / 2.14
+    on   avg 4.02 / 4.98 ms   max 18.95 / 21.82   mdev 2.83 / 3.62
+
+By the same repeat-spread test the power number had to pass, the average
+difference (0.87 ms) does NOT clear its spread (0.96 ms) and is not
+established; the tail does -- worst-case RTT roughly doubles to triples
+(8.3 -> 20.4 ms against spreads of 6.7 and 2.9), and mdev moves with it.
+
+So what this task buys is jitter and worst case, not a five-fold cut in the
+average, and how much depends on conditions nobody has pinned down: the two
+rounds differ in day, traffic pattern and signal, and which of those matters
+was not isolated. The user-facing strings promise the shape, not a number that
+one round contradicts. Owners: uzak-masaustu for the 2026-08-17 numbers,
+archsetup for both 2026-08-22 rounds.
 
 So this is a pair of tasks rather than a recommendation. The kernel default is
 power save ON: the battery gain is already banked and archsetup has nothing to
@@ -65,11 +81,12 @@ UDEV_RULES = Path("/etc/udev/rules.d/83-wifi-power-save.rules")
 # PATH -- and is where pacman puts iw.
 UDEV_CONTENT = f"""\
 # Written by archsetup.
-# 802.11 power save trades latency for power: measured on this machine, average
-# RTT is 36-45 ms with it on against 7.8 ms with it off (jitter 21-29 ms against
-# 1.6 ms), and turning it off costs 0.50 W at idle, ~17 min of battery. Power
-# save has no sysfs attribute, so this runs iw. Both measurements and the
-# reasoning are in core/wifi_power_save.py.
+# 802.11 power save trades latency for power. Measured on this machine: turning
+# it off costs 0.50 W at idle (~17 min of battery) and buys mostly jitter and
+# worst-case RTT -- peak fell 20.4 -> 8.3 ms, while the average difference did
+# not clear its own repeat spread. An earlier round saw a far larger effect and
+# it did not reproduce; the numbers and that caveat are in
+# core/wifi_power_save.py. Power save has no sysfs attribute, so this runs iw.
 ACTION=="add", SUBSYSTEM=="net", DRIVERS=="{DRIVER}", RUN+="{IW} dev $name set power_save off"
 """
 
