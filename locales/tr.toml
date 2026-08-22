@@ -273,6 +273,13 @@ disable_plan = "{path} kaldırılacak ve power/control=on yazılacak; ikincisi a
 disable_q = "Ethernet runtime PM kapatılsın mı?"
 not_restored = "Kural kaldırıldı ama power/control tekrar on olmadı. Okumak için: /sys/bus/pci/devices/<adres>/power/control ({path})"
 disabled = "Ethernet denetleyicisinde runtime PM kapalı: port uyanık kalıyor ve kabloyu anında fark ediyor. Geri açmak için Ethernet Runtime PM görevi."
+status_no_device = "Realtek 2.5GbE denetleyicisi yok."
+status_on = "açık"
+status_off = "kapalı"
+status_split = "kural ile durum ayrışmış"
+status_rule_yes = "kural yerinde"
+status_rule_no = "kural yok"
+status_line = "Şu an: {verdict} — power/control={control}, {rule}"
 
 [wifi_power_save]
 no_device = "Bu makinede iwlwifi arayüzü yok; kuralın üzerinde çalışacağı bir cihaz bulunmuyor."
@@ -286,6 +293,13 @@ not_applied = "power save değişmedi. Geri okumak için: iw dev <arayüz> get p
 not_restored = "power save tekrar on olmadı. Geri okumak için: iw dev <arayüz> get power_save"
 off_done = "802.11 power save kapalı: link daha kararlı cevap veriyor, makine 0,50 W fazla çekiyor. {path} her açılışta yeniden uyguluyor -- kuralın bu cihazla eşleştiği denetlendi, RUN'ının açılışta koştuğu denetlenmedi. Wifi Power Save (Aç) görevi ikisini de geri alır."
 on_done = "802.11 power save yeniden açık -- çekirdek varsayılanı, ve ucuz olanı. Kural kaldırıldı, yani bu yeniden başlatmada da kalıcı."
+status_no_device = "iwlwifi arayüzü yok."
+status_on = "açık (çekirdek varsayılanı)"
+status_off = "kapalı"
+status_split = "kural ile durum ayrışmış"
+status_rule_yes = "kural yerinde"
+status_rule_no = "kural yok"
+status_line = "Şu an: power save {verdict} — {state}, {rule}"
 
 [iwd]
 no_manager = "Çalışan bir ağ yöneticisi yok ({managers}). iwd'nin ağ yapılandırmasını kapatmak makineyi adressiz bırakabilir."

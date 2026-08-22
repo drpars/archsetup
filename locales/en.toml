@@ -273,6 +273,13 @@ disable_plan = "This removes {path} and writes power/control=on, which takes eff
 disable_q = "Turn ethernet runtime PM off?"
 not_restored = "The rule was removed but power/control did not go back to on. Read it at /sys/bus/pci/devices/<address>/power/control ({path})"
 disabled = "Runtime PM is off for the ethernet controller: the port stays awake and notices a cable immediately. The Ethernet Runtime PM task puts it back."
+status_no_device = "No Realtek 2.5GbE controller."
+status_on = "on"
+status_off = "off"
+status_split = "rule and state disagree"
+status_rule_yes = "rule in place"
+status_rule_no = "no rule"
+status_line = "Now: {verdict} -- power/control={control}, {rule}"
 
 [wifi_power_save]
 no_device = "No iwlwifi interface on this machine; there is nothing for the rule to act on."
@@ -286,6 +293,13 @@ not_applied = "power save did not change. Read it back with: iw dev <iface> get 
 not_restored = "power save did not go back to on. Read it back with: iw dev <iface> get power_save"
 off_done = "802.11 power save is off: the link answers more steadily and the machine draws 0.50 W more. {path} applies it again at boot -- that the rule matches this device was checked, that its RUN fires at boot was not. The Wifi Power Save (On) task undoes both."
 on_done = "802.11 power save is on again -- the kernel default, and the cheaper one. The rule is gone, so this survives a reboot."
+status_no_device = "No iwlwifi interface."
+status_on = "on (kernel default)"
+status_off = "off"
+status_split = "rule and state disagree"
+status_rule_yes = "rule in place"
+status_rule_no = "no rule"
+status_line = "Now: power save {verdict} -- {state}, {rule}"
 
 [iwd]
 no_manager = "No network manager is running ({managers}). Turning off iwd's network configuration may leave the machine without an address."

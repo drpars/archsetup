@@ -339,3 +339,139 @@ async def test_pick_screen_filter_stays_reachable():
         await pilot.press("enter")
         await pilot.pause()
         assert picked == ["Istanbul"]
+
+
+def test_a_computed_description_is_read_when_drawn_not_when_built():
+    """Satirin degeri kurulma aninda donarsa canli olmaz.
+
+    Mekanizmanin tamami bu: MenuItem.desc cagirilabilir olabiliyor ve
+    _prompt onu her cizimde cozuyor. Donmus olsaydi asagidaki ikinci
+    okuma da ilkini verirdi.
+    """
+    state = {"v": "once"}
+    item = screens.MenuItem("x", "Etiket", lambda: state["v"])
+    assert "once" in screens.MenuScreen._prompt(item)
+    state["v"] = "sonra"
+    assert "sonra" in screens.MenuScreen._prompt(item)
+
+    # Duz dize hala duz dize: cagirilabilir olmayan yol bozulmadi.
+    assert "sabit" in screens.MenuScreen._prompt(
+        screens.MenuItem("y", "Etiket", "sabit")
+    )
+
+
+async def test_running_a_task_rewrites_its_state_line_and_keeps_the_cursor(
+    monkeypatch,
+):
+    """Gorev donunce satir tazelenmeli -- ve imlec yerinde kalmali.
+
+    Ikisi tek testte, cunku ikisi tek tasarim kararinin iki yuzu:
+    refresh(recompose=True) satiri tazeler ama imleci ilk satira dusurur, ve
+    bu cagrinin yapildigi an kullanicinin uzerinde durdugu satiri az once
+    calistirdigi andir. replace_option_prompt ikisini birden verir.
+
+    Tazelemeyen bir arayuz, degistirmeden onceki durumu bildirir; bu deponun
+    kendi cizgisiyle ayni hata: bir seyi yazan gorev onun yururlukte
+    oldugunu iddia edemez.
+    """
+    from archsetup.core import tasks
+    from archsetup.ui.app import ArchSetupApp
+
+    state = {"v": "ONCE"}
+    task = tasks.Task("fake-toggle", "task.system_update", lambda: 0,
+                      group="update", state=lambda: state["v"])
+    other = tasks.Task("fake-plain", "task.clean_orphans", lambda: 0,
+                       group="update")
+    monkeypatch.setattr(tasks, "TASKS", (other, task))
+
+    def fake_run_task(self, tsk):
+        state["v"] = "SONRA"
+
+    monkeypatch.setattr(ArchSetupApp, "run_task", fake_run_task)
+
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")  # Guncelleme menusu, ilk satir
+        await pilot.pause()
+        options = app.screen.query_one(OptionList)
+        options.highlighted = 1  # ikinci satir: durum tasiyan gorev
+        await pilot.pause()
+        assert "ONCE" in str(options.get_option("fake-toggle").prompt)
+
+        await pilot.press("enter")
+        await pilot.pause()
+        options = app.screen.query_one(OptionList)
+        assert "SONRA" in str(options.get_option("fake-toggle").prompt)
+        assert options.highlighted == 1, "imlec ilk satira dustu"
+
+
+async def test_refresh_leaves_static_rows_alone(monkeypatch):
+    """Sabit aciklamali satirlar her gorev kosusunda yeniden yazilmamali."""
+    from archsetup.core import tasks
+    from archsetup.ui.app import ArchSetupApp
+
+    task = tasks.Task("fake-plain", "task.clean_orphans", lambda: 0,
+                      group="update")
+    monkeypatch.setattr(tasks, "TASKS", (task,))
+    monkeypatch.setattr(ArchSetupApp, "run_task", lambda self, tsk: None)
+
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        screen = app.screen
+        options = screen.query_one(OptionList)
+        touched = []
+        monkeypatch.setattr(
+            type(options),
+            "replace_option_prompt",
+            lambda self, option_id, prompt: touched.append(option_id) or self,
+        )
+        screen.refresh_state()
+        assert touched == []
+
+
+async def test_network_menu_draws_state_lines_without_touching_the_machine(
+    monkeypatch,
+):
+    """Ag satirlari cizim aninda durum okuyor; test o okumayi makineye indirmez.
+
+    Bu ayni zamanda conftest'teki sealed_network_state'in pozitif kontrolu:
+    muhur kalkarsa bu makinede NIC bulunur ve asagidaki "cihaz yok" iddiasi
+    duser. Muhursuz bir suit, altindaki donanima gore farkli cevap verirdi --
+    bu deponun uc kez odedigi sizinti.
+    """
+    from archsetup.core import i18n, wifi_power_save
+    from archsetup.ui.app import ArchSetupApp
+
+    def explode(*args, **kwargs):
+        raise AssertionError("menu cizilirken alt surec calisti")
+
+    monkeypatch.setattr(wifi_power_save.subprocess, "run", explode)
+
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 4  # Yapilandirma
+        await pilot.press("enter")
+        await pilot.pause()
+        app.screen.query_one(OptionList).highlighted = 3  # Ag
+        await pilot.press("enter")
+        await pilot.pause()
+
+        ids = list(app.screen._items)
+        for task_id in (
+            "ethernet-runtime-pm",
+            "ethernet-runtime-pm-off",
+            "wifi-power-save-off",
+            "wifi-power-save-on",
+        ):
+            assert task_id in ids
+
+        options = app.screen.query_one(OptionList)
+        eth = str(options.get_option("ethernet-runtime-pm").prompt)
+        wifi = str(options.get_option("wifi-power-save-off").prompt)
+        assert i18n.t("ethernet_pm.status_no_device") in eth
+        assert i18n.t("wifi_power_save.status_no_device") in wifi

@@ -143,6 +143,11 @@ class Task:
     key: str  # locale key for the title; "<key>_desc" is the description
     fn: Callable[[], int]
     group: str = "update"  # which menu the task appears in
+    # Optional read-only reader for "what is in force right now", rendered
+    # above the description the way a category renders its detection line.
+    # It must not change the machine and must not need root: the menu calls
+    # it while drawing, and again after the task returns.
+    state: Callable[[], str] | None = None
 
 
 TASKS: tuple[Task, ...] = (
@@ -243,24 +248,28 @@ TASKS: tuple[Task, ...] = (
         "task.ethernet_pm",
         ethernet_pm.configure,
         group="network",
+        state=ethernet_pm.status,
     ),
     Task(
         "ethernet-runtime-pm-off",
         "task.ethernet_pm_off",
         ethernet_pm.disable,
         group="network",
+        state=ethernet_pm.status,
     ),
     Task(
         "wifi-power-save-off",
         "task.wifi_power_save_off",
         wifi_power_save.turn_off,
         group="network",
+        state=wifi_power_save.status,
     ),
     Task(
         "wifi-power-save-on",
         "task.wifi_power_save_on",
         wifi_power_save.turn_on,
         group="network",
+        state=wifi_power_save.status,
     ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
     Task("vfioctl", "task.vfioctl", virt.install_vfioctl, group="virt"),

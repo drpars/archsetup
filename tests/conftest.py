@@ -6,7 +6,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from archsetup.core import i18n, mkinitcpio, secureboot  # noqa: E402
+from archsetup.core import (  # noqa: E402
+    ethernet_pm,
+    i18n,
+    mkinitcpio,
+    secureboot,
+    wifi_power_save,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +65,35 @@ def sealed_sizes(monkeypatch):
     A test that wants the fallback replaces this with its own answer.
     """
     monkeypatch.setattr(mkinitcpio, "_sudo_stat", lambda paths: "")
+
+
+@pytest.fixture(autouse=True)
+def sealed_network_state(monkeypatch, tmp_path):
+    """The live-machine reads behind the two network menu rows.
+
+    Those rows carry a computed description, so their state readers run while
+    the menu is being *drawn*: `ethernet_pm.status()` walks /sys/bus/pci and
+    `wifi_power_save.status()` walks /sys/class/net and then shells out to
+    `iw` once per interface. Any pilot test that walks into the network menu
+    would answer differently per machine, and on a box with no wifi it would
+    also spawn a subprocess for nothing.
+
+    Sealed by pointing the device roots at empty directories rather than by
+    stubbing status(): the readers still run for real, which is the half worth
+    testing, and only the hardware underneath them is replaced. Every existing
+    test that wants devices already sets these constants itself and still
+    wins, because a per-test setattr lands after this one.
+
+    Same reasoning as sealed_rebuild: this is the third class of live read the
+    suite has grown, and the two before it leaked because the attention was on
+    the new measurement rather than on what the measurement touched.
+    """
+    empty_pci = tmp_path / "sealed-pci"
+    empty_net = tmp_path / "sealed-net"
+    empty_pci.mkdir()
+    empty_net.mkdir()
+    monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", empty_pci)
+    monkeypatch.setattr(wifi_power_save, "NET_DEVICES", empty_net)
 
 
 @pytest.fixture

@@ -132,6 +132,41 @@ def current(iface: str) -> str:
     return ""
 
 
+def status() -> str:
+    """One menu line, the same two bits ethernet_pm.status() reports.
+
+    The direction is the mirror image, and the line has to survive that: power
+    save is ON by the kernel's own default here, so the rule's job is to keep
+    it OFF. "No rule and everything on" is therefore the untouched machine,
+    not a failure.
+
+    ``current()`` shells out to iw once per interface. That is a subprocess in
+    a menu render, which is why it is one line and not a table -- and it is
+    unprivileged, because getting power_save needs no root while setting it
+    does.
+    """
+    ifaces = interfaces()
+    if not ifaces:
+        return t("wifi_power_save.status_no_device")
+
+    states = {iface: current(iface) or "?" for iface in ifaces}
+    rule = UDEV_RULES.exists()
+    if rule and all(state == "off" for state in states.values()):
+        verdict = t("wifi_power_save.status_off")
+    elif not rule and all(state == "on" for state in states.values()):
+        verdict = t("wifi_power_save.status_on")
+    else:
+        verdict = t("wifi_power_save.status_split")
+    return t(
+        "wifi_power_save.status_line",
+        verdict=verdict,
+        state=", ".join(f"{iface}={state}" for iface, state in states.items()),
+        rule=t(
+            "wifi_power_save.status_rule_yes" if rule else "wifi_power_save.status_rule_no"
+        ),
+    )
+
+
 def _apply(ifaces: list[str], want: str) -> tuple[int, bool]:
     """Set every interface and read each one back. Returns (rc, all_agree)."""
     rc = 0

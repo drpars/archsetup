@@ -9,11 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
-from typing import Callable
-
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Input, OptionList, SelectionList, Static
 from textual.widgets.option_list import Option
@@ -28,7 +27,10 @@ t = i18n.t
 class MenuItem:
     id: str
     label: str
-    desc: str = ""
+    # A callable is resolved every time the row is drawn. That is what lets a
+    # row report what the machine is doing instead of a fixed sentence -- and
+    # why a state reader has to be cheap, read-only and root-free.
+    desc: str | Callable[[], str] = ""
     action: Callable[["MenuScreen"], None] = field(default=lambda screen: None)
 
 
@@ -52,9 +54,35 @@ class MenuScreen(Screen):
 
     @staticmethod
     def _prompt(item: MenuItem) -> str:
-        if item.desc:
-            return f"{item.label}\n[dim]{item.desc}[/dim]"
+        desc = item.desc() if callable(item.desc) else item.desc
+        if desc:
+            return f"{item.label}\n[dim]{desc}[/dim]"
         return item.label
+
+    def refresh_state(self) -> None:
+        """Re-read the computed rows in place, without rebuilding the screen.
+
+        Rebuilding is the obvious way and it is the wrong one here.
+        `refresh(recompose=True)` drops the highlight back to the first row,
+        and the moment this runs is the moment just after the user ran the row
+        they were standing on -- the one place the cursor is worth keeping.
+        `replace_option_prompt` swaps the text and leaves it alone.
+
+        Only computed rows are touched: a static description cannot have gone
+        stale, and rewriting it would make every task run redraw the whole
+        menu for nothing.
+        """
+        computed = [item for item in self._items.values() if callable(item.desc)]
+        if not computed:
+            return
+        try:
+            options = self.query_one(OptionList)
+        except NoMatches:
+            # Called before compose(), or after the screen went away. Nothing
+            # to update, and nothing wrong either.
+            return
+        for item in computed:
+            options.replace_option_prompt(item.id, self._prompt(item))
 
     def on_option_list_option_selected(
         self, event: OptionList.OptionSelected
@@ -378,6 +406,15 @@ def make_drivers_menu() -> MenuScreen:
     return MenuScreen(t("menu.drivers.title"), items)
 
 
+def _run_task(screen: MenuScreen, task: tasks.Task) -> None:
+    screen.app.run_task(task)
+    # The row that was just run is the row whose state line is most likely to
+    # be wrong now, and a description that reports the state from before the
+    # toggle is worse than no description: it is the UI form of a task
+    # claiming what it wrote is in force.
+    screen.refresh_state()
+
+
 def _task_items(group: str) -> list[MenuItem]:
     items = []
     for task in tasks.TASKS:
@@ -385,12 +422,19 @@ def _task_items(group: str) -> list[MenuItem]:
             continue
         if task.id == "remove-db-lock" and not tasks.PACMAN_LOCK.exists():
             continue
+        # The state line goes above the description, the same order a category
+        # puts its detection line above its note: what is true now first, what
+        # the row would do second.
+        fixed = t(f"{task.key}_desc")
+        desc: str | Callable[[], str] = fixed
+        if task.state is not None:
+            desc = lambda tsk=task, fixed=fixed: f"{tsk.state()}\n{fixed}"
         items.append(
             MenuItem(
                 id=task.id,
                 label=t(task.key),
-                desc=t(f"{task.key}_desc"),
-                action=lambda screen, tsk=task: screen.app.run_task(tsk),
+                desc=desc,
+                action=lambda screen, tsk=task: _run_task(screen, tsk),
             )
         )
     return items

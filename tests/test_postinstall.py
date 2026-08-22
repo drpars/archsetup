@@ -2051,3 +2051,115 @@ def test_wifi_power_save_rule_uses_an_absolute_iw_path():
     assert f'RUN+="{wifi_power_save.IW}' in wifi_power_save.UDEV_CONTENT
     assert wifi_power_save.UDEV_RULES.suffix == ".rules"
     assert wifi_power_save.UDEV_RULES.parent == Path("/etc/udev/rules.d")
+
+
+# ------------------------------------------------- network menu state readers
+
+@pytest.mark.parametrize(
+    "control,rule,verdict",
+    [
+        ("auto", True, "status_on"),
+        ("on", False, "status_off"),
+        # The two states the tasks themselves pass through, and the reason the
+        # line reports both bits: a rule left behind puts `auto` back on the
+        # next add|bind, and `auto` with no rule does not survive one.
+        ("on", True, "status_split"),
+        ("auto", False, "status_split"),
+    ],
+)
+def test_ethernet_status_keeps_the_rule_and_the_attribute_apart(
+    fake_nic, tmp_path, monkeypatch, control, rule, verdict
+):
+    """Kural ile power/control iki ayri olgu; tek kelimeye indirilemez.
+
+    Ikisinin ayristigi hallerde "acik" ya da "kapali" demek, bir sonraki
+    aciliata ne olacagini soyleyen yariyi gizler -- ve satiri okuyan kullanici
+    tam olarak onu sormaktadir.
+    """
+    from archsetup.core import i18n
+
+    (fake_nic / "power" / "control").write_text(f"{control}\n")
+    rules = tmp_path / "81-ethernet-pm.rules"
+    if rule:
+        rules.write_text("# rule\n")
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+
+    line = ethernet_pm.status()
+    assert i18n.t(f"ethernet_pm.{verdict}") in line
+    assert control in line
+
+
+def test_ethernet_status_says_something_different_in_every_state(
+    fake_nic, tmp_path, monkeypatch
+):
+    """Dort halin dordu ayri okunmali, ve detay sus degil tasiyici olmali.
+
+    Ikinci yari ilkini kanitliyor: tek basina verdict kelimesi dort hali
+    UCE dusuruyor, cunku iki ayrisik hal de ayni kelimeyi aliyor. Yani
+    "Su an: acik" ile yetinen bir satir bilgi kaybeder, ve kaybettigi sey
+    tam olarak bir sonraki aciliata ne olacagi.
+    """
+    seen = set()
+    for control in ("auto", "on"):
+        for rule in (True, False):
+            (fake_nic / "power" / "control").write_text(f"{control}\n")
+            rules = tmp_path / f"rules-{control}-{rule}"
+            if rule:
+                rules.write_text("# rule\n")
+            monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+            seen.add(ethernet_pm.status())
+    assert len(seen) == 4, seen
+
+    verdicts = {line.split("—")[0].strip() for line in seen}
+    assert len(verdicts) == 3, verdicts
+
+
+def test_ethernet_status_without_the_card_says_so(tmp_path, monkeypatch):
+    from archsetup.core import i18n
+
+    monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", tmp_path / "empty")
+    assert ethernet_pm.status() == i18n.t("ethernet_pm.status_no_device")
+
+
+@pytest.mark.parametrize(
+    "state,rule,verdict",
+    [
+        ("off", True, "status_off"),
+        ("on", False, "status_on"),
+        ("off", False, "status_split"),
+        ("on", True, "status_split"),
+    ],
+)
+def test_wifi_status_reads_the_mirror_image_correctly(
+    fake_wifi, tmp_path, monkeypatch, state, rule, verdict
+):
+    """Yon ethernet'in tersi: power save cekirdek varsayilaniyla ACIK.
+
+    Yani "kural yok ve her sey on" dokunulmamis makinedir, ariza degil --
+    ve bu iki tabloyu ayni koda yazan biri tam burada yanilir.
+    """
+    from archsetup.core import i18n
+
+    monkeypatch.setattr(wifi_power_save, "current", lambda iface: state)
+    rules = tmp_path / "83-wifi-power-save.rules"
+    if rule:
+        rules.write_text("# rule\n")
+    monkeypatch.setattr(wifi_power_save, "UDEV_RULES", rules)
+
+    line = wifi_power_save.status()
+    assert i18n.t(f"wifi_power_save.{verdict}") in line
+    assert f"wlan0={state}" in line
+
+
+def test_wifi_status_does_not_run_iw_when_there_is_no_interface(
+    tmp_path, monkeypatch
+):
+    """Arayuz yoksa alt surec de yok: menu cizerken bedava olmali."""
+    from archsetup.core import i18n
+
+    def explode(*args, **kwargs):
+        raise AssertionError("iw calistirildi")
+
+    monkeypatch.setattr(wifi_power_save, "NET_DEVICES", tmp_path / "empty")
+    monkeypatch.setattr(wifi_power_save.subprocess, "run", explode)
+    assert wifi_power_save.status() == i18n.t("wifi_power_save.status_no_device")

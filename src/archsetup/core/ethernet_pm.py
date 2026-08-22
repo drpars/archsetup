@@ -114,6 +114,40 @@ def matching_devices() -> list[Path]:
     ]
 
 
+def status() -> str:
+    """One menu line: what is in force right now, both halves of it.
+
+    Two bits, not one. ``power/control`` is what the controller is doing this
+    second; the rule file is whether that survives the next add|bind event.
+    They disagree in exactly the two states this module's own tasks pass
+    through -- the rule gone while the device is still parked at ``auto``, and
+    the attribute written while the rule is still loaded -- and collapsing
+    them into one word would hide the half that decides the next boot.
+
+    Read-only and unprivileged: sysfs attributes plus one stat(2). Nothing
+    here reaches config space, so it cannot resume a sleeping device and turn
+    the reading into the thing it was supposed to report.
+    """
+    devices = matching_devices()
+    if not devices:
+        return t("ethernet_pm.status_no_device")
+
+    controls = [_attr(device, "power/control") or "?" for device in devices]
+    rule = UDEV_RULES.exists()
+    if rule and all(control == "auto" for control in controls):
+        verdict = t("ethernet_pm.status_on")
+    elif not rule and all(control == "on" for control in controls):
+        verdict = t("ethernet_pm.status_off")
+    else:
+        verdict = t("ethernet_pm.status_split")
+    return t(
+        "ethernet_pm.status_line",
+        verdict=verdict,
+        control=", ".join(controls),
+        rule=t("ethernet_pm.status_rule_yes" if rule else "ethernet_pm.status_rule_no"),
+    )
+
+
 def configure() -> int:
     devices = matching_devices()
     if not devices:
