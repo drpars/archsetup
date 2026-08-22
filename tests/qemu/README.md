@@ -132,3 +132,11 @@ grep ^MODULES /etc/mkinitcpio.conf    # virtio_* ve radeon OLMAMALI
 | `./run-vm.sh boot` / `bios-boot` | Kurulu sistemi diskten başlat |
 
 Disk ve ISO `~/.cache/archsetup-qemu/` altında tutulur.
+
+## Başka bir düzenek: swap bölümünden hazırda bekletme
+
+`run-vm.sh` kurucu modunu sınar ve elle sürülür. Yanında, tamamen betikle
+sürülen ikinci bir düzenek var: `hibernate-swap-partition/`. Swap **bölümü**
+olan bir misafir kurar, `swap-hibernate` görevini orada koşturur ve gerçek
+bir S4 gidiş-dönüşü ölçer — bu makinede swap bölümü olmadığı için o dal
+başka türlü sınanamıyor. Kendi README'si ayrıntıyı taşıyor.
