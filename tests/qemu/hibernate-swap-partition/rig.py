@@ -25,6 +25,13 @@ OVMF_CODE = "/usr/share/edk2/x64/OVMF_CODE.4m.fd"
 ARCHISO_UUID = "2026-07-01-16-36-20-00"
 HERE = Path(__file__).resolve().parent
 
+# The set Arch shipped before `systemd` became the default hook.
+# _ensure_resume_hook() is a no-op on any HOOKS carrying `systemd`, so the
+# other branch cannot be reached without putting this back.
+BUSYBOX_HOOKS = ("base", "udev", "autodetect", "microcode", "modconf", "kms",
+                 "keyboard", "keymap", "consolefont", "block", "filesystems",
+                 "fsck")
+
 
 def qemu_args(ram: int, iso_boot: bool) -> list[str]:
     args = [
@@ -181,6 +188,49 @@ def send_script(g: Guest, path: Path, dest: str) -> None:
     print(out.strip()[-200:], flush=True)
 
 
+def hooks_of(out: str) -> list[str]:
+    """HOOKS=(...) as a list, from the last match in the reply.
+
+    Not anchored with ^: bash's OSC 3008 report lands in front of the first
+    line of every reply, so `^HOOKS=` matches nothing -- and an unmatched
+    pattern reads exactly like a clean answer.
+    """
+    got = re.findall(r"HOOKS=\(([^)]*)\)", out)
+    if not got:
+        raise RuntimeError(f"HOOKS satırı okunamadı: {out.strip()[-300:]}")
+    return got[-1].split()
+
+
+def image_probe() -> str:
+    """One guest command; counts, not greps, so a zero is still a report."""
+    return ("lsinitcpio /boot/initramfs-linux.img > /tmp/lsi.txt 2>/dev/null; "
+            "echo RIG_LINES=$(wc -l < /tmp/lsi.txt); "
+            "echo RIG_HOOK_RESUME=$(grep -c 'hooks/resume$' /tmp/lsi.txt); "
+            "echo RIG_SYSTEMD=$(grep -c 'lib/systemd/systemd$' /tmp/lsi.txt)")
+
+
+def image_counts(out: str, what: str) -> dict[str, int]:
+    got = {k: int(v) for k, v in re.findall(r"RIG_(\w+)=(\d+)", out)}
+    if got.get("LINES", 0) == 0:
+        raise RuntimeError(f"{what}: imaj listelenemedi")
+    return got
+
+
+def check_image(out: str, what: str, resume: bool) -> None:
+    """resume=True: the hook must be in the image. False: it must not be.
+
+    Both directions get asserted in one run, so `hooks/resume` is shown to
+    match when the hook is there -- a count that is only ever read as 0
+    cannot tell "absent" from "pattern never matches".
+    """
+    got = image_counts(out, what)
+    if bool(got.get("HOOK_RESUME", 0)) != resume:
+        raise RuntimeError(f"{what}: resume kancası beklenen durumda değil "
+                           f"(HOOK_RESUME={got.get('HOOK_RESUME')}, beklenen {resume})")
+    if got.get("SYSTEMD", 1) != 0:
+        raise RuntimeError(f"{what}: systemd hâlâ imajda, dal karışmış")
+
+
 def phase_install() -> None:
     banner("FAZ 1 — canlı ISO'dan kurulum")
     g = Guest(ram=4096, iso_boot=True, log=D / "log-install.txt")
@@ -212,8 +262,13 @@ def phase_install() -> None:
         g.kill()
 
 
-def phase_hibernate() -> None:
-    banner("FAZ 2 — kurulu sistem: swap bölümü + archsetup + hibernate")
+def phase_hibernate(busybox: bool = False, control: bool = False) -> None:
+    # The control arm: same busybox initramfs, hook left out, archsetup never
+    # run. If that comes back too, the hook is not what brings the machine
+    # back and the other arm proves nothing.
+    busybox = busybox or control
+    branch = ("busybox-control" if control else "busybox") if busybox else "systemd"
+    banner(f"FAZ 2 — swap bölümü + archsetup + hibernate (HOOKS: {branch})")
     g = Guest(ram=2048, iso_boot=False, log=D / "log-hibernate.txt")
     try:
         m, _ = g.expect(r"swaptest login:|root@swaptest", timeout=300)
@@ -227,6 +282,18 @@ def phase_hibernate() -> None:
         banner("2a — takas alanı gerçekten bölüm mü")
         _, out = g.run("swapon --show=NAME,TYPE,SIZE --bytes --noheadings", timeout=60)
         print(out.strip(), flush=True)
+
+        banner("2a2 — takas alanında bayat hazırda imzası var mı")
+        # A hibernation image replaces the swap signature in the first page
+        # with S1SUSPEND. A leftover one would let a later run come back from
+        # somebody else's image -- the control arm especially, where coming
+        # back at all is the failing outcome.
+        _, out = g.run("echo RIG_SWAPSIG=$(dd if=/dev/vda2 bs=1 skip=4086 "
+                       "count=10 status=none)", timeout=60)
+        sig = re.search(r"RIG_SWAPSIG=(\S+)", out)
+        print(f"takas imzası: {sig.group(1) if sig else None}", flush=True)
+        if not sig or sig.group(1) != "SWAPSPACE2":
+            raise RuntimeError(f"takas alanında bayat imza: {out.strip()[-200:]}")
 
         banner("2b — archsetup'ın okuduğu UUID / bu boot'un cmdline'ı")
         _, out = g.run("echo RIG_LSBLK=$(lsblk -no UUID /dev/vda2); "
@@ -248,22 +315,77 @@ def phase_hibernate() -> None:
                        "chmod 440 /etc/sudoers.d/rig; id rig", timeout=60)
         print(out.strip(), flush=True)
 
-        banner("2d — archsetup swap-hibernate")
-        rc, out = g.run(
-            "cd /opt/archsetup && runuser -u rig -- env PYTHONPATH=/opt/archsetup/src "
-            "python -m archsetup --lang en swap-hibernate > /tmp/as.log 2>&1; RC=$?; "
-            "tail -25 /tmp/as.log; (exit $RC)", timeout=900)
-        print(out, flush=True)
-        if rc != 0:
-            raise RuntimeError(f"swap-hibernate rc={rc}")
+        if busybox:
+            banner("2c2 — HOOKS busybox'a çevriliyor, taban imaj kuruluyor")
+            _, out = g.run("grep -E '^HOOKS=' /etc/mkinitcpio.conf", timeout=60)
+            print("başlangıç:", hooks_of(out), flush=True)
+            _, out = g.run(image_probe(), timeout=180)
+            print(out.strip(), flush=True)
+            image_counts(out, "başlangıç imajı")
 
-        banner("2e — configure() ne yazdı")
+            # Naming a hook that has no install script would fail the rebuild
+            # for a reason that has nothing to do with what is under test.
+            rc, out = g.run("for h in " + " ".join(BUSYBOX_HOOKS) + "; do "
+                            "[ -e /usr/lib/initcpio/install/$h ] || "
+                            "{ echo MISSING=$h; exit 1; }; done", timeout=60)
+            if rc != 0:
+                raise RuntimeError(f"kanca betiği yok: {out.strip()}")
+            rc, out = g.run("sed -i 's/^HOOKS=.*/HOOKS=(" + " ".join(BUSYBOX_HOOKS)
+                            + ")/' /etc/mkinitcpio.conf && grep -E '^HOOKS=' "
+                            "/etc/mkinitcpio.conf", timeout=60)
+            if rc != 0:
+                raise RuntimeError("HOOKS yazılamadı")
+            hooks = hooks_of(out)
+            print("taban HOOKS:", hooks, flush=True)
+            if "systemd" in hooks or "resume" in hooks:
+                raise RuntimeError(f"taban HOOKS yanlış: {hooks}")
+
+            # The rig builds the baseline itself. Without it "the hook was
+            # not in the image before" would rest on whatever the previous
+            # run happened to leave behind, and a re-run would inherit an
+            # image that already carries the hook.
+            rc, out = g.run("mkinitcpio -P > /tmp/base.log 2>&1; RC=$?; "
+                            "tail -5 /tmp/base.log; (exit $RC)", timeout=900)
+            print(out.strip()[-400:], flush=True)
+            if rc != 0:
+                raise RuntimeError(f"taban imaj üretilemedi rc={rc}")
+            _, out = g.run(image_probe(), timeout=180)
+            print(out.strip(), flush=True)
+            check_image(out, "taban imaj", resume=False)
+            if control:
+                print("KONTROL KOLU: archsetup koşturulmuyor, kanca eklenmiyor",
+                      flush=True)
+
+        if not control:
+            banner("2d — archsetup swap-hibernate")
+            rc, out = g.run(
+                "cd /opt/archsetup && runuser -u rig -- env PYTHONPATH=/opt/archsetup/src "
+                "python -m archsetup --lang en swap-hibernate > /tmp/as.log 2>&1; RC=$?; "
+                "tail -25 /tmp/as.log; (exit $RC)", timeout=900)
+            print(out, flush=True)
+            if rc != 0:
+                raise RuntimeError(f"swap-hibernate rc={rc}")
+
+        banner("2e — cmdline'daki resume işaretçisi")
         _, out = g.run("grep -n options /boot/loader/entries/arch.conf", timeout=60)
         print(out.strip(), flush=True)
         if f"resume=UUID={lsblk_uuid}" not in out:
             raise RuntimeError("resume=UUID= yazılmamış")
         if "resume_offset" in out:
             raise RuntimeError("bölüm dalına resume_offset yazılmış")
+
+        if busybox and not control:
+            banner("2e2 — kanca HOOKS'a ve archsetup'ın ürettiği imaja girdi mi")
+            _, out = g.run("grep -E '^HOOKS=' /etc/mkinitcpio.conf", timeout=60)
+            hooks = hooks_of(out)
+            print("archsetup sonrası:", hooks, flush=True)
+            if "resume" not in hooks:
+                raise RuntimeError(f"resume HOOKS'a eklenmemiş: {hooks}")
+            if hooks.index("resume") + 1 != hooks.index("fsck"):
+                raise RuntimeError(f"resume fsck'ten hemen önce değil: {hooks}")
+            _, out = g.run(image_probe(), timeout=180)
+            print(out.strip(), flush=True)
+            check_image(out, "archsetup'ın ürettiği imaj", resume=True)
 
         banner("2f — hibernate öncesi işaretler")
         g.run("head -c 16 /dev/urandom | base64 > /dev/shm/rig-token", timeout=60)
@@ -272,6 +394,7 @@ def phase_hibernate() -> None:
                        "echo RIG_UP=$(cut -d' ' -f1 /proc/uptime)", timeout=60)
         print(out.strip(), flush=True)
         state = {"lsblk_uuid": lsblk_uuid,
+                 "hooks": branch,
                  "boot_id": re.search(r"RIG_BOOTID=([0-9a-f-]{36})", out).group(1),
                  "token": re.search(r"RIG_TOKEN=(\S+)", out).group(1)}
         STATE.write_text(json.dumps(state, indent=2))
@@ -293,6 +416,8 @@ def phase_hibernate() -> None:
 def phase_resume() -> None:
     banner("FAZ 3 — yeniden başlat: resume swap BÖLÜMÜNDEN geldi mi")
     state = json.loads(STATE.read_text())
+    branch = state.get("hooks", "systemd")
+    print(f"ölçülen dal: HOOKS={branch}", flush=True)
     g = Guest(ram=2048, iso_boot=False, log=D / "log-resume.txt")
     try:
         # "rig>" is the prompt the pre-hibernate session was left at, so
@@ -320,13 +445,27 @@ def phase_resume() -> None:
                         "grep -iE 'hibernat|resume|PM:' | head -30", timeout=180)
         print(out2, flush=True)
 
+        if branch.startswith("busybox"):
+            banner("3b2 — bu boot'un okuduğu imaj")
+            _, out3 = g.run(image_probe(), timeout=180)
+            print(out3.strip(), flush=True)
+            check_image(out3, "imaj", resume=branch == "busybox")
+
         banner("3c — sonuç")
         print(f"boot_id aynı mı           : {same_boot}  (beklenen {state['boot_id']})",
               flush=True)
         print(f"tmpfs token geri geldi mi : {token_back}", flush=True)
         print(f"karşılayan istem          : {landed!r}", flush=True)
-        print("GERÇEK S4 DÖNÜŞÜ (swap bölümü): "
-              + ("EVET" if (same_boot and token_back) else "HAYIR"), flush=True)
+        back = same_boot and token_back
+        print(f"HOOKS dalı                : {branch}", flush=True)
+        print("GERÇEK S4 DÖNÜŞÜ (swap bölümü): " + ("EVET" if back else "HAYIR"),
+              flush=True)
+        if branch == "busybox-control":
+            print("KONTROL KOLU — beklenen: dönüş YOK", flush=True)
+            print("SONUÇ: " + ("kanca gereksiz, dönüşü başka bir şey yapıyor"
+                               if back else
+                               "kancasız dönüş yok -> dönüşü yapan şey resume kancası"),
+                  flush=True)
         g.send("poweroff")
         g.wait_exit(120)
     finally:
@@ -334,5 +473,9 @@ def phase_resume() -> None:
 
 
 if __name__ == "__main__":
-    {"install": phase_install, "hibernate": phase_hibernate,
-     "resume": phase_resume}[sys.argv[1]]()
+    phase = sys.argv[1]
+    if phase == "hibernate":
+        flags = sys.argv[2:]
+        phase_hibernate(busybox="--busybox" in flags, control="--control" in flags)
+    else:
+        {"install": phase_install, "resume": phase_resume}[phase]()
