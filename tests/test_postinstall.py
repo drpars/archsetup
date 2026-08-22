@@ -782,6 +782,114 @@ def test_ethernet_pm_rule_matches_only_what_was_measured():
     assert ethernet_pm.UDEV_RULES.parent == Path("/etc/udev/rules.d")
 
 
+def _off_recorder(nic, applies: bool):
+    """disable()'in iki mekanizmasini tek diziye yazar.
+
+    Dosya run() ile gidiyor, cihaz sudo_write() ile yaziliyor; aralarindaki
+    sira gorevin dogru olmasinin kosulu, o yuzden ikisi ayni listeye dusuyor.
+    """
+    events = []
+
+    def run(cmd, **kwargs):
+        events.append(tuple(cmd))
+        return 0
+
+    def write(path, content):
+        events.append(("write", str(path), content.strip()))
+        if applies:
+            Path(path).write_text(content)
+        return 0
+
+    return events, run, write
+
+
+def _arm_off(monkeypatch, rules, runner, write, answer=True):
+    monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+    monkeypatch.setattr(ethernet_pm, "run", runner)
+    monkeypatch.setattr(ethernet_pm, "ask_yes", lambda prompt: answer)
+    monkeypatch.setattr(sysedit, "sudo_write", write)
+
+
+def test_ethernet_pm_off_removes_the_rule_before_it_writes_the_attribute(
+    tmp_path, monkeypatch, fake_nic
+):
+    """Sira: kural yururlukteyken yazilan "on"u eslesen herhangi bir olay geri alir."""
+    rules = tmp_path / "81-ethernet-pm.rules"
+    rules.write_text(ethernet_pm.UDEV_CONTENT)
+    (fake_nic / "power" / "control").write_text("auto\n")
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, rules, runner, write)
+
+    assert ethernet_pm.disable() == 0
+    assert (fake_nic / "power" / "control").read_text().strip() == "on"
+    assert ("sudo", "udevadm", "control", "--reload-rules") in events
+    removed = events.index(("sudo", "rm", "-f", str(rules)))
+    written = [i for i, event in enumerate(events) if event[0] == "write"]
+    assert written and removed < written[0]
+
+
+def test_ethernet_pm_off_still_wakes_a_device_no_rule_is_holding_at_auto(
+    tmp_path, monkeypatch, fake_nic
+):
+    """Dosyayi silmek yururlukte olmak degildir.
+
+    Kural yoksa bile cihaz "auto"da kalmis olabilir -- udev kurallari olayla
+    calisir, silinen kural park etmis bir denetleyiciye hicbir sey soylemez.
+    Gorev bu dalda hicbir dosyaya dokunmadan yalniz attribute'u yaziyor.
+    """
+    rules = tmp_path / "hic-yazilmadi.rules"
+    (fake_nic / "power" / "control").write_text("auto\n")
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, rules, runner, write)
+
+    assert ethernet_pm.disable() == 0
+    assert (fake_nic / "power" / "control").read_text().strip() == "on"
+    assert [event for event in events if event[0] == "write"]
+    assert not [event for event in events if event[:2] == ("sudo", "rm")]
+
+
+def test_ethernet_pm_off_fails_when_the_attribute_did_not_change(
+    tmp_path, monkeypatch, fake_nic, capsys
+):
+    """configure() ile ayni disiplin: yazilan sey ile cihazin tasidigi sey iki ayri iddia."""
+    rules = tmp_path / "81-ethernet-pm.rules"
+    rules.write_text(ethernet_pm.UDEV_CONTENT)
+    (fake_nic / "power" / "control").write_text("auto\n")
+    _events, runner, write = _off_recorder(fake_nic, applies=False)
+    _arm_off(monkeypatch, rules, runner, write)
+
+    assert ethernet_pm.disable() != 0
+    assert "power/control" in capsys.readouterr().out
+
+
+def test_ethernet_pm_off_does_nothing_when_it_is_already_off(
+    tmp_path, monkeypatch, fake_nic
+):
+    """Kural yok, cihaz zaten "on": ne soru sorulur ne komut kosar."""
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, tmp_path / "hic-yazilmadi.rules", runner, write)
+    monkeypatch.setattr(
+        ethernet_pm, "ask_yes", lambda prompt: pytest.fail("soru sorulmamaliydi")
+    )
+
+    assert ethernet_pm.disable() == 0
+    assert events == []
+
+
+def test_ethernet_pm_off_takes_no_for_an_answer(tmp_path, monkeypatch, fake_nic):
+    """Bedeli olculu (1,52 W), o yuzden sorar -- ve hayir cevabi hicbir sey degistirmez."""
+    rules = tmp_path / "81-ethernet-pm.rules"
+    rules.write_text(ethernet_pm.UDEV_CONTENT)
+    (fake_nic / "power" / "control").write_text("auto\n")
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, rules, runner, write, answer=False)
+
+    assert ethernet_pm.disable() == 0
+    assert events == []
+    assert rules.exists()
+    assert (fake_nic / "power" / "control").read_text().strip() == "auto"
+
+
 def _block_device(block, name: str, limit: str, hardware: bool = True):
     (block / name / "queue").mkdir(parents=True)
     (block / name / "queue" / "discard_max_bytes").write_text(f"{limit}\n")

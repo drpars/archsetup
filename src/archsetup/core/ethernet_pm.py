@@ -134,6 +134,81 @@ def configure() -> int:
     return rc
 
 
+def disable() -> int:
+    """Hand the port back: drop the rule, and put power/control back to on.
+
+    Deleting the file is the smaller half, and on its own it is the kind of
+    change that reports itself as done without being done. udev rules run on
+    events, so a removed rule says nothing to a controller already parked at
+    ``auto``: the machine would go on autosuspending until the next boot while
+    the task claimed otherwise. Writing the attribute is therefore not a
+    belt-and-braces extra but the half that takes effect, and it is the same
+    one write that recovers a port found dead.
+
+    The order matters and is the one that survives an interruption. The rule
+    goes first, because writing ``on`` while the rule is still loaded leaves a
+    window where any matching event puts ``auto`` straight back -- and if the
+    run dies in that window, it dies having changed nothing rather than having
+    left a rule that disagrees with the device.
+
+    The sibling ``.rules.bak`` from write_with_backup stays. udev reads only
+    names ending in ``.rules``, so it is inert where it sits, and throwing
+    away the backup that the enabling task deliberately made is not this
+    task's call to make.
+
+    What this gives up is measured, not guessed: 1.52 W at idle, about
+    35 minutes of battery. That is why it asks first, and why the message at
+    the end names the task that puts it back.
+    """
+    devices = matching_devices()
+    if not devices:
+        print(t("ethernet_pm.no_device"))
+        return 1
+
+    rule_present = UDEV_RULES.exists()
+    suspending = [
+        device for device in devices if _attr(device, "power/control") != "on"
+    ]
+    if not rule_present and not suspending:
+        print(t("ethernet_pm.already_off"))
+        return 0
+
+    print(t("ethernet_pm.disable_plan", path=UDEV_RULES))
+    if not ask_yes(t("ethernet_pm.disable_q")):
+        print(t("msg.cancelled"))
+        return 0
+
+    rc = 0
+    if rule_present:
+        rc |= run(["sudo", "rm", "-f", str(UDEV_RULES)])
+        rc |= run(["sudo", "udevadm", "control", "--reload-rules"])
+
+    for device in devices:
+        rc |= sysedit.sudo_write(device / "power" / "control", "on\n")
+
+    # Read back for the same reason configure() does: what was written and
+    # what the device carries are two different claims.
+    restored = True
+    for device in devices:
+        control = _attr(device, "power/control")
+        print(
+            t(
+                "ethernet_pm.state",
+                device=device.name,
+                control=control or "?",
+                status=_attr(device, "power/runtime_status") or "?",
+            )
+        )
+        restored = restored and control == "on"
+
+    if not restored:
+        print(t("ethernet_pm.not_restored", path=UDEV_RULES))
+        return rc | 1
+
+    print(t("ethernet_pm.disabled"))
+    return rc
+
+
 def _chassis_ok() -> bool:
     """The whole payoff is battery, so a desktop is asked rather than told.
 

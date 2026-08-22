@@ -243,6 +243,12 @@ TASKS: tuple[Task, ...] = (
         ethernet_pm.configure,
         group="network",
     ),
+    Task(
+        "ethernet-runtime-pm-off",
+        "task.ethernet_pm_off",
+        ethernet_pm.disable,
+        group="network",
+    ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
     Task("vfioctl", "task.vfioctl", virt.install_vfioctl, group="virt"),
     Task(
