@@ -1,11 +1,11 @@
 """Command line entry point.
 
-    archsetup                   interactive TUI
-    archsetup --overview        what the tool is and what each task does
-    archsetup --list            list headless tasks
-    archsetup <task-id>         run a single task without the TUI
-    archsetup --lang en         override the interface language
-    archsetup --check-packages  audit data/ against the sync databases
+    ./archsetup                   interactive TUI
+    ./archsetup --overview        what the tool is and what each task does
+    ./archsetup --list            list headless tasks
+    ./archsetup <task-id>         run a single task without the TUI
+    ./archsetup --lang en         override the interface language
+    ./archsetup --check-packages  audit data/ against the sync databases
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     # -h is parsed before the language config is read, so this text stays
     # English; --overview is the localized one.
     parser = argparse.ArgumentParser(
-        prog="archsetup",
+        prog="./archsetup",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
             "Interactive Arch Linux install & post-install tool.\n"
@@ -64,11 +64,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         ),
         epilog=(
             "examples:\n"
-            "  archsetup                 open the task menu\n"
-            "  archsetup --overview      what each task does, in your language\n"
-            "  archsetup --list          flat 'id title' lines, for scripts\n"
-            "  archsetup --aur-list      every AUR package, with votes and age\n"
-            "  archsetup ssh-status      run one task without the menu\n"
+            "  ./archsetup               open the task menu\n"
+            "  ./archsetup --overview    what each task does, in your language\n"
+            "  ./archsetup --list        flat 'id title' lines, for scripts\n"
+            "  ./archsetup --aur-list    every AUR package, with votes and age\n"
+            "  ./archsetup ssh-status    run one task without the menu\n"
             "\n"
             "Tasks change the machine. The tool's own settings -- language and\n"
             "theme -- live in the Settings menu and persist in\n"

@@ -76,3 +76,59 @@ def test_render_uses_the_selected_language():
     finally:
         i18n.load("tr")
     assert "Görevler —" in overview.render()
+
+
+def _promises_a_bare_command(text: str) -> bool:
+    """Metin, kurulu olmayan `archsetup` komutunu vaat ediyor mu.
+
+    Araç sisteme kurulmuyor (karar 2026-08-22) — PATH'te `archsetup` diye
+    bir komut yok, çalıştırma biçimi checkout'tan `./archsetup`. Aracı
+    **adıyla** anan nesir doğru; kopyalanıp çalıştırılacak biçimde yazılan
+    ad yanlış. İkisini ayıran şey ardından gelen argüman: bayrak,
+    yer tutucu, ya da görev id'si. Argümansız tek istisna "…: archsetup"
+    kalıbı, çünkü orada iki nokta zaten komut vaat ediyor.
+    """
+    import re
+
+    return bool(re.search(
+        r'(?<![./\w-])archsetup(?=\s+(?:--|<|[a-z]+-[a-z])|(?<=: archsetup)$)',
+        text,
+    ))
+
+
+def test_no_user_facing_text_promises_an_uninstalled_command():
+    """Bekçi: yardım metni ve locale dizgeleri `./archsetup` yazar.
+
+    Yakaladığı hata ölçüldü (2026-08-22): `--help` epilog'u ve 16 locale
+    dizgesi `archsetup --list` gibi satırlar veriyordu, `command -v
+    archsetup` ise rc=1. Kopyalayan kullanıcı "command not found" alır ve
+    hiçbir test kırmızıya dönmezdi.
+
+    Aşağıdaki dört pozitif örnek korumanın sökülmüş hâlidir ve dördü de
+    **ayrı şekil** — aynı şekli tekrarlayan bir küme, bir şekil bozulunca
+    yeşil kalırdı (bu deponun ölçülmüş tuzağı).
+    """
+    assert _promises_a_bare_command("Flat list for scripts: archsetup --list")
+    assert _promises_a_bare_command("run it with `archsetup <task-id>`")
+    assert _promises_a_bare_command("wrong task: archsetup nvidia-sleep")
+    assert _promises_a_bare_command("open the menu: archsetup")
+
+    # Nesirde geçen ad, bir yol parçası ve düzeltilmiş biçim susmalı.
+    assert not _promises_a_bare_command("archsetup installs Arch and maintains it")
+    assert not _promises_a_bare_command("looks hand-written (no archsetup marker).")
+    assert not _promises_a_bare_command("that file is not archsetup's")
+    assert not _promises_a_bare_command("~/.config/archsetup/config.toml")
+    assert not _promises_a_bare_command("Flat list for scripts: ./archsetup --list")
+
+    root = paths.LOCALE_DIR.parent
+    scanned = sorted(paths.LOCALE_DIR.glob("*.toml")) + [
+        root / "src" / "archsetup" / "__main__.py",
+        root / "README.md",
+    ]
+    offenders = [
+        f"{path.name}:{no}"
+        for path in scanned
+        for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if _promises_a_bare_command(line)
+    ]
+    assert not offenders, f"kurulu olmayan komut vaat ediliyor: {offenders}"

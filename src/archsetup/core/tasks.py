@@ -1,7 +1,7 @@
 """Named maintenance tasks.
 
 Each task is a plain function returning an exit code, so it can run both
-headlessly (`archsetup <task-id>`) and from the TUI (terminal suspended).
+headlessly (`./archsetup <task-id>`) and from the TUI (terminal suspended).
 """
 
 from __future__ import annotations
