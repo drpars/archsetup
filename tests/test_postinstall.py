@@ -28,8 +28,8 @@ from archsetup.core import (
     trim,
     virt,
     waydroid,
-    writeback,
-)
+    wifi_power_save,
+    writeback,)
 
 
 @pytest.fixture
@@ -1914,3 +1914,140 @@ def test_writeback_lowers_the_global_ceiling_before_the_rule_fires(
     order = [c for c in runner.calls if c[:2] == ["sudo", "sysctl"] or c[:3] == ["sudo", "udevadm", "trigger"]]
     assert order[0][:2] == ["sudo", "sysctl"]
     assert order[-1][:3] == ["sudo", "udevadm", "trigger"]
+
+
+# ---------------------------------------------------------- wifi power save
+@pytest.fixture
+def fake_wifi(tmp_path, monkeypatch):
+    """iwlwifi arayuzu + bir yabanci: kural surucuyle esliyor, adla degil."""
+    net = tmp_path / "net"
+    for name, drv in (("wlan0", "iwlwifi"), ("enp4s0", "r8169")):
+        driver = tmp_path / "drivers" / drv
+        driver.mkdir(parents=True, exist_ok=True)
+        dev = net / name / "device"
+        dev.mkdir(parents=True)
+        (dev / "driver").symlink_to(driver)
+    monkeypatch.setattr(wifi_power_save, "NET_DEVICES", net)
+    return net
+
+
+def _ps_state(monkeypatch, initial, follow_set=True):
+    """current() icin sahte iw; set komutu durumu tasirsa follow_set=True."""
+    state = {"v": initial}
+
+    def current(iface):
+        return state["v"]
+
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(tuple(cmd))
+        if follow_set and cmd[:2] == ["sudo", "iw"] and "set" in cmd:
+            state["v"] = cmd[-1]
+        return 0
+
+    monkeypatch.setattr(wifi_power_save, "current", current)
+    monkeypatch.setattr(wifi_power_save, "run", run)
+    run.calls = calls
+    return state, calls
+
+
+def test_wifi_power_save_finds_the_card_by_driver_not_by_name(fake_wifi):
+    assert wifi_power_save.interfaces() == ["wlan0"]
+
+
+def test_wifi_power_save_off_sets_the_state_and_leaves_a_rule(
+    tmp_path, monkeypatch, fake_wifi, fake_write
+):
+    """Iki yari da gerekli: ayar simdi, kural sonraki acilis icin."""
+    rules = tmp_path / "83-wifi-power-save.rules"
+    state, calls = _ps_state(monkeypatch, "on")
+    monkeypatch.setattr(wifi_power_save, "UDEV_RULES", rules)
+    monkeypatch.setattr(wifi_power_save, "ask_yes", lambda prompt: True)
+    monkeypatch.setattr(wifi_power_save.pacman, "is_installed", lambda pkg: True)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    monkeypatch.setattr(sysedit, "run", lambda cmd, **kw: 0)
+
+    assert wifi_power_save.turn_off() == 0
+    assert state["v"] == "off"
+    assert ("sudo", "iw", "dev", "wlan0", "set", "power_save", "off") in calls
+    text = rules.read_text()
+    assert 'RUN+=' in text and "set power_save off" in text
+    assert 'DRIVERS=="iwlwifi"' in text
+
+
+def test_wifi_power_save_off_fails_when_the_state_did_not_change(
+    tmp_path, monkeypatch, fake_wifi, fake_write, capsys
+):
+    """Kurali yazmak yururlukte olmak degil; olcut geri okunan durumdur."""
+    state, _calls = _ps_state(monkeypatch, "on", follow_set=False)
+    monkeypatch.setattr(
+        wifi_power_save, "UDEV_RULES", tmp_path / "83-wifi-power-save.rules"
+    )
+    monkeypatch.setattr(wifi_power_save, "ask_yes", lambda prompt: True)
+    monkeypatch.setattr(wifi_power_save.pacman, "is_installed", lambda pkg: True)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    monkeypatch.setattr(sysedit, "run", lambda cmd, **kw: 0)
+
+    assert wifi_power_save.turn_off() != 0
+    assert "power save" in capsys.readouterr().out
+
+
+def test_wifi_power_save_off_asks_and_takes_no_for_an_answer(
+    tmp_path, monkeypatch, fake_wifi
+):
+    """Bedeli olculu (0,50 W), o yuzden sorar; hayir hicbir sey degistirmez."""
+    rules = tmp_path / "83-wifi-power-save.rules"
+    state, calls = _ps_state(monkeypatch, "on")
+    monkeypatch.setattr(wifi_power_save, "UDEV_RULES", rules)
+    monkeypatch.setattr(wifi_power_save, "ask_yes", lambda prompt: False)
+
+    assert wifi_power_save.turn_off() == 0
+    assert state["v"] == "on"
+    assert calls == []
+    assert not rules.exists()
+
+
+def test_wifi_power_save_on_removes_the_rule_and_restores_the_default(
+    tmp_path, monkeypatch, fake_wifi
+):
+    rules = tmp_path / "83-wifi-power-save.rules"
+    rules.write_text(wifi_power_save.UDEV_CONTENT)
+    state, calls = _ps_state(monkeypatch, "off")
+    monkeypatch.setattr(wifi_power_save, "UDEV_RULES", rules)
+
+    assert wifi_power_save.turn_on() == 0
+    assert state["v"] == "on"
+    assert ("sudo", "rm", "-f", str(rules)) in calls
+    assert ("sudo", "iw", "dev", "wlan0", "set", "power_save", "on") in calls
+
+
+def test_wifi_power_save_on_is_a_no_op_at_the_kernel_default(
+    tmp_path, monkeypatch, fake_wifi
+):
+    """Kural yok, zaten "on": hicbir komut kosmaz."""
+    state, calls = _ps_state(monkeypatch, "on")
+    monkeypatch.setattr(
+        wifi_power_save, "UDEV_RULES", tmp_path / "hic-yazilmadi.rules"
+    )
+
+    assert wifi_power_save.turn_on() == 0
+    assert calls == []
+
+
+def test_wifi_power_save_without_the_card_writes_nothing(tmp_path, monkeypatch):
+    rules = tmp_path / "83-wifi-power-save.rules"
+    monkeypatch.setattr(wifi_power_save, "NET_DEVICES", tmp_path / "empty")
+    monkeypatch.setattr(wifi_power_save, "UDEV_RULES", rules)
+
+    assert wifi_power_save.turn_off() == 1
+    assert wifi_power_save.turn_on() == 1
+    assert not rules.exists()
+
+
+def test_wifi_power_save_rule_uses_an_absolute_iw_path():
+    """udev PATH tasimaz: goreli ad sessizce hicbir sey yapmaz."""
+    assert wifi_power_save.IW.startswith("/")
+    assert f'RUN+="{wifi_power_save.IW}' in wifi_power_save.UDEV_CONTENT
+    assert wifi_power_save.UDEV_RULES.suffix == ".rules"
+    assert wifi_power_save.UDEV_RULES.parent == Path("/etc/udev/rules.d")

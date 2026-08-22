@@ -37,6 +37,7 @@ from . import (
     uki,
     virt,
     waydroid,
+    wifi_power_save,
     writeback,
 )
 from .pacman import run
@@ -247,6 +248,18 @@ TASKS: tuple[Task, ...] = (
         "ethernet-runtime-pm-off",
         "task.ethernet_pm_off",
         ethernet_pm.disable,
+        group="network",
+    ),
+    Task(
+        "wifi-power-save-off",
+        "task.wifi_power_save_off",
+        wifi_power_save.turn_off,
+        group="network",
+    ),
+    Task(
+        "wifi-power-save-on",
+        "task.wifi_power_save_on",
+        wifi_power_save.turn_on,
         group="network",
     ),
     Task("virt-config", "task.virt_config", virt.configure, group="virt"),
