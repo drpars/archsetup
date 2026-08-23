@@ -244,14 +244,14 @@ TASKS: tuple[Task, ...] = (
         group="network",
     ),
     Task(
-        "ethernet-runtime-pm",
+        "ethernet-power-save",
         "task.ethernet_pm",
         ethernet_pm.configure,
         group="network",
         state=ethernet_pm.status,
     ),
     Task(
-        "ethernet-runtime-pm-off",
+        "ethernet-power-save-off",
         "task.ethernet_pm_off",
         ethernet_pm.disable,
         group="network",

@@ -679,40 +679,63 @@ def test_nvidia_laptop_requires_driver(monkeypatch):
 
 @pytest.fixture
 def fake_nic(tmp_path, monkeypatch):
-    """A sysfs tree with the measured NIC plus a device that must not match."""
+    """A sysfs tree with the measured NIC plus a device that must not match.
+
+    The shape matters as much as the contents: /sys/bus/pci/devices/<addr> is a
+    symlink into /sys/devices, and the lever's second half reaches the NIC's
+    PARENT through that link. A flat directory of devices would make
+    bridge_for() answer None for every test and quietly retire half the task.
+    """
+    tree = tmp_path / "devices" / "pci0000:00"
     devices = tmp_path / "pci-devices"
-    nic = devices / "0000:03:00.0"
+    devices.mkdir(parents=True)
+
+    bridge = tree / "0000:00:02.3"
+    (bridge / "power").mkdir(parents=True)
+    (bridge / "power" / "control").write_text("auto\n")
+    (bridge / "power" / "runtime_status").write_text("suspended\n")
+
+    nic = bridge / "0000:03:00.0"
     (nic / "power").mkdir(parents=True)
     (nic / "vendor").write_text("0x10ec\n")
     (nic / "device").write_text("0x8125\n")
     (nic / "power" / "control").write_text("on\n")
     (nic / "power" / "runtime_status").write_text("active\n")
+    (devices / "0000:03:00.0").symlink_to(nic)
 
-    wifi = devices / "0000:02:00.0"
+    wifi_bridge = tree / "0000:00:02.1"
+    wifi = wifi_bridge / "0000:02:00.0"
     (wifi / "power").mkdir(parents=True)
     (wifi / "vendor").write_text("0x8086\n")
     (wifi / "device").write_text("0x2725\n")
     (wifi / "power" / "control").write_text("auto\n")
+    (devices / "0000:02:00.0").symlink_to(wifi)
 
     monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", devices)
     # Sasi gercek makineden okunmamali: CI konteynerinde hostnamectl yok ve
     # gorev orada "bilinmiyor" dalina dusup soru sorardi.
     monkeypatch.setattr(ethernet_pm.hardware, "is_laptop", lambda: True)
-    return nic
+    return devices / "0000:03:00.0"
 
 
-def _udev_runner(nic, applies: bool):
-    """Stand-in for udev: the trigger is what moves power/control, or does not.
+def _udev_runner(nic, applies: bool, bridge_applies: bool = True):
+    """Stand-in for udev: the trigger is what moves the attributes, or does not.
 
-    The two answers are the whole point of the task -- it triggers an event
-    and then reads the attribute back rather than trusting the file it wrote.
+    Both halves are modelled, because the rule has two and they fail
+    separately: ATTR{} parks the NIC at auto, RUN+= pins the parent at on. A
+    stand-in that only did the first would let a task pass while the half that
+    keeps the port alive never ran -- which is the exact failure this lever
+    exists to prevent.
     """
     calls = []
+    bridge = ethernet_pm.bridge_for(nic)
 
     def run(cmd, **kwargs):
         calls.append(cmd)
         if applies and cmd[:3] == ["sudo", "udevadm", "trigger"]:
             (nic / "power" / "control").write_text("auto\n")
+            if bridge_applies and bridge is not None:
+                (bridge / "power" / "control").write_text("on\n")
         return 0
 
     run.calls = calls
@@ -731,9 +754,13 @@ def test_ethernet_pm_writes_the_rule_and_triggers_it(
 
     assert ethernet_pm.configure() == 0
     assert 'ATTR{power/control}="auto"' in rules.read_text()
+    assert "RUN+=" in rules.read_text()
     assert ["sudo", "udevadm", "control", "--reload-rules"] in runner.calls
     trigger = [cmd for cmd in runner.calls if cmd[:3] == ["sudo", "udevadm", "trigger"]]
     assert trigger == [["sudo", "udevadm", "trigger", "--action=add", str(fake_nic)]]
+    bridge = ethernet_pm.bridge_for(fake_nic)
+    assert bridge is not None
+    assert (bridge / "power" / "control").read_text().strip() == "on"
 
 
 def test_ethernet_pm_fails_when_the_rule_did_not_take(
@@ -776,6 +803,11 @@ def test_ethernet_pm_rule_matches_only_what_was_measured():
     assert f'ATTR{{vendor}}=="{ethernet_pm.VENDOR}"' in ethernet_pm.UDEV_CONTENT
     assert f'ATTR{{device}}=="{ethernet_pm.DEVICE}"' in ethernet_pm.UDEV_CONTENT
     assert 'TEST=="power/control"' in ethernet_pm.UDEV_CONTENT
+    # The parent is reached through $devpath, never through a written-down
+    # address: this NIC's own address moved once already.
+    assert "RUN+=" in ethernet_pm.UDEV_CONTENT
+    assert "/sys$devpath/../power/control" in ethernet_pm.UDEV_CONTENT
+    assert "0000:00:02.3" not in ethernet_pm.UDEV_CONTENT
     # udev bu dizinde yalnizca .rules ile bitenleri okur; baska bir uzanti
     # kurali sessizce yok sayar ve disaridan "kural ise yaramadi" gibi gorunur.
     assert ethernet_pm.UDEV_RULES.suffix == ".rules"
@@ -877,10 +909,10 @@ def test_ethernet_pm_off_does_nothing_when_it_is_already_off(
 
 
 def test_ethernet_pm_off_takes_no_for_an_answer(tmp_path, monkeypatch, fake_nic):
-    """Bedeli olculu (1,52 W), o yuzden sorar -- ve hayir cevabi hicbir sey degistirmez."""
+    """Bedeli olculu (0,88 W), o yuzden sorar -- ve hayir cevabi hicbir sey degistirmez."""
     rules = tmp_path / "81-ethernet-pm.rules"
     rules.write_text(ethernet_pm.UDEV_CONTENT)
-    (fake_nic / "power" / "control").write_text("auto\n")
+    _set_state(fake_nic, "auto", "on")
     events, runner, write = _off_recorder(fake_nic, applies=True)
     _arm_off(monkeypatch, rules, runner, write, answer=False)
 
@@ -888,6 +920,52 @@ def test_ethernet_pm_off_takes_no_for_an_answer(tmp_path, monkeypatch, fake_nic)
     assert events == []
     assert rules.exists()
     assert (fake_nic / "power" / "control").read_text().strip() == "auto"
+    assert (
+        ethernet_pm.bridge_for(fake_nic) / "power" / "control"
+    ).read_text().strip() == "on"
+
+
+def test_ethernet_pm_off_unpins_the_bridge_too(tmp_path, monkeypatch, fake_nic):
+    """Arch varsayilanina donmek iki yazi ister, biri degil.
+
+    NIC'i uyandirip kopruyu sabitlenmis birakmak, menude "kapali" yazarken
+    0,64 W'i kosturmaya devam etmek demek -- ve o hal disaridan Arch
+    varsayilanina birebir benziyor.
+    """
+    rules = tmp_path / "81-ethernet-pm.rules"
+    rules.write_text(ethernet_pm.UDEV_CONTENT)
+    _set_state(fake_nic, "auto", "on")
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, rules, runner, write)
+
+    assert ethernet_pm.disable() == 0
+    bridge = ethernet_pm.bridge_for(fake_nic)
+    assert (fake_nic / "power" / "control").read_text().strip() == "on"
+    assert (bridge / "power" / "control").read_text().strip() == "auto"
+    # Kural once gitmeli: yururlukteyken yazilan iki degeri de eslesen
+    # herhangi bir olay geri alir.
+    removed = events.index(("sudo", "rm", "-f", str(rules)))
+    written = [i for i, event in enumerate(events) if event[0] == "write"]
+    assert len(written) == 2 and removed < written[0]
+
+
+def test_ethernet_pm_off_does_not_call_a_pinned_bridge_already_off(
+    tmp_path, monkeypatch, fake_nic
+):
+    """NIC "on" ama kopru hala sabit: bu Arch varsayilani DEGIL.
+
+    Yalniz NIC'e bakan bir denetim burada "zaten kapali" der ve cikar, gorevi
+    olcum boyunca 0,64 W'i acik birakarak bitirir.
+    """
+    _set_state(fake_nic, "on", "on")
+    events, runner, write = _off_recorder(fake_nic, applies=True)
+    _arm_off(monkeypatch, tmp_path / "hic-yazilmadi.rules", runner, write)
+
+    assert ethernet_pm.disable() == 0
+    assert events, "kopru sabitken gorev hicbir sey yapmadan cikti"
+    assert (
+        ethernet_pm.bridge_for(fake_nic) / "power" / "control"
+    ).read_text().strip() == "auto"
 
 
 def _block_device(block, name: str, limit: str, hardware: bool = True):
@@ -2055,30 +2133,43 @@ def test_wifi_power_save_rule_uses_an_absolute_iw_path():
 
 # ------------------------------------------------- network menu state readers
 
+def _set_state(nic, control, bridge_control):
+    (nic / "power" / "control").write_text(f"{control}\n")
+    bridge = ethernet_pm.bridge_for(nic)
+    assert bridge is not None
+    (bridge / "power" / "control").write_text(f"{bridge_control}\n")
+
+
 @pytest.mark.parametrize(
-    "control,rule,verdict",
+    "control,bridge_control,rule,verdict",
     [
-        ("auto", True, "status_on"),
-        ("on", False, "status_off"),
-        # The two states the tasks themselves pass through, and the reason the
-        # line reports both bits: a rule left behind puts `auto` back on the
-        # next add|bind, and `auto` with no rule does not survive one.
-        ("on", True, "status_split"),
-        ("auto", False, "status_split"),
+        ("auto", "on", True, "status_on"),
+        ("on", "auto", False, "status_off"),
+        # The states the tasks themselves pass through, and the reason the line
+        # reports every bit: a rule left behind puts the pair back on the next
+        # add|bind, and the pair with no rule does not survive one.
+        ("on", "auto", True, "status_split"),
+        ("auto", "on", False, "status_split"),
+        # The half-applied states, which are the ones this lever can actually
+        # land in: a NIC parked at auto whose bridge went back to sleep is the
+        # measured dead port, and it must not read as "on".
+        ("auto", "auto", True, "status_split"),
+        ("on", "on", False, "status_split"),
     ],
 )
-def test_ethernet_status_keeps_the_rule_and_the_attribute_apart(
-    fake_nic, tmp_path, monkeypatch, control, rule, verdict
+def test_ethernet_status_keeps_the_rule_and_the_attributes_apart(
+    fake_nic, tmp_path, monkeypatch, control, bridge_control, rule, verdict
 ):
-    """Kural ile power/control iki ayri olgu; tek kelimeye indirilemez.
+    """Kural, NIC ve kopru uc ayri olgu; tek kelimeye indirilemez.
 
-    Ikisinin ayristigi hallerde "acik" ya da "kapali" demek, bir sonraki
-    aciliata ne olacagini soyleyen yariyi gizler -- ve satiri okuyan kullanici
-    tam olarak onu sormaktadir.
+    Ayristiklari hallerde "acik" ya da "kapali" demek, bir sonraki aciliata ne
+    olacagini soyleyen yariyi gizler -- ve satiri okuyan kullanici tam olarak
+    onu sormaktadir. Koprunun kendi biti bunun ucuncu yarisi: NIC auto'da ama
+    kopru uyuyorsa port oludur, ve o hal "acik" diye okunamaz.
     """
     from archsetup.core import i18n
 
-    (fake_nic / "power" / "control").write_text(f"{control}\n")
+    _set_state(fake_nic, control, bridge_control)
     rules = tmp_path / "81-ethernet-pm.rules"
     if rule:
         rules.write_text("# rule\n")
@@ -2086,29 +2177,30 @@ def test_ethernet_status_keeps_the_rule_and_the_attribute_apart(
 
     line = ethernet_pm.status()
     assert i18n.t(f"ethernet_pm.{verdict}") in line
-    assert control in line
+    assert f"{control}/{bridge_control}" in line
 
 
 def test_ethernet_status_says_something_different_in_every_state(
     fake_nic, tmp_path, monkeypatch
 ):
-    """Dort halin dordu ayri okunmali, ve detay sus degil tasiyici olmali.
+    """Sekiz halin sekizi ayri okunmali, ve detay sus degil tasiyici olmali.
 
-    Ikinci yari ilkini kanitliyor: tek basina verdict kelimesi dort hali
-    UCE dusuruyor, cunku iki ayrisik hal de ayni kelimeyi aliyor. Yani
+    Ikinci yari ilkini kanitliyor: tek basina verdict kelimesi sekiz hali
+    UCE dusuruyor, cunku ayrisik hallerin hepsi ayni kelimeyi aliyor. Yani
     "Su an: acik" ile yetinen bir satir bilgi kaybeder, ve kaybettigi sey
     tam olarak bir sonraki aciliata ne olacagi.
     """
     seen = set()
     for control in ("auto", "on"):
-        for rule in (True, False):
-            (fake_nic / "power" / "control").write_text(f"{control}\n")
-            rules = tmp_path / f"rules-{control}-{rule}"
-            if rule:
-                rules.write_text("# rule\n")
-            monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
-            seen.add(ethernet_pm.status())
-    assert len(seen) == 4, seen
+        for bridge_control in ("auto", "on"):
+            for rule in (True, False):
+                _set_state(fake_nic, control, bridge_control)
+                rules = tmp_path / f"rules-{control}-{bridge_control}-{rule}"
+                if rule:
+                    rules.write_text("# rule\n")
+                monkeypatch.setattr(ethernet_pm, "UDEV_RULES", rules)
+                seen.add(ethernet_pm.status())
+    assert len(seen) == 8, seen
 
     verdicts = {line.split("—")[0].strip() for line in seen}
     assert len(verdicts) == 3, verdicts

@@ -463,15 +463,15 @@ async def test_network_menu_draws_state_lines_without_touching_the_machine(
 
         ids = list(app.screen._items)
         for task_id in (
-            "ethernet-runtime-pm",
-            "ethernet-runtime-pm-off",
+            "ethernet-power-save",
+            "ethernet-power-save-off",
             "wifi-power-save-off",
             "wifi-power-save-on",
         ):
             assert task_id in ids
 
         options = app.screen.query_one(OptionList)
-        eth = str(options.get_option("ethernet-runtime-pm").prompt)
+        eth = str(options.get_option("ethernet-power-save").prompt)
         wifi = str(options.get_option("wifi-power-save-off").prompt)
         assert i18n.t("ethernet_pm.status_no_device") in eth
         assert i18n.t("wifi_power_save.status_no_device") in wifi
