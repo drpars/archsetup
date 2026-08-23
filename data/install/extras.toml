@@ -19,6 +19,14 @@ id = "extras"
   [[category.packages]]
   name = "edk2-shell"
 
+  # Kapalı: bir bellek testi yılda bir kez, somut bir şüphe üzerine koşulur.
+  # Girdi yine de burada, çünkü asıl iş paketi kurmak değil ESP kopyası +
+  # imza + boot girdisi; işaretlenirse kurucu üçünü de kendisi yapar.
+  [[category.packages]]
+  name = "memtest86+-efi"
+  default = false
+  note = { tr = "Bellek testi (boot menüsüne girdi ekler)", en = "Memory test (adds a boot menu entry)" }
+
   [[category.packages]]
   name = "efibootmgr"
 

@@ -15,7 +15,7 @@ from ..core import i18n
 from ..core.pacman import run
 from . import disk
 from ..core.prompt import ask_yes
-from .chroot import chroot_run, gen_uki, target_ready
+from .chroot import chroot_run, gen_uki, place_esp_helpers, target_ready
 from .state import state
 
 t = i18n.t
@@ -123,10 +123,17 @@ def install_systemd_boot() -> int:
     if rc != 0:
         return rc
 
-    # This flow writes no /efi/loader/entries, so the only thing
-    # systemd-boot can boot is a UKI. Skipping the step leaves an
-    # installed system with an empty boot menu — hence the prompt here
-    # instead of a separate menu item the user has to remember.
+    # Helpers go on now that loader.conf exists: the memtest entry is only
+    # written where there is a systemd-boot menu to put it in, and this is
+    # the step that creates one. Extra packages are installed before the
+    # target menu opens, so anything selected there is already in place.
+    place_esp_helpers()
+
+    # Apart from that entry this flow writes no /efi/loader/entries, so the
+    # only thing systemd-boot can boot is a UKI. Skipping the step leaves an
+    # installed system with nothing but a memory tester in its boot menu —
+    # hence the prompt here instead of a separate menu item the user has to
+    # remember.
     print(t("inst.sdboot_done"))
     if ask_yes(t("inst.uki_now_q")):
         rc |= gen_uki()

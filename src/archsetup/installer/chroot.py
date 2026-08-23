@@ -709,6 +709,104 @@ SDBOOT_SRC = "/usr/lib/systemd/boot/efi/systemd-bootx64.efi"
 # What the firmware actually loads. bootctl put unsigned copies here.
 ESP_BINARIES = ("EFI/systemd/systemd-bootx64.efi", "EFI/BOOT/BOOTX64.EFI")
 
+# Binaries only the firmware ever reads, so they have to sit on the ESP:
+# (package, source under the target root, destination under the ESP). For
+# memtest the copy is not a convenience -- /boot is a directory inside the
+# root filesystem on this layout, not a second ESP, so the firmware cannot
+# see /boot/memtest86+/memtest.efi at all.
+ESP_HELPERS = (
+    ("edk2-shell", "usr/share/edk2-shell/x64/Shell.efi", "shellx64.efi"),
+    ("memtest86+-efi", "boot/memtest86+/memtest.efi", "EFI/memtest86+/memtest.efi"),
+)
+
+# No version in the title: it would be right on the day it was written and
+# wrong after the first upgrade, and nothing here would notice. sort-key
+# keeps the entry at the bottom of a menu that times out in three seconds --
+# it is there for the day someone goes looking for it, not for the day
+# someone stops paying attention.
+MEMTEST_ENTRY = "memtest86+.conf"
+MEMTEST_ENTRY_TEXT = (
+    "title    Memtest86+\n"
+    "efi      /EFI/memtest86+/memtest.efi\n"
+    "sort-key zz-memtest\n"
+)
+
+# Nothing on an installed machine refreshes an ESP copy. sbctl's own pacman
+# hook re-*signs* what its database already lists, which keeps a stale copy
+# signed rather than current, and this installer runs once. So the copying is
+# handed to the target as a hook of its own, next to 95-systemd-boot.hook,
+# which is where the numbering came from.
+#
+# It signs the fresh copy itself rather than leaving that to zz-sbctl.hook.
+# That hook would run afterwards -- 96 sorts before zz -- but whether it runs
+# at all depends on its Path triggers matching the source of an upgrade, and
+# `man alpm-hooks` says only "shell-style glob patterns", which does not
+# answer whether `boot/*` reaches boot/memtest86+/memtest.efi. Signing here
+# does not depend on the answer.
+#
+# The signing test is sbctl's key directory rather than `command -v sbctl`:
+# the package can be installed on a machine that never enrolled anything, and
+# there `sbctl sign` fails inside somebody's pacman transaction for a copy
+# that is correct unsigned. /var/lib/sbctl/keys is what an enrolled machine
+# has (measured on this one, sbctl 0.18).
+ESP_HELPERS_HOOK_NAME = "96-esp-helpers.hook"
+ESP_HELPERS_HOOK = """[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = edk2-shell
+Target = memtest86+-efi
+
+[Action]
+Description = Refreshing the helper binaries on the ESP...
+When = PostTransaction
+Exec = /bin/sh -c 'mountpoint -q /efi || exit 0; sign() { [ -d /var/lib/sbctl/keys ] && sbctl sign -s $1; }; s=/usr/share/edk2-shell/x64/Shell.efi; [ -f $s ] && cp -f $s /efi/shellx64.efi && sign /efi/shellx64.efi; m=/boot/memtest86+/memtest.efi; [ -f $m ] && mkdir -p /efi/EFI/memtest86+ && cp -f $m /efi/EFI/memtest86+/memtest.efi && sign /efi/EFI/memtest86+/memtest.efi; exit 0'
+"""
+
+
+def place_esp_helpers() -> int:
+    """Copy the firmware-only helpers onto the ESP, overwriting what is there.
+
+    Overwriting, because `if not shell.is_file()` is what let a copy outlive
+    its source: it made the first install the only run that ever wrote the
+    file, and every later upgrade of the package moved the source out from
+    under an ESP copy nothing would touch again. What that guard could have
+    protected -- a shellx64.efi some other install left on a reused ESP -- is
+    already gone by the time this runs: `bootctl install` overwrites
+    EFI/BOOT/BOOTX64.EFI, the far more consequential of the two.
+    """
+    placed: list[str] = []
+    for package, source, relative in ESP_HELPERS:
+        if not _target_has(package):
+            continue
+        origin = MNT / source
+        if not origin.is_file():
+            print(t("inst.esp_helper_missing", pkg=package, path=f"/{source}"))
+            continue
+        destination = ESP / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(origin.read_bytes())
+        placed.append(package)
+        print(t("inst.esp_helper_placed", path=f"/efi/{relative}"))
+
+    if not placed:
+        return 0
+
+    # An entry is only worth writing where systemd-boot reads one, and
+    # loader.conf is the file this installer writes when it installs it.
+    # GRUB needs nothing from us: memtest86+-efi ships
+    # /etc/grub.d/60_memtest86+-efi and grub-mkconfig finds it by itself.
+    if "memtest86+-efi" in placed and (ESP / "loader/loader.conf").is_file():
+        entries = ESP / "loader/entries"
+        entries.mkdir(parents=True, exist_ok=True)
+        (entries / MEMTEST_ENTRY).write_text(MEMTEST_ENTRY_TEXT, encoding="utf-8")
+        print(t("inst.memtest_entry", path=f"/efi/loader/entries/{MEMTEST_ENTRY}"))
+
+    hooks = MNT / "etc/pacman.d/hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / ESP_HELPERS_HOOK_NAME).write_text(ESP_HELPERS_HOOK, encoding="utf-8")
+    return 0
+
 
 def setup_mode() -> bool | None:
     """Firmware Secure Boot setup mode; None when it cannot be read.
@@ -781,13 +879,16 @@ def setup_secure_boot() -> int:
     if not signed_uki:
         print(t("inst.sb_no_uki"))
 
-    if _target_has("edk2-shell"):
-        shell = ESP / "shellx64.efi"
-        if not shell.is_file():
-            shell.write_bytes(
-                (MNT / "usr/share/edk2-shell/x64/Shell.efi").read_bytes()
-            )
-        rc |= chroot_run(["sbctl", "sign", "-s", "/efi/shellx64.efi"])
+    # Called here as well as from the systemd-boot step, because the two are
+    # separate menu items in either order and a machine can reach this one
+    # without the other (an ESP that already has a loader, keys enrolled in a
+    # later session). The copy is idempotent, so running it twice costs a
+    # rewrite. Signing is driven by what is on the ESP rather than by which
+    # package is installed: a helper placed by an earlier run is still ours.
+    place_esp_helpers()
+    for _package, _source, relative in ESP_HELPERS:
+        if (ESP / relative).is_file():
+            rc |= chroot_run(["sbctl", "sign", "-s", f"/efi/{relative}"])
 
     # No re-signing hook of our own. sbctl ships two already: a mkinitcpio
     # post hook that signs the image it was just handed ($3, the UKI), and

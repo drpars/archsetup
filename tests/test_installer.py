@@ -450,6 +450,9 @@ def test_username_validation(name, ok):
 def boot_env(tmp_path, monkeypatch, runlog):
     (tmp_path / "etc").mkdir()
     monkeypatch.setattr(bootloaders, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "ESP", tmp_path / "efi")
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: False)
     monkeypatch.setattr(bootloaders, "run", runlog)
     monkeypatch.setattr(bootloaders, "chroot_run", lambda a: 0)
     monkeypatch.setattr(bootloaders, "target_ready", lambda: True)
@@ -685,6 +688,100 @@ def test_setup_mode_reads_efivarfs_past_the_attribute_header(tmp_path, monkeypat
     assert chroot.setup_mode() is False
     monkeypatch.setattr(chroot, "SETUP_MODE_VAR", tmp_path / "absent")
     assert chroot.setup_mode() is None
+
+
+
+# --- ESP helper binaries ---------------------------------------------------
+
+
+@pytest.fixture
+def helper_env(tmp_path, monkeypatch):
+    """A target that has both helper packages and their source files."""
+    for relative in ("usr/share/edk2-shell/x64/Shell.efi", "boot/memtest86+/memtest.efi"):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"MZ-new")
+    monkeypatch.setattr(chroot, "MNT", tmp_path)
+    monkeypatch.setattr(chroot, "ESP", tmp_path / "efi")
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: True)
+    return tmp_path
+
+
+def test_esp_copy_is_rewritten_over_a_stale_one(helper_env):
+    """`if not shell.is_file()` made the first install the only writer.
+
+    sbctl's pacman hook re-signs what its database lists, so an ESP copy
+    left behind by an upgraded package stays signed while its source moves
+    on -- and every check reports it as fine.
+    """
+    stale = helper_env / "efi/shellx64.efi"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"MZ-old")
+
+    assert chroot.place_esp_helpers() == 0
+    assert stale.read_bytes() == b"MZ-new"
+
+
+def test_esp_helpers_get_a_hook_that_outlives_the_installer(helper_env):
+    """The installer runs once; the staleness starts at the next upgrade."""
+    assert chroot.place_esp_helpers() == 0
+    hook = helper_env / "etc/pacman.d/hooks" / chroot.ESP_HELPERS_HOOK_NAME
+    text = hook.read_text()
+    assert "Target = edk2-shell" in text
+    assert "Target = memtest86+-efi" in text
+    # Signs what it just copied instead of waiting for zz-sbctl.hook, whose
+    # Path triggers may or may not match the source of the upgrade.
+    assert "sbctl sign -s" in text
+    # An unmounted /efi is a directory on the root filesystem; writing the
+    # copy there fills / and the ESP mount hides it.
+    assert "mountpoint -q /efi" in text
+
+
+def test_memtest_lands_on_the_esp_with_an_entry_that_sorts_last(helper_env):
+    """/boot is inside the root filesystem here, so the firmware cannot see it."""
+    loader = helper_env / "efi/loader"
+    loader.mkdir(parents=True)
+    (loader / "loader.conf").write_text("timeout  3\n")
+
+    assert chroot.place_esp_helpers() == 0
+    assert (helper_env / "efi/EFI/memtest86+/memtest.efi").read_bytes() == b"MZ-new"
+    entry = (loader / "entries" / chroot.MEMTEST_ENTRY).read_text()
+    assert "efi      /EFI/memtest86+/memtest.efi" in entry
+    assert "sort-key zz-memtest" in entry
+    # A version in the title would be right for one upgrade only.
+    assert "7.20" not in entry
+
+
+def test_memtest_entry_waits_for_a_menu_to_put_it_in(helper_env):
+    """GRUB gets its own entry from /etc/grub.d/60_memtest86+-efi."""
+    assert chroot.place_esp_helpers() == 0
+    assert (helper_env / "efi/EFI/memtest86+/memtest.efi").is_file()
+    assert not (helper_env / "efi/loader/entries").exists()
+
+
+def test_systemd_boot_places_the_helpers_once_the_menu_exists(boot_env, monkeypatch):
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: False)
+    source = boot_env / "boot/memtest86+/memtest.efi"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"MZ")
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: pkg == "memtest86+-efi")
+
+    assert bootloaders.install_systemd_boot() == 0
+    assert (boot_env / "efi/EFI/memtest86+/memtest.efi").read_bytes() == b"MZ"
+    assert (boot_env / "efi/loader/entries" / chroot.MEMTEST_ENTRY).is_file()
+
+
+def test_secure_boot_signs_every_helper_on_the_esp(sb_env, monkeypatch, runlog):
+    """Signing follows what is on the ESP, not which package is installed."""
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    monkeypatch.setattr(chroot, "_target_has", lambda pkg: pkg in ("sbctl", "memtest86+-efi"))
+    source = sb_env / "boot/memtest86+/memtest.efi"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"MZ")
+
+    assert chroot.setup_secure_boot() == 0
+    assert ["sbctl", "sign", "-s", "/efi/EFI/memtest86+/memtest.efi"] in runlog.calls
 
 
 # --- NVMe reset ------------------------------------------------------------
