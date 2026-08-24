@@ -61,6 +61,25 @@ id = "hyprland"
   name = "pacman-contrib"
   note = { tr = "checkupdates komutunu getirir; waybar güncelleme göstergesi buna dayanır", en = "provides checkupdates, which the waybar update indicator depends on" }
 
+  # SUPER + C in the dotfiles opens a kitty scratchpad running qalc, which this
+  # package provides -- there is no separate qalc package. Nothing drags it in
+  # either: on the reference machine it is explicitly installed with an empty
+  # "Required By", and qalculate-gtk is not installed at all, so a Hyprland
+  # install without this line leaves the keybinding opening an empty terminal.
+  [[category.packages]]
+  name = "libqalculate"
+  note = { tr = "qalc komutunu getirir; SUPER + C hesap makinesi scratchpad'i buna dayanır", en = "provides qalc, which the SUPER + C calculator scratchpad depends on" }
+
+  # The dotfiles' weather script builds the waybar module's JSON with jq. The
+  # package is in the repo but only in optional apps.toml categories, so a
+  # machine that installs Hyprland without picking those does not get it. The
+  # script's error branch is deliberately jq-free, so the module degrades to a
+  # visible placeholder instead of an empty one -- easier to spot, still not
+  # the weather it is there to show.
+  [[category.packages]]
+  name = "jq"
+  note = { tr = "waybar hava durumu modülünün JSON'unu kuran betik buna dayanır", en = "the weather script builds the waybar module's JSON with it" }
+
   [[category.packages]]
   name = "wlogout"
   aur = true
