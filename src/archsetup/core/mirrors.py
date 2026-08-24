@@ -15,6 +15,18 @@ nothing better was measured. Raising N does not fix that; it just times more
 mirrors. Going from 10 to 20 candidates cost 29 extra seconds and picked no
 better mirror.
 
+It is tempting to read that as "then preselect by something better", and
+measurement says no. On 2026-08-24 the filtered pool held 363 mirrors, and
+three ways of drawing ten from it were timed back to back: --latest, --score,
+and a random sample. Fastest mirror 3593 / 3593 / 3103 KiB/s, median 749 /
+828 / 847 -- indistinguishable. The published score does not predict bandwidth
+to any particular machine either: Spearman -0.13 over 26 mirrors, and the
+best-scored band's median was 837 KiB/s against 754 KiB/s for the worst-scored.
+So the preselect is not the thing to fix, and the Taiwan run above was an
+artifact of the floor below rather than of the pool: with the floor corrected
+those "timed out" mirrors resolve to real numbers and sort where they belong
+(Johannesburg 157 KiB/s, last).
+
 `--download-timeout` is a speed floor, not a patience setting -- see
 MIN_RATE_KIB below. Setting it too low fails silently, because a mirror that
 did not finish in time reads 0.00 KiB/s, which is exactly what a dead mirror
@@ -66,8 +78,12 @@ CONNECT_TIMEOUT = "3"
 # It grows with the repo, so the floor drifts up as it does; re-measure with
 #   curl -sI https://<mirror>/extra/os/x86_64/extra.db | grep -i content-length
 DB_BYTES = 8_859_805
-# Reject a mirror slower than this. Below it the packages the ranking is meant
-# to speed up would take longer to fetch than the ranking itself.
+# Low enough that a usable mirror still gets measured, high enough that the
+# rating terminates. Note what it does NOT do: it decides what gets *measured*,
+# it rejects nothing. KEEP equals CANDIDATES, so a mirror below the floor is
+# still written to the list -- rated 0.00 and sorted last, as a fallback for
+# when the fast ones fail. Three of the ten saved on 2026-08-24 were there
+# (255, 193, 157 KiB/s).
 MIN_RATE_KIB = 600
 # Round up, so a mirror exactly at the floor still gets timed rather than
 # rejected. Worst case for the whole rating is CANDIDATES * this.
