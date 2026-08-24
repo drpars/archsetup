@@ -51,7 +51,21 @@ import math
 
 # Rate this many candidates when timing them...
 CANDIDATES = "10"
-# ...and keep this many in the final list.
+# ...and keep this many in the final list. Deliberately equal to CANDIDATES:
+# rating orders the list, it never prunes it, so mirrors measured below
+# MIN_RATE_KIB are still written out as fallbacks. Measured 2026-08-24 before
+# leaving it that way. pacman starts every payload at the first server and does
+# not spread them: with ParallelDownloads = 5 and three databases fetched at
+# once, 51 connection samples went to server #1 and none to server #2. It also
+# drops a server that fails fatally for the rest of the transaction, and has a
+# default low speed limit (the thing DisableDownloadTimeout turns off). So the
+# tail of the list is reached only when everything above it fails inside one
+# transaction, and it costs nothing while unused.
+#
+# A smaller KEEP would also be the wrong instrument: --number is a count, not a
+# predicate, and the count of above-floor mirrors varies per run -- 7 of 10 that
+# day. Six would have kept slow mirrors on a bad run and dropped usable ones on
+# a good one.
 KEEP = "10"
 # Skip mirrors that have not synced recently: they serve stale packages, and
 # pacman then fails on signatures or missing targets for no obvious reason.
