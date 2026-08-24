@@ -12,6 +12,7 @@ class InstallState:
     rootdev: str | None = None
     homedev: str | None = None
     kernel: str | None = None
+    parallel_downloads: int | None = None
     fs_packages: list[str] = field(default_factory=list)
 
 

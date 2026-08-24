@@ -70,10 +70,38 @@ def parallel_downloads() -> int:
     if not raw.isdigit() or int(raw) < 1:
         print(t("inst.invalid"))
         return 1
-    for conf in (Path("/etc/pacman.conf"), MNT / "etc/pacman.conf"):
+    # Remembered because the target cannot be written here: this step sits
+    # five before mount, so /mnt/etc/pacman.conf does not exist yet and the
+    # loop below can only ever reach the live file. _apply_parallel_to_target()
+    # finishes the job once pacstrap has created it.
+    state.parallel_downloads = int(raw)
+    for conf in (LIVE_PACMAN_CONF, MNT / "etc/pacman.conf"):
         if conf.is_file() and _set_parallel(conf, int(raw)):
             print(f"{conf}: ParallelDownloads = {raw}")
     return 0
+
+
+def _apply_parallel_to_target() -> None:
+    """Carry the chosen ParallelDownloads into the system being installed.
+
+    Nothing else does. pacstrap copies the host's mirrorlist by default
+    (copymirrorlist=1) but not the host's pacman.conf (copyconf=0, and -P is
+    not passed), so without this the target keeps whatever the pacman package
+    ships -- measured on pacman 7.1.0.r9.g54d9411-2: ParallelDownloads = 5,
+    uncommented. That is why the omission was invisible rather than broken:
+    the target downloaded in parallel, just never at the chosen number.
+
+    Silence was the other half of it. parallel_downloads() prints only what it
+    wrote, so skipping the target printed nothing and one line looked like a
+    finished run.
+    """
+    if state.parallel_downloads is None:
+        return
+    conf = MNT / "etc/pacman.conf"
+    if _set_parallel(conf, state.parallel_downloads):
+        print(f"{conf}: ParallelDownloads = {state.parallel_downloads}")
+    else:
+        print(t("inst.parallel_target_missed", path=str(conf)))
 
 
 def pacstrap_base() -> int:
@@ -114,6 +142,9 @@ def pacstrap_base() -> int:
     rc = run(["pacstrap", str(MNT), *packages])
     if rc == 0:
         state.kernel = kernel
+        # Before the repo step: its `pacman -Sy` runs in the target and reads
+        # this file.
+        _apply_parallel_to_target()
         if repo is not None:
             # The installed system needs the repo too, or its kernel has
             # no source for updates.

@@ -15,6 +15,7 @@ def unsafe(monkeypatch):
     yield
     state.bootdev = state.swapdev = state.rootdev = state.homedev = None
     state.fs_packages.clear()
+    state.parallel_downloads = None
 
 
 def _feed(monkeypatch, module, answers):
@@ -1071,3 +1072,83 @@ def test_locale_accepts_the_full_name_too(tmp_path, monkeypatch, typed):
     assert chroot.set_locale(typed) == 0
     assert "\ntr_TR.UTF-8 UTF-8" in (etc / "locale.gen").read_text()
     assert (etc / "locale.conf").read_text().startswith("LANG=tr_TR.UTF-8\n")
+
+
+# --- ParallelDownloads reaches the installed system ------------------------
+
+
+def _parallel_env(tmp_path, monkeypatch, live_text="[options]\n#ParallelDownloads = 5\n"):
+    """Live and target pacman.conf under tmp_path; neither is the real one."""
+    live = tmp_path / "live-pacman.conf"
+    live.write_text(live_text)
+    monkeypatch.setattr(base, "LIVE_PACMAN_CONF", live)
+    monkeypatch.setattr(base, "MNT", tmp_path / "mnt")
+    return live
+
+
+def _parallel_line(path):
+    return [l.strip() for l in path.read_text().splitlines()
+            if l.strip().startswith("ParallelDownloads")]
+
+
+def test_parallel_downloads_remembers_the_choice_for_the_target(tmp_path, monkeypatch):
+    """The step runs five before mount, so it cannot write the target itself.
+
+    Measured: _set_parallel() on a file that does not exist returns False and
+    writes nothing, and parallel_downloads() prints only what it wrote -- so
+    the target half was skipped with no output at all. Remembering the number
+    is what lets pacstrap_base() finish the job.
+    """
+    live = _parallel_env(tmp_path, monkeypatch)
+    _feed(monkeypatch, base, ["8"])
+
+    assert base.parallel_downloads() == 0
+    assert _parallel_line(live) == ["ParallelDownloads = 8"]
+    assert not (tmp_path / "mnt").exists()
+    assert state.parallel_downloads == 8
+
+
+def test_pacstrap_carries_parallel_downloads_into_the_target(tmp_path, monkeypatch, runlog):
+    """pacstrap copies the host mirrorlist but not the host pacman.conf.
+
+    copymirrorlist=1 is the default and copyconf=0 is, with -P not passed, so
+    nothing else moves this number across. Without it the target keeps what
+    the pacman package ships -- ParallelDownloads = 5, uncommented -- which is
+    why the omission looked like nothing was wrong.
+    """
+    _repo_env(tmp_path, monkeypatch, runlog)
+    target = tmp_path / "etc" / "pacman.conf"
+    target.write_text("[options]\n#ParallelDownloads = 5\n")
+    monkeypatch.setattr(base, "ask_yes", lambda q: False)
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-zen") + 1)])
+    state.parallel_downloads = 8
+
+    assert base.pacstrap_base() == 0
+    assert _parallel_line(target) == ["ParallelDownloads = 8"]
+
+
+def test_target_is_left_alone_when_no_number_was_chosen(tmp_path, monkeypatch, runlog):
+    """Skipping the step is a choice; it must not write a default of its own."""
+    _repo_env(tmp_path, monkeypatch, runlog)
+    target = tmp_path / "etc" / "pacman.conf"
+    target.write_text("[options]\n#ParallelDownloads = 5\n")
+    monkeypatch.setattr(base, "ask_yes", lambda q: False)
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-zen") + 1)])
+
+    assert state.parallel_downloads is None
+    assert base.pacstrap_base() == 0
+    assert _parallel_line(target) == []
+
+
+def test_the_number_lands_before_the_repo_step_reads_the_file(tmp_path, monkeypatch, runlog):
+    """add_kernel_repo() runs `pacman -Sy` in the target, which reads it."""
+    _repo_env(tmp_path, monkeypatch, runlog)
+    (tmp_path / "etc" / "pacman.conf").write_text("[core]\n#ParallelDownloads = 5\n")
+    monkeypatch.setattr(base, "ask_yes", lambda q: True)
+    _feed(monkeypatch, base, [str(base.KERNELS.index("linux-ogc") + 1)])
+    state.parallel_downloads = 8
+
+    assert base.pacstrap_base() == 0
+    text = (tmp_path / "etc" / "pacman.conf").read_text()
+    assert "ParallelDownloads = 8" in text
+    assert "[ogc]" in text

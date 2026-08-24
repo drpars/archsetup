@@ -665,6 +665,7 @@ swap_sizing = "Bu makinede RAM {ram} MiB. Hazırda bekletme, belleğin imajını
 swapsize_q = "Takas dosyası boyutu (MB)"
 fstab_q = "fstab hangi kimlikle üretilsin?"
 parallel_q = "Aynı anda kaç paket indirilsin?"
+parallel_target_missed = "{path} bulunamadı; ParallelDownloads hedefin geldiği hâlde bırakıldı."
 no_target = "/mnt altında kurulu sistem yok; önce pacstrap çalıştırın."
 no_aur_in_target = "AUR paketleri hedef sisteme kurulamaz (yardımcı yok), atlandı: {pkgs}"
 no_preset = "mkinitcpio preset dosyası bulunamadı."

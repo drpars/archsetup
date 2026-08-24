@@ -665,6 +665,7 @@ swap_sizing = "This machine has {ram} MiB of RAM. Hibernation writes an image of
 swapsize_q = "Swap file size (MB)"
 fstab_q = "Generate fstab with which identifier?"
 parallel_q = "How many parallel package downloads?"
+parallel_target_missed = "{path} not found; ParallelDownloads left as the target shipped it."
 no_target = "No installed system under /mnt; run pacstrap first."
 no_aur_in_target = "AUR packages cannot be installed into the target (no helper), skipped: {pkgs}"
 no_preset = "No mkinitcpio preset file found."
