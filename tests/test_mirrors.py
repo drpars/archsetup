@@ -109,3 +109,68 @@ def test_sudo_only_when_asked():
     runner = _recorder()
     mirrors.rank(runner, "/tmp/ml")
     assert runner.calls[0][0] == "reflector"
+
+
+# --- both phases go through this module ------------------------------------
+#
+# The module exists because the two phases once built their arguments
+# separately and disagreed (see its docstring). Nothing in the tree fails if
+# that happens again: sharing is a convention, and a later edit is free to
+# drop it -- reaching for `reflector` directly in one phase looks like a
+# one-line change and leaves the other phase behind silently. These two pin
+# the call sites, and with them the one difference that was decided by
+# measurement: score in the installer, rate afterwards.
+
+
+def _capture_rank(monkeypatch):
+    seen = []
+
+    def fake_rank(runner, save_path, country="", thorough=False, sudo=False):
+        seen.append(
+            {"path": save_path, "country": country,
+             "thorough": thorough, "sudo": sudo}
+        )
+        return 0
+
+    monkeypatch.setattr(mirrors, "rank", fake_rank)
+    return seen
+
+
+def _ran_reflector_itself(calls):
+    """Any command that is reflector, rather than one that installs it."""
+    return [c for c in calls if c[:1] == ["reflector"] or c[:2] == ["sudo", "reflector"]]
+
+
+def test_installer_ranks_through_this_module(monkeypatch, runlog):
+    from archsetup.installer import base
+
+    seen = _capture_rank(monkeypatch)
+    monkeypatch.setattr(base, "run", runlog)
+    monkeypatch.setattr(base, "input", lambda prompt="": "Turkey", raising=False)
+
+    assert base.run_reflector() == 0
+    assert seen == [
+        {"path": "/etc/pacman.d/mirrorlist", "country": "Turkey",
+         "thorough": False, "sudo": False}
+    ]
+    # Live ISO runs as root, and the ranking must not be built here.
+    assert _ran_reflector_itself(runlog.calls) == []
+
+
+def test_post_install_ranks_through_this_module(monkeypatch, runlog, tmp_path):
+    from archsetup.core import tasks
+
+    mirrorlist = tmp_path / "mirrorlist"
+    mirrorlist.write_text("Server = https://example.invalid/$repo/os/$arch\n")
+    seen = _capture_rank(monkeypatch)
+    monkeypatch.setattr(tasks, "MIRRORLIST", mirrorlist)
+    monkeypatch.setattr(tasks, "run", runlog)
+    monkeypatch.setattr(tasks.shutil, "which", lambda name: "/usr/bin/reflector")
+    monkeypatch.setattr(tasks, "input", lambda prompt="": "Turkey", raising=False)
+
+    assert tasks.reflector_mirrors() == 0
+    assert seen == [
+        {"path": str(mirrorlist), "country": "Turkey",
+         "thorough": True, "sudo": True}
+    ]
+    assert _ran_reflector_itself(runlog.calls) == []
