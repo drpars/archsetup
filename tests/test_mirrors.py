@@ -24,7 +24,24 @@ def test_thorough_sorting_measures_the_connection():
     assert args[args.index("--sort") + 1] == "rate"
     pairs = _pairs(args)
     assert int(pairs["--connection-timeout"]) <= 5
-    assert int(pairs["--download-timeout"]) <= 10
+
+
+def test_download_timeout_is_a_floor_not_a_deadline():
+    """reflector downloads the whole db and needs it to finish inside the
+    timeout, so anything slower than DB_BYTES/timeout rates 0.00 -- the same
+    reading a dead mirror gets. A 5 s timeout put that floor at 1730 KiB/s and
+    silently zeroed all ten candidates, leaving an 88 KiB/s mirror first."""
+    pairs = _pairs(mirrors.reflector_args(thorough=True))
+    floor_kib = mirrors.DB_BYTES / int(pairs["--download-timeout"]) / 1024
+    assert floor_kib <= mirrors.MIN_RATE_KIB
+
+
+def test_rating_cost_stays_bounded():
+    """Every candidate can burn the full timeout, so the floor cannot be
+    lowered by simply waiting longer."""
+    pairs = _pairs(mirrors.reflector_args(thorough=True))
+    worst_case_s = int(pairs["--latest"]) * int(pairs["--download-timeout"])
+    assert worst_case_s <= 180
 
 
 def test_candidate_pool_is_not_widened():

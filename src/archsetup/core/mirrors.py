@@ -5,8 +5,7 @@ build the arguments separately and disagree: the post-install one asked which
 country to prefer, the installer one did not. That divergence mattered most
 in the wrong direction, since the live ISO is where a slow mirror is felt.
 
-Two things measured on a 100 Mbit line, worth keeping in mind before
-"improving" any of this:
+Three things measured, worth keeping in mind before "improving" any of this:
 
 `--latest N` does not mean "the N best mirrors", it means "the N most
 recently synced", and only those get timed afterwards. Asking for 10 that way
@@ -16,16 +15,27 @@ nothing better was measured. Raising N does not fix that; it just times more
 mirrors. Going from 10 to 20 candidates cost 29 extra seconds and picked no
 better mirror.
 
+`--download-timeout` is a speed floor, not a patience setting -- see
+MIN_RATE_KIB below. Setting it too low fails silently, because a mirror that
+did not finish in time reads 0.00 KiB/s, which is exactly what a dead mirror
+reads.
+
 `--sort rate` downloads from every candidate to time it, and that is the
 whole cost: 43-72 s against 0 s for `--sort score`, which uses the score the
-mirror status API already computed. Measured top speeds were 8.6 MB/s for
-rate against 6.4 MB/s for score. Over a ~800 MB pacstrap that is about 32
-seconds saved -- less than the ranking spent earning it. So the installer
-sorts by score, and only the post-install task, which the user runs
-deliberately and which may precede gigabytes of packages, pays for rate.
+mirror status API already computed. On a 100 Mbit line measured top speeds
+were 8.6 MB/s for rate against 6.4 MB/s for score -- about 32 seconds saved
+over a ~800 MB pacstrap, less than the ranking spent earning it. That
+comparison is line-dependent and it flips on a slow line: measured 2026-08-24
+on a link that reached ~1 MB/s to the candidate pool, score's first mirror
+served 784 KiB/s and rate's served 1035 KiB/s, so rate saved ~253 s over the
+same 800 MB for the 130 s it spent. So the installer sorts by score, and only
+the post-install task, which the user runs deliberately and which may precede
+gigabytes of packages, pays for rate.
 """
 
 from __future__ import annotations
+
+import math
 
 # Rate this many candidates when timing them...
 CANDIDATES = "10"
@@ -36,7 +46,32 @@ KEEP = "10"
 MAX_AGE_HOURS = "12"
 # An unreachable mirror should cost seconds, not the default wait.
 CONNECT_TIMEOUT = "3"
-DOWNLOAD_TIMEOUT = "5"
+
+# reflector times a mirror by downloading the whole database and requiring the
+# read to finish inside --download-timeout (Reflector.py, rate_http). So the
+# timeout is not patience, it is a floor: a mirror slower than
+# DB_BYTES / timeout is not rated slow, it is rated 0.00 KiB/s -- the same
+# value rate_http returns for a mirror that refused the connection. When the
+# floor sits above what the line can actually do, every candidate reads 0, the
+# sort is stable so it leaves them in sync-recency order, and the saved list is
+# simply whatever --latest picked: a ranking that costs a minute and ranks
+# nothing.
+#
+# Measured 2026-08-24 (worldwide pool, ~1 MB/s to it): with the floor at
+# 1730 KiB/s all ten candidates read 0.00, and the one that led the saved list
+# actually served 88 KiB/s. Dropping the floor to 577 KiB/s rated five of the
+# ten between 784 and 1035 KiB/s and put the fastest first. Cost 57 s -> 130 s.
+#
+# Size of extra/os/x86_64/extra.db, the file reflector times (its DB_SUBPATH).
+# It grows with the repo, so the floor drifts up as it does; re-measure with
+#   curl -sI https://<mirror>/extra/os/x86_64/extra.db | grep -i content-length
+DB_BYTES = 8_859_805
+# Reject a mirror slower than this. Below it the packages the ranking is meant
+# to speed up would take longer to fetch than the ranking itself.
+MIN_RATE_KIB = 600
+# Round up, so a mirror exactly at the floor still gets timed rather than
+# rejected. Worst case for the whole rating is CANDIDATES * this.
+DOWNLOAD_TIMEOUT = str(math.ceil(DB_BYTES / (MIN_RATE_KIB * 1024)))
 
 
 def reflector_args(country: str = "", thorough: bool = False) -> list[str]:
