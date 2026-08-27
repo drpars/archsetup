@@ -10,6 +10,7 @@ from archsetup.core import (  # noqa: E402
     ethernet_pm,
     i18n,
     mkinitcpio,
+    printing,
     secureboot,
     wifi_power_save,
 )
@@ -69,14 +70,15 @@ def sealed_sizes(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def sealed_network_state(monkeypatch, tmp_path):
-    """The live-machine reads behind the two network menu rows.
+    """The live-machine reads behind the three network menu rows.
 
     Those rows carry a computed description, so their state readers run while
-    the menu is being *drawn*: `ethernet_pm.status()` walks /sys/bus/pci and
+    the menu is being *drawn*: `ethernet_pm.status()` walks /sys/bus/pci,
     `wifi_power_save.status()` walks /sys/class/net and then shells out to
-    `iw` once per interface. Any pilot test that walks into the network menu
-    would answer differently per machine, and on a box with no wifi it would
-    also spawn a subprocess for nothing.
+    `iw` once per interface, and `printing.status()` reads /etc/nsswitch.conf,
+    asks systemd whether cupsd is up and runs fc-match. Any pilot test that
+    walks into the network menu would answer differently per machine, and on a
+    box with no wifi it would also spawn a subprocess for nothing.
 
     Sealed by pointing the device roots at empty directories rather than by
     stubbing status(): the readers still run for real, which is the half worth
@@ -94,6 +96,14 @@ def sealed_network_state(monkeypatch, tmp_path):
     empty_net.mkdir()
     monkeypatch.setattr(ethernet_pm, "PCI_DEVICES", empty_pci)
     monkeypatch.setattr(wifi_power_save, "NET_DEVICES", empty_net)
+    # Same shape for the printing row: point each reader at something that
+    # cannot exist, so the readers themselves still run and the machine
+    # underneath them does not answer. The unit name matters as much as the
+    # paths -- services.is_active() shells out to systemctl either way, and a
+    # real unit name would make the row depend on whether the box prints.
+    monkeypatch.setattr(printing, "NSSWITCH", tmp_path / "sealed-nsswitch.conf")
+    monkeypatch.setattr(printing, "FONT_RULE", tmp_path / "sealed-font-rule.conf")
+    monkeypatch.setattr(printing, "SYSTEMD_UNITS", tmp_path / "sealed-units")
 
 
 @pytest.fixture
