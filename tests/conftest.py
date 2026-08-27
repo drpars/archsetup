@@ -11,6 +11,7 @@ from archsetup.core import (  # noqa: E402
     i18n,
     mkinitcpio,
     printing,
+    scanning,
     secureboot,
     wifi_power_save,
 )
@@ -104,6 +105,14 @@ def sealed_network_state(monkeypatch, tmp_path):
     monkeypatch.setattr(printing, "NSSWITCH", tmp_path / "sealed-nsswitch.conf")
     monkeypatch.setattr(printing, "FONT_RULE", tmp_path / "sealed-font-rule.conf")
     monkeypatch.setattr(printing, "SYSTEMD_UNITS", tmp_path / "sealed-units")
+    # The scanning row is the same shape and answers off three more files:
+    # whether sane is installed, whether the non-free backend is on disk, and
+    # what the user's network config names. Unsealed, the row would report the
+    # machine running the suite -- and on the box this was written on it would
+    # report a configured scanner.
+    monkeypatch.setattr(scanning, "SANE_DLL", tmp_path / "sealed-dll.conf")
+    monkeypatch.setattr(scanning, "NONFREE_BACKEND", tmp_path / "sealed-backend.so")
+    monkeypatch.setattr(scanning, "NETWORK_CONF", tmp_path / "sealed-network.conf")
 
 
 @pytest.fixture
