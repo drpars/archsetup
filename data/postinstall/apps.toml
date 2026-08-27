@@ -553,41 +553,46 @@ id = "theme_engines"
   name = "qt5ct"
   default = false
 
-  # The AUR fork over extra/qt6ct, against the repo-first rule, because the
-  # desktop this installs needs code paths the patch adds. Same upstream, same
-  # version (0.11-8 both); measured from qt6ct-shenanigans.patch on 2026-08-27.
-  # Two of them hold whatever the config says:
-  #   * QQuickStyle::setStyle("org.kde.desktop"), so QML applications
-  #     (hyprpolkitagent's password prompt, hyprland-qt-support) follow the
-  #     desktop style. Kvantum cannot cover this -- it is a QStyle and never
-  #     touches QML.
-  #   * A KDE icon engine: libqt6ct.so carries libKF6IconThemes in DT_NEEDED
-  #     and overrides createIconEngine with KIconEngine. Upstream has no such
-  #     override. The visible difference was not measured.
-  # A third one is real today but is on its way out, so do not lean on it:
-  # loadColorScheme() accepts a KDE .colors file, and dotfiles currently ships
-  # Tokyo.colors, which is pure KColorScheme format with zero active_colors
-  # keys -- upstream reads only [ColorScheme] active_colors= and would hand
-  # back an empty palette silently, no error, no exit code. That path hangs off
-  # custom_palette: the fork leaves m_schemePath empty when it is false, which
-  # also stops KDE_COLOR_SCHEME_PATH from being set. A queued dotfiles change
-  # turns custom_palette off, having measured the palette as dead under
-  # Kvantum, so this half expires with it.
-  # The added dependency is not a real cost: qqc2-desktop-style is pulled in by
-  # easyeffects anyway. Install size differs by about 20 KiB.
-  # Untested: extra/qt6ct was never installed and run -- the two conflict, so
-  # trying it means removing this one.
-  [[category.packages]]
-  name = "qt6ct-kde"
-  aur = true
-  note = { tr = "Qt6 yapılandırması (KDE yamalı)", en = "Qt6 config (KDE-patched)" }
-
-  # Kept selectable for a setup that ships no .colors scheme. Conflicts with
-  # qt6ct-kde at the pacman level (that one provides and conflicts qt6ct), so
-  # ticking both is rejected visibly; the schema has no exclusion field.
+  # extra/qt6ct, preselected as of 2026-08-28. This slot used to hold the AUR
+  # fork qt6ct-kde, against the repo-first rule; the fork was dropped after its
+  # own rationale was measured out from under it (dotfiles, 2026-08-27). The
+  # entry has to stay ticked either way: dotfiles exports
+  # QT_QPA_PLATFORMTHEME=qt6ct, so unticking it leaves Qt with no platform
+  # theme at all. What the patch added, and where each half went:
+  #   * QQuickStyle::setStyle("org.kde.desktop") for QML applications. Measured
+  #     on the only QML consumer this desktop has, hyprpolkitagent's password
+  #     prompt, captured under both packages: same geometry, and every differing
+  #     pixel accounted for -- a blinking text cursor, one channel of edge
+  #     antialiasing, corner blur. No systematic colour change, because the
+  #     prompt takes its style from hyprland-qt-support, whose HyprlandStyle.qml
+  #     derives colour from ColorGroup, that is QPalette, not KColorScheme.
+  #     Scope: a real Kirigami.Theme application was never tried, and that one
+  #     still feeds from KColorScheme -> kdeglobals.
+  #   * loadColorScheme() accepting a KDE .colors file. Dead: dotfiles points
+  #     color_scheme_path at a native TokyoNight.conf and has custom_palette
+  #     off, so nothing asks for the .colors path any more.
+  #   * A KDE icon engine: the patched libqt6ct.so overrode createIconEngine
+  #     with KIconEngine. This half still stands and is STILL NOT MEASURED.
+  #     What is known is only that icon_theme visibly applies under plain
+  #     qt6ct. Measuring it means putting the AUR fork back for an A/B, which
+  #     is why the swap was not made to wait on it.
+  # The cost that decided it, ldd on the platform theme plugin: the patched
+  # libqt6ct.so pulled in eight KF6 libraries (KF6IconThemes, KF6Archive,
+  # KF6ColorScheme, KF6BreezeIcons, KF6I18n, KF6ConfigCore, KF6ConfigGui,
+  # KF6GuiAddons). Miss one KF6 soname bump without a rebuild and the platform
+  # theme does not load at all -- the whole Qt look goes, no error, no exit
+  # code. Plain qt6ct links zero of them (measured again here on 2026-08-28).
+  #
+  # Order trap, for a machine that already runs the fork: point
+  # color_scheme_path at the native .conf FIRST, swap the package SECOND. The
+  # native parser finds no [ColorScheme] group in a .colors file and falls back
+  # to the Qt default -- Highlight #308cc6, Window #efefef, a light desktop.
+  # Loud rather than silent, but still the wrong way round. In the right order
+  # the swap is a measured no-op: the same probe rendered byte-identical PNGs
+  # under both packages.
   [[category.packages]]
   name = "qt6ct"
-  default = false
+  note = { tr = "Qt6 yapılandırması", en = "Qt6 config" }
 
 [[category]]
 id = "themes"
