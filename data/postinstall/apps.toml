@@ -554,25 +554,27 @@ id = "theme_engines"
   default = false
 
   # The AUR fork over extra/qt6ct, against the repo-first rule, because the
-  # config this setup ships needs three code paths the patch adds. Same
-  # upstream, same version (0.11-8 both); measured from
-  # qt6ct-shenanigans.patch on 2026-08-27:
-  #   * loadColorScheme() accepts a KDE .colors file. Upstream reads only
-  #     [ColorScheme] active_colors=, and dotfiles ships Tokyo.colors, which
-  #     is pure KColorScheme format with zero active_colors keys -- upstream
-  #     would hand back an empty palette silently, no error, no exit code.
-  #   * qApp gets a KDE_COLOR_SCHEME_PATH property, which is where KDE and
-  #     Kirigami applications read the scheme from.
+  # desktop this installs needs code paths the patch adds. Same upstream, same
+  # version (0.11-8 both); measured from qt6ct-shenanigans.patch on 2026-08-27.
+  # Two of them hold whatever the config says:
   #   * QQuickStyle::setStyle("org.kde.desktop"), so QML applications
   #     (hyprpolkitagent's password prompt, hyprland-qt-support) follow the
   #     desktop style. Kvantum cannot cover this -- it is a QStyle and never
   #     touches QML.
-  # The added dependency is not a real cost: qqc2-desktop-style is pulled in
-  # by easyeffects anyway. Install size differs by about 20 KiB.
-  # This holds only while dotfiles ships a .colors scheme. Convert that to
-  # qt6ct's native format and extra/qt6ct covers the widgets; the QML half
-  # would still want QT_QUICK_CONTROLS_STYLE set by hand, and by the patch's
-  # own comment qqc2-desktop-style then falls back to kdeglobals.
+  #   * A KDE icon engine: libqt6ct.so carries libKF6IconThemes in DT_NEEDED
+  #     and overrides createIconEngine with KIconEngine. Upstream has no such
+  #     override. The visible difference was not measured.
+  # A third one is real today but is on its way out, so do not lean on it:
+  # loadColorScheme() accepts a KDE .colors file, and dotfiles currently ships
+  # Tokyo.colors, which is pure KColorScheme format with zero active_colors
+  # keys -- upstream reads only [ColorScheme] active_colors= and would hand
+  # back an empty palette silently, no error, no exit code. That path hangs off
+  # custom_palette: the fork leaves m_schemePath empty when it is false, which
+  # also stops KDE_COLOR_SCHEME_PATH from being set. A queued dotfiles change
+  # turns custom_palette off, having measured the palette as dead under
+  # Kvantum, so this half expires with it.
+  # The added dependency is not a real cost: qqc2-desktop-style is pulled in by
+  # easyeffects anyway. Install size differs by about 20 KiB.
   # Untested: extra/qt6ct was never installed and run -- the two conflict, so
   # trying it means removing this one.
   [[category.packages]]
