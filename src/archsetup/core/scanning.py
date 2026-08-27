@@ -19,14 +19,24 @@ and `sane-airscan` is in `extra` precisely for that case. The oracle is
 
 **The verification trap, measured in both directions on 2026-08-27.** For this
 backend `scanimage -L` answers out of the config file, not off the wire. With
-`~/.epsonscan2/Network/epsonscan2.conf` in place and the scanner powered down
-and unreachable (100% packet loss, TCP 1865 timing out), the device was still
-listed and rc was still 0; with `HOME` pointed at an empty directory it
-answered "No scanners were identified", also rc 0. A listing therefore proves
-the file, not the device, and this file never reports it as more than that.
-The proof of a working scanner is a scan, and its criterion is variance rather
-than file size: an empty flatbed still produces a valid PNG (grey std 1.2 here
-against 35.3 with a document on the glass).
+`~/.epsonscan2/Network/epsonscan2.conf` in place and the scanner unreachable --
+100% packet loss, ICMP and TCP 1865 both timing out, nothing announcing over
+mDNS -- the device was still listed and rc was still 0; with `HOME` pointed at
+an empty directory it answered "No scanners were identified", also rc 0. A
+listing therefore proves the file, not the device, and this file never reports
+it as more than that. (What was measured is unreachability. The device's own
+power state was never read, and the two are not the same claim.)
+
+**And the scan that follows does not fail either -- it hangs.** Measured the
+same day against that unreachable address: `scanimage -d <device> -o <file>`
+wrote nothing to stdout, nothing to stderr beyond net-snmp's own noise, created
+no file, and was still running when it was killed at 120 s. So the symptom of
+an unreachable scanner is silence rather than an error, which is worth saying
+out loud next to the verify command.
+
+The proof of a working scanner is therefore a scan that finishes, and its
+criterion is variance rather than file size: an empty flatbed still produces a
+valid PNG (grey std 1.2 here against 35.3 with a document on the glass).
 
 **The address is measured, never assumed.** `avahi-browse -prt _scanner._tcp`
 is the source, and its `-p` output needed one real correction: a device
