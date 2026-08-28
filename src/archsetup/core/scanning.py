@@ -35,8 +35,28 @@ an unreachable scanner is silence rather than an error, which is worth saying
 out loud next to the verify command.
 
 The proof of a working scanner is therefore a scan that finishes, and its
-criterion is variance rather than file size: an empty flatbed still produces a
-valid PNG (grey std 1.2 here against 35.3 with a document on the glass).
+criterion is variance rather than file size. Both arms of both working points
+were measured on 2026-08-28 on this device, as grey standard deviation on the
+0-255 scale -- numpy over the raw array, and the unit matters because
+ImageMagick reports the same quantity in Q16, 257x larger:
+
+    Letter, same command but for the glass    empty     document    ratio
+      --mode Grayscale --resolution 75        0.786      33.218      42x
+      --mode Color --resolution 150           1.244      35.044      28x
+
+The second row is the working point the verify command below actually asks
+for, and it is where the pair this file used to quote unattributed (1.2
+against 35.3) came from -- those numbers were right, but nothing said which
+settings produced them, so they could not be compared against anything.
+
+**File size does not substitute, and not because it fails to separate the two
+arms.** It separates the wrong thing: the same empty glass weighs 76,298 bytes
+at the first working point and 1,023,094 at the second, a 13x spread out of
+the settings alone, which makes the empty scan at Color 150 dpi 6.4x *larger*
+than the document scan at Grayscale 75 dpi. One file size therefore cannot
+tell a scanned page from an empty platen. The variance can, and without a
+second reading to compare against: ~1 means the sensor returned uniform
+white, and no document does that.
 
 **The address is measured, never assumed -- and it need not be an address.**
 `avahi-browse -prt _scanner._tcp` is the source. The field order was first
