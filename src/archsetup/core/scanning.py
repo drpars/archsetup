@@ -81,11 +81,19 @@ mechanism.
 it is written at task time and never shipped: an address in this repo would be
 personal data, and correct on exactly one network.
 
-What is NOT measured here: `sane-airscan` was never installed on the machine
-this was written on, so the repo path has been reasoned about rather than
-seen finding a scanner; `simple-scan`'s GUI was installed but never opened;
-the USB path (`epsonds` over a cable) was never tried, because the device that
-drove all of this sits on Wi-Fi. Nor was a real lease change -- the device's
+**The gate's premise was finally checked against a reachable device.** On
+2026-08-28, with the scanner up and announcing (two resolved `_scanner._tcp`
+rows) and `sane-airscan` 0.99.38 installed, `scanimage -L` returned exactly one
+device and it was the `epsonscan2:` one; `_uscan._tcp` had no resolved rows at
+all. So on this device, on this network, the driverless path really does come
+back empty and the AUR question really is what is left -- which is what the
+whole shape here was built on and had until then only been reasoned about.
+
+What is NOT measured here: `sane-airscan` has still never been seen *finding*
+a scanner, since the only device to hand is the one it cannot talk to, so the
+repo path's positive branch stays untested; `simple-scan`'s GUI was installed
+but never opened; the USB path (`epsonds` over a cable) was never tried,
+because the device that drove all of this sits on Wi-Fi. Nor was a real lease change -- the device's
 address could not be moved, so the name's durability rests on the mechanism
 rather than on having watched it survive one -- and the name was tried on this
 one model only.
