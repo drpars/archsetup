@@ -73,6 +73,38 @@ def test_notes_are_localized():
     assert "Archive" in ark.note
 
 
+def test_every_package_entry_carries_a_bilingual_note():
+    """The note is all a menu row says about a package beyond its name, and
+    it is the only half read *before* anything is installed -- post_msg fires
+    afterwards, so it reaches nobody still deciding.
+
+    A missing note is invisible rather than broken: the row still draws, just
+    emptier, and no check anywhere notices. That is how 186 of 322 entries
+    came to have none at all without a single failure pointing at it.
+
+    Bilingual rather than merely present, and for the same reason. A bare
+    string is handed to both languages unchanged (data._note), so a Turkish
+    sentence reaches an English menu with no error and no fallback -- seventeen
+    entries were doing exactly that, most of them one-word tags like "KDE"
+    that read as a label rather than a description in either language.
+    """
+    import tomllib
+
+    from archsetup import paths
+
+    for filename, section in ALL_DATA:
+        raw = tomllib.loads(
+            (paths.DATA_DIR / section / filename).read_text(encoding="utf-8")
+        )
+        for category in raw["category"]:
+            for pkg in category["packages"]:
+                where = f"{filename}:{category['id']}/{pkg['name']}"
+                note = pkg.get("note")
+                assert note, f"no note: {where}"
+                assert isinstance(note, dict), f"note is not bilingual: {where}"
+                assert note.get("tr") and note.get("en"), f"note misses a language: {where}"
+
+
 def test_category_notes_are_localized_and_optional():
     """A category note is what the menu can show before anything is
     installed; post_msg only reaches whoever already found the entries."""

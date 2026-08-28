@@ -7,46 +7,60 @@ id = "hyprland"
 
   [[category.packages]]
   name = "hyprland"
+  note = { tr = "Döşemeli Wayland kompozitörü", en = "Dynamic tiling Wayland compositor" }
 
   [[category.packages]]
   name = "hyprpaper"
+  note = { tr = "Duvar kağıdı aracı (IPC denetimli)", en = "Wallpaper utility (IPC-controlled)" }
 
   [[category.packages]]
   name = "hyprpicker"
+  note = { tr = "Renk seçici", en = "Colour picker" }
 
   [[category.packages]]
   name = "hypridle"
+  note = { tr = "Boşta kalma daemon'u (kilit, dpms, uyku)", en = "Idle daemon (lock, dpms, sleep)" }
 
   [[category.packages]]
   name = "hyprlock"
+  note = { tr = "Ekran kilidi", en = "Screen locker" }
 
   [[category.packages]]
   name = "hyprcursor"
+  note = { tr = "Hyprland imleç biçimi ve kitaplığı", en = "Hyprland cursor format and library" }
 
   [[category.packages]]
   name = "hyprpolkitagent"
+  note = { tr = "Polkit yetkilendirme penceresi", en = "Polkit authentication agent" }
 
   [[category.packages]]
   name = "hyprqt6engine"
+  note = { tr = "Qt6 tema sağlayıcı", en = "Qt6 theme provider" }
   aur = true
 
   [[category.packages]]
   name = "xdg-desktop-portal-hyprland"
+  note = { tr = "Ekran paylaşımı ve dosya seçici arka ucu", en = "Screen sharing and file picker backend" }
 
   [[category.packages]]
   name = "qt5-wayland"
+  note = { tr = "Qt5 uygulamaları için Wayland desteği", en = "Wayland support for Qt5 applications" }
 
   [[category.packages]]
   name = "qt6-wayland"
+  note = { tr = "Qt6 uygulamaları için Wayland desteği", en = "Wayland support for Qt6 applications" }
 
   [[category.packages]]
   name = "kitty"
+  note = { tr = "GPU hızlandırmalı terminal", en = "GPU-accelerated terminal" }
 
   [[category.packages]]
   name = "rofi"
+  note = { tr = "Uygulama başlatıcı ve pencere geçişi", en = "Application launcher and window switcher" }
 
   [[category.packages]]
   name = "waybar"
+  note = { tr = "Durum çubuğu", en = "Status bar" }
 
   [[category.packages]]
   name = "waybar-git"
@@ -82,48 +96,58 @@ id = "hyprland"
 
   [[category.packages]]
   name = "wlogout"
+  note = { tr = "Oturum kapatma menüsü", en = "Logout menu" }
   aur = true
 
   [[category.packages]]
   name = "mako"
+  note = { tr = "Bildirim daemon'u", en = "Notification daemon" }
 
   [[category.packages]]
   name = "libnotify"
+  note = { tr = "Masaüstü bildirimi gönderir (notify-send)", en = "Sends desktop notifications (notify-send)" }
 
   [[category.packages]]
   name = "cliphist"
+  note = { tr = "Wayland pano geçmişi", en = "Wayland clipboard history" }
 
   # Bound to Print / SHIFT+Print / CTRL+Print in the dotfiles, each piping
   # into swappy. Without the package all three keys die silently.
   [[category.packages]]
   name = "hyprshot"
+  note = { tr = "Ekran görüntüsü aracı", en = "Screenshot utility" }
 
   [[category.packages]]
   name = "swappy"
+  note = { tr = "Ekran görüntüsü üzerine çizim ve düzenleme", en = "Annotate and edit screenshots" }
 
   [[category.packages]]
   name = "awww"
+  note = { tr = "Wayland duvar kağıdı daemon'u", en = "Wayland wallpaper daemon" }
 
   [[category.packages]]
   name = "imv"
+  note = { tr = "Görüntü görüntüleyici (Wayland/X11)", en = "Image viewer (Wayland/X11)" }
 
   [[category.packages]]
   name = "grim"
+  note = { tr = "Wayland ekran görüntüsü", en = "Wayland screenshot" }
 
   [[category.packages]]
   name = "slurp"
+  note = { tr = "Ekranda bölge seçimi (grim/hyprshot bunu kullanır)", en = "Region selection on screen (grim/hyprshot use it)" }
 
   [[category.packages]]
   name = "swaybg"
+  note = { tr = "Duvar kağıdı (wlroots)", en = "Wallpaper tool (wlroots)" }
 
   [[category.packages]]
   name = "playerctl"
-
-  [[category.packages]]
-  name = "pamixer"
+  note = { tr = "Medya oynatıcı denetimi (MPRIS)", en = "Media player control (MPRIS)" }
 
   [[category.packages]]
   name = "pavucontrol"
+  note = { tr = "Ses seviyesi denetimi (arayüz)", en = "Volume control (GUI)" }
 
   [[category.packages]]
   name = "bluetui"
@@ -135,6 +159,7 @@ id = "hyprland"
 
   [[category.packages]]
   name = "brightnessctl"
+  note = { tr = "Parlaklık denetimi (backlight aygıtı olan ekranlar)", en = "Brightness control (displays with a backlight device)" }
 
   [[category.packages]]
   name = "ddcutil"

@@ -11,28 +11,36 @@ id = "console"
 
   [[category.packages]]
   name = "cmatrix"
+  note = { tr = "Terminalde Matrix ekranı", en = "Matrix-style terminal screen" }
   default = false
 
   [[category.packages]]
   name = "wget"
+  note = { tr = "Komut satırından dosya indirme", en = "Command-line file downloader" }
 
   [[category.packages]]
   name = "fastfetch"
+  note = { tr = "Sistem bilgisi özeti (neofetch benzeri)", en = "System info summary (neofetch-like)" }
 
   [[category.packages]]
   name = "mpv"
+  note = { tr = "Hafif medya oynatıcı", en = "Lightweight media player" }
 
   [[category.packages]]
   name = "mc"
+  note = { tr = "İki panelli dosya yöneticisi (TUI)", en = "Two-pane file manager (TUI)" }
 
   [[category.packages]]
   name = "plocate"
+  note = { tr = "Hızlı dosya arama (locate)", en = "Fast file search (locate)" }
 
   [[category.packages]]
   name = "fd"
+  note = { tr = "find'a hızlı ve kullanışlı alternatif", en = "Fast, friendly alternative to find" }
 
   [[category.packages]]
   name = "ripgrep"
+  note = { tr = "Hızlı özyinelemeli metin arama (rg)", en = "Fast recursive text search (rg)" }
 
   [[category.packages]]
   name = "fzf"
@@ -44,25 +52,32 @@ id = "console"
 
   [[category.packages]]
   name = "btop"
+  note = { tr = "Kaynak izleyici (TUI)", en = "Resource monitor (TUI)" }
 
   [[category.packages]]
   name = "nvtop"
+  note = { tr = "GPU süreç izleyici (AMD/Intel/NVIDIA)", en = "GPU process monitor (AMD/Intel/NVIDIA)" }
 
   [[category.packages]]
   name = "bat"
+  note = { tr = "Sözdizimi renklendirmeli cat", en = "cat with syntax highlighting" }
 
   [[category.packages]]
   name = "xsel"
+  note = { tr = "X11 seçim/pano aracı", en = "X11 selection and clipboard tool" }
 
   [[category.packages]]
   name = "xclip"
+  note = { tr = "X11 pano aracı", en = "X11 clipboard tool" }
   default = false
 
   [[category.packages]]
   name = "wl-clipboard"
+  note = { tr = "Wayland pano araçları (wl-copy/wl-paste)", en = "Wayland clipboard tools (wl-copy/wl-paste)" }
 
   [[category.packages]]
   name = "zsh"
+  note = { tr = "Gelişmiş, programlanabilir kabuk", en = "Advanced, programmable shell" }
 
   [[category.packages]]
   name = "lazygit"
@@ -74,102 +89,132 @@ id = "console"
 
   [[category.packages]]
   name = "pkgfile"
+  note = { tr = "Bir dosyayı hangi paketin verdiğini bulur", en = "Finds which package provides a file" }
 
 [[category]]
 id = "compression"
 
   [[category.packages]]
   name = "tar"
+  note = { tr = "Klasik arşiv aracı", en = "The classic archiving tool" }
 
   [[category.packages]]
   name = "zip"
+  note = { tr = "ZIP arşivi oluşturur", en = "Creates ZIP archives" }
 
   [[category.packages]]
   name = "unzip"
+  note = { tr = "ZIP arşivlerini açar", en = "Extracts ZIP archives" }
 
   [[category.packages]]
   name = "unrar"
+  note = { tr = "RAR arşivlerini açar (yalnız açar)", en = "Extracts RAR archives (extract only)" }
 
   [[category.packages]]
   name = "7zip"
+  note = { tr = "Çok yüksek sıkıştırma oranlı arşivleyici", en = "Archiver with very high compression" }
 
   [[category.packages]]
   name = "lzop"
+  note = { tr = "Hızlı sıkıştırma (lzo)", en = "Fast compression (lzo)" }
 
 [[category]]
 id = "programming"
 
   [[category.packages]]
   name = "python"
+  note = { tr = "Python yorumlayıcısı", en = "The Python interpreter" }
 
   [[category.packages]]
   name = "python-psutil"
+  note = { tr = "Süreç ve sistem bilgisi kitaplığı (Python)", en = "Process and system info library (Python)" }
 
   [[category.packages]]
   name = "python-requests"
+  note = { tr = "HTTP istemci kitaplığı (Python)", en = "HTTP client library (Python)" }
 
   [[category.packages]]
   name = "go"
+  note = { tr = "Go derleyicisi ve temel araçları", en = "Go compiler and core tools" }
 
   [[category.packages]]
   name = "go-tools"
+  note = { tr = "Go geliştirici araçları", en = "Go developer tools" }
 
   [[category.packages]]
   name = "shellcheck"
+  note = { tr = "Kabuk betiği çözümleyici", en = "Shell script analyser" }
 
   [[category.packages]]
   name = "codespell"
+  note = { tr = "Kodda yaygın yazım hatalarını bulur", en = "Finds common misspellings in code" }
 
   [[category.packages]]
   name = "npm"
+  note = { tr = "JavaScript paket yöneticisi", en = "JavaScript package manager" }
 
   [[category.packages]]
   name = "yarn"
+  note = { tr = "Alternatif JavaScript paket yöneticisi", en = "Alternative JavaScript package manager" }
 
   [[category.packages]]
   name = "xmlstarlet"
+  note = { tr = "Komut satırından XML sorgulama ve düzenleme", en = "Query and edit XML from the command line" }
 
   [[category.packages]]
   name = "luarocks"
+  note = { tr = "Lua modül yöneticisi", en = "Lua module manager" }
 
   [[category.packages]]
   name = "ruby"
+  note = { tr = "Ruby yorumlayıcısı", en = "The Ruby interpreter" }
 
   [[category.packages]]
   name = "rubygems"
+  note = { tr = "Ruby paket yöneticisi", en = "Ruby package manager" }
 
   [[category.packages]]
   name = "composer"
+  note = { tr = "PHP bağımlılık yöneticisi", en = "PHP dependency manager" }
 
   [[category.packages]]
   name = "php"
+  note = { tr = "PHP yorumlayıcısı", en = "PHP interpreter" }
 
   [[category.packages]]
   name = "julia"
+  note = { tr = "Sayısal hesaplama dili", en = "Language for numerical computing" }
 
   [[category.packages]]
   name = "jq"
+  note = { tr = "Komut satırı JSON işleyici", en = "Command-line JSON processor" }
 
   [[category.packages]]
   name = "cpanminus"
+  note = { tr = "CPAN modül kurucusu (Perl)", en = "CPAN module installer (Perl)" }
 
 [[category]]
 id = "filesystem"
 
   [[category.packages]]
   name = "gvfs"
+  note = { tr = "GIO sanal dosya sistemi çekirdeği", en = "GIO virtual filesystem core" }
 
   [[category.packages]]
   name = "gvfs-mtp"
+  note = { tr = "Android/MTP aygıtları için gvfs arka ucu", en = "gvfs backend for Android/MTP devices" }
 
   [[category.packages]]
   name = "gvfs-smb"
+  note = { tr = "Windows paylaşımları (SMB/CIFS) için gvfs arka ucu", en = "gvfs backend for Windows shares (SMB/CIFS)" }
 
   [[category.packages]]
   name = "gvfs-nfs"
+  note = { tr = "NFS için gvfs arka ucu", en = "gvfs backend for NFS" }
 
   [[category.packages]]
   name = "gvfs-afc"
+  note = { tr = "Apple mobil aygıtları için gvfs arka ucu", en = "gvfs backend for Apple mobile devices" }
   default = false
 
 [[category]]
@@ -177,10 +222,11 @@ id = "system"
 
   [[category.packages]]
   name = "gnome-disk-utility"
+  note = { tr = "Disk yönetimi arayüzü (GNOME)", en = "Disk management GUI (GNOME)" }
 
   [[category.packages]]
   name = "gparted"
-  note = "GTK disk bölümleme"
+  note = { tr = "Disk bölümleme arayüzü (GNU Parted önyüzü)", en = "Partition editor (GNU Parted frontend)" }
   default = false
 
   [[category.packages]]
@@ -189,37 +235,50 @@ id = "system"
 
   [[category.packages]]
   name = "acpi"
+  note = { tr = "Pil, güç ve sıcaklık okumaları", en = "Battery, power and thermal readings" }
 
   [[category.packages]]
   name = "acpi_call-dkms"
+  note = { tr = "ACPI metotlarını çağırmayı sağlayan çekirdek modülü", en = "Kernel module for calling ACPI methods" }
 
   [[category.packages]]
   name = "lm_sensors"
+  note = { tr = "Donanım sıcaklık ve fan okumaları", en = "Hardware temperature and fan readouts" }
 
   [[category.packages]]
   name = "lib32-lm_sensors"
+  note = { tr = "lm_sensors 32-bit kitaplıkları", en = "lm_sensors 32-bit libraries" }
 
   [[category.packages]]
   name = "os-prober"
-  note = "grub çoklu önyükleme"
+  note = { tr = "Diskteki diğer işletim sistemlerini bulur (GRUB için)", en = "Detects other operating systems on disk (for GRUB)" }
   default = false
 
   [[category.packages]]
   name = "xorg-xhost"
   note = { tr = "X sunucusu erişim denetimi", en = "X server access control" }
 
+  [[category.packages]]
+  name = "ddcutil"
+  default = false
+  note = { tr = "Harici monitör ayarları (DDC/CI) — komut satırından parlaklık/kontrast; parlaklık tuşları dış monitöre kendiliğinden ulaşmaz", en = "External monitor controls (DDC/CI) — brightness/contrast from the command line; the brightness keys do not reach an external monitor by themselves" }
+  post_msg = "msg.ddcutil_i2c_dev"
+
 [[category]]
 id = "internet"
 
   [[category.packages]]
   name = "firefox"
+  note = { tr = "Web tarayıcı", en = "Web browser" }
 
   [[category.packages]]
   name = "thunderbird"
+  note = { tr = "E-posta ve haber okuyucu", en = "Mail and news reader" }
   default = false
 
   [[category.packages]]
   name = "zen-browser-bin"
+  note = { tr = "Firefox tabanlı, gizlilik odaklı tarayıcı", en = "Privacy-focused, Firefox-based browser" }
   aur = true
 
   # Do not "fix" this into extra/chromium. The repo-first rule is about the
@@ -245,14 +304,17 @@ id = "internet"
 
   [[category.packages]]
   name = "uget"
+  note = { tr = "İndirme yöneticisi (GTK)", en = "Download manager (GTK)" }
   default = false
 
   [[category.packages]]
   name = "transmission-gtk"
+  note = { tr = "BitTorrent istemcisi (GTK)", en = "BitTorrent client (GTK)" }
   default = false
 
   [[category.packages]]
   name = "transmission-qt"
+  note = { tr = "BitTorrent istemcisi (Qt)", en = "BitTorrent client (Qt)" }
   default = false
 
   [[category.packages]]
@@ -266,10 +328,12 @@ id = "common"
 
   [[category.packages]]
   name = "libreoffice-fresh"
+  note = { tr = "LibreOffice — yeni özellikler dalı", en = "LibreOffice — new features branch" }
   default = false
 
   [[category.packages]]
   name = "libreoffice-still"
+  note = { tr = "LibreOffice — kararlı bakım dalı", en = "LibreOffice — stable maintenance branch" }
   default = false
 
   # zathura tek basina hicbir bicimi acamaz -- her bicim ayri bir eklenti.
@@ -286,7 +350,7 @@ id = "common"
 
   [[category.packages]]
   name = "zathura-djvu"
-  note = "DjVu"
+  note = { tr = "zathura için DjVu desteği", en = "DjVu support for zathura" }
   default = false
 
   [[category.packages]]
@@ -296,38 +360,45 @@ id = "common"
 
   [[category.packages]]
   name = "zathura-ps"
-  note = "PostScript"
+  note = { tr = "zathura için PostScript desteği", en = "PostScript support for zathura" }
   default = false
 
   [[category.packages]]
   name = "openrgb"
+  note = { tr = "RGB aydınlatma denetimi; üretici yazılımı gerekmez", en = "RGB lighting control; no vendor software needed" }
 
   [[category.packages]]
   name = "solaar"
-  note = "Logitech"
+  note = { tr = "Logitech aygıt yöneticisi", en = "Logitech device manager" }
   default = false
 
   [[category.packages]]
   name = "waydroid"
+  note = { tr = "Linux üstünde kapsayıcı içinde Android", en = "Android in a container on Linux" }
   post_msg = "msg.waydroid_hint"
 
   [[category.packages]]
   name = "waydroid-helper"
+  note = { tr = "Waydroid için yapılandırma arayüzü", en = "Configuration GUI for Waydroid" }
   aur = true
 
   [[category.packages]]
   name = "kate"
+  note = { tr = "KDE'nin gelişmiş metin düzenleyicisi", en = "KDE's advanced text editor" }
 
   [[category.packages]]
   name = "mousepad"
+  note = { tr = "Hafif metin düzenleyici (Xfce)", en = "Lightweight text editor (Xfce)" }
   default = false
 
   [[category.packages]]
   name = "gnome-text-editor"
+  note = { tr = "GNOME'un basit metin düzenleyicisi", en = "GNOME's simple text editor" }
   default = false
 
   [[category.packages]]
   name = "bleachbit"
+  note = { tr = "Disk temizleme ve gizlilik aracı", en = "Disk cleaner and privacy tool" }
   default = false
 
   # It writes the Exec= line of the .desktop entries it generates from
@@ -343,6 +414,7 @@ id = "common"
 
   [[category.packages]]
   name = "stacer-bin"
+  note = { tr = "Sistem izleme ve temizleme arayüzü", en = "System monitoring and cleanup GUI" }
   aur = true
   default = false
 
@@ -351,6 +423,7 @@ id = "filemanagers"
 
   [[category.packages]]
   name = "archlinux-xdg-menu"
+  note = { tr = ".desktop dosyalarından pencere yöneticisi menüsü üretir", en = "Builds a window-manager menu from .desktop files" }
 
   # Categories install independently, so picking yazi here gets the file
   # manager and none of the binaries its config calls out to -- preview,
@@ -359,53 +432,57 @@ id = "filemanagers"
   # at it, because nothing else in this screen does.
   [[category.packages]]
   name = "yazi"
+  note = { tr = "Hızlı terminal dosya yöneticisi (Rust)", en = "Fast terminal file manager (Rust)" }
   post_msg = "msg.yazi_extras_hint"
 
   [[category.packages]]
   name = "dolphin"
-  note = "KDE"
+  note = { tr = "KDE dosya yöneticisi", en = "KDE file manager" }
 
   [[category.packages]]
   name = "dolphin-plugins"
-  note = "KDE"
+  note = { tr = "Dolphin için ek eklentiler", en = "Extra plugins for Dolphin" }
 
   [[category.packages]]
   name = "kdenetwork-filesharing"
-  note = "KDE"
+  note = { tr = "Dosya yöneticisinden yerel ağa klasör paylaşımı", en = "Share a folder to the local network from the file manager" }
 
   [[category.packages]]
   name = "ffmpegthumbs"
-  note = "KDE"
+  note = { tr = "Video küçük resimleri (FFmpeg tabanlı, KDE)", en = "Video thumbnails (FFmpeg-based, KDE)" }
 
   [[category.packages]]
   name = "ark"
-  note = "KDE"
+  note = { tr = "KDE arşiv yöneticisi", en = "KDE archiving tool" }
 
   [[category.packages]]
   name = "thunar"
-  note = "XFCE"
+  note = { tr = "XFCE dosya yöneticisi", en = "XFCE file manager" }
   default = false
 
   [[category.packages]]
   name = "thunar-volman"
-  note = "XFCE"
+  note = { tr = "Çıkarılabilir aygıtları otomatik yönetir (Thunar)", en = "Automatic removable device handling (Thunar)" }
   default = false
 
   [[category.packages]]
   name = "thunar-archive-plugin"
-  note = "XFCE"
+  note = { tr = "Thunar sağ tık menüsüne arşiv işlemleri", en = "Archive actions in Thunar's context menu" }
   default = false
 
   [[category.packages]]
   name = "thunar-shares-plugin"
+  note = { tr = "Thunar'dan root'suz Samba paylaşımı", en = "Samba sharing from Thunar without root" }
   default = false
 
   [[category.packages]]
   name = "file-roller"
+  note = { tr = "GNOME arşiv yöneticisi", en = "GNOME archive manager" }
   default = false
 
   [[category.packages]]
   name = "tumbler"
+  note = { tr = "Küçük resim servisi (D-Bus)", en = "Thumbnail service (D-Bus)" }
   default = false
 
 # The odd one out on purpose: every other category groups by topic, this one
@@ -421,33 +498,43 @@ id = "yazi_extras"
 
   [[category.packages]]
   name = "ffmpegthumbnailer"
+  note = { tr = "Video küçük resimleri", en = "Video thumbnails" }
 
   [[category.packages]]
   name = "7zip"
+  note = { tr = "Çok yüksek sıkıştırma oranlı arşivleyici", en = "Archiver with very high compression" }
 
   [[category.packages]]
   name = "jq"
+  note = { tr = "Komut satırı JSON işleyici", en = "Command-line JSON processor" }
 
   [[category.packages]]
   name = "poppler"
+  note = { tr = "PDF işleme (önizleme için)", en = "PDF rendering (for previews)" }
 
   [[category.packages]]
   name = "fd"
+  note = { tr = "find'a hızlı ve kullanışlı alternatif", en = "Fast, friendly alternative to find" }
 
   [[category.packages]]
   name = "ripgrep"
+  note = { tr = "Hızlı özyinelemeli metin arama (rg)", en = "Fast recursive text search (rg)" }
 
   [[category.packages]]
   name = "fzf"
+  note = { tr = "Bulanık arama (fuzzy finder)", en = "Fuzzy finder" }
 
   [[category.packages]]
   name = "zoxide"
+  note = { tr = "Öğrenen cd komutu", en = "A cd command that learns" }
 
   [[category.packages]]
   name = "imagemagick"
+  note = { tr = "Görüntü dönüştürme ve önizleme", en = "Image conversion and preview" }
 
   [[category.packages]]
   name = "perl-image-exiftool"
+  note = { tr = "EXIF üstverisi okuma/yazma", en = "Reads and writes EXIF metadata" }
 
   [[category.packages]]
   name = "glow"
@@ -462,76 +549,94 @@ id = "multimedia"
 
   [[category.packages]]
   name = "smplayer"
+  note = { tr = "Codec'leri gömülü medya oynatıcı", en = "Media player with built-in codecs" }
   default = false
 
   [[category.packages]]
   name = "smplayer-skins"
+  note = { tr = "SMPlayer kaplamaları", en = "SMPlayer skins" }
   default = false
 
   [[category.packages]]
   name = "smplayer-themes"
+  note = { tr = "SMPlayer temaları", en = "SMPlayer themes" }
   default = false
 
   [[category.packages]]
   name = "elisa"
+  note = { tr = "KDE müzik çalar", en = "KDE music player" }
   default = false
 
   [[category.packages]]
   name = "gst-plugins-base"
+  note = { tr = "GStreamer temel eklentileri", en = "GStreamer base plugins" }
 
   [[category.packages]]
   name = "gst-plugins-good"
+  note = { tr = "GStreamer 'good' eklenti kümesi", en = "GStreamer 'good' plugin set" }
 
   [[category.packages]]
   name = "gst-plugins-ugly"
+  note = { tr = "GStreamer 'ugly' kümesi (lisansı yüklü codec'ler)", en = "GStreamer 'ugly' set (license-encumbered codecs)" }
 
   [[category.packages]]
   name = "gst-plugins-bad"
+  note = { tr = "GStreamer 'bad' eklenti kümesi", en = "GStreamer 'bad' plugin set" }
 
   [[category.packages]]
   name = "gst-plugin-pipewire"
+  note = { tr = "GStreamer PipeWire eklentisi", en = "GStreamer PipeWire plugin" }
 
   [[category.packages]]
   name = "gst-libav"
+  note = { tr = "GStreamer libav eklentisi (geniş codec desteği)", en = "GStreamer libav plugin (broad codec support)" }
 
   [[category.packages]]
   name = "libde265"
+  note = { tr = "H.265/HEVC çözücü", en = "H.265/HEVC decoder" }
 
 [[category]]
 id = "fonts"
 
   [[category.packages]]
   name = "ttf-jetbrains-mono-nerd"
+  note = { tr = "JetBrains Mono, Nerd Fonts yamalı", en = "JetBrains Mono, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "ttf-fantasque-nerd"
+  note = { tr = "Fantasque Sans Mono, Nerd Fonts yamalı", en = "Fantasque Sans Mono, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "ttf-ubuntu-nerd"
+  note = { tr = "Ubuntu, Nerd Fonts yamalı", en = "Ubuntu, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "ttf-ubuntu-mono-nerd"
+  note = { tr = "Ubuntu Mono, Nerd Fonts yamalı", en = "Ubuntu Mono, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "ttf-hack-nerd"
+  note = { tr = "Hack, Nerd Fonts yamalı", en = "Hack, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "ttf-firacode-nerd"
+  note = { tr = "Fira Code, Nerd Fonts yamalı", en = "Fira Code, Nerd Fonts patched" }
 
   [[category.packages]]
   name = "otf-font-awesome"
+  note = { tr = "Simge yazı tipi (Font Awesome)", en = "Icon font (Font Awesome)" }
 
 [[category]]
 id = "theme_engines"
 
   [[category.packages]]
   name = "lxappearance"
-  note = "GTK"
+  note = { tr = "GTK tema değiştirici (LXDE)", en = "GTK theme switcher (LXDE)" }
   default = false
 
   [[category.packages]]
   name = "nwg-look"
-  note = "GTK"
+  note = { tr = "GTK ayar düzenleyici (wlroots kompozitörleri için)", en = "GTK settings editor (for wlroots compositors)" }
   default = false
 
   # Preselected as of 2026-08-27: the Qt style is Kvantum, taking over from
@@ -546,11 +651,12 @@ id = "theme_engines"
   # Not measured: no Qt5 application was looked for on the target desktop.
   [[category.packages]]
   name = "kvantum-qt5"
-  note = "Qt5"
+  note = { tr = "Qt5 için SVG tabanlı tema motoru", en = "SVG-based theme engine for Qt5" }
   default = false
 
   [[category.packages]]
   name = "qt5ct"
+  note = { tr = "Qt5 görünüm ayarları", en = "Qt5 appearance settings" }
   default = false
 
   # extra/qt6ct, preselected as of 2026-08-28. This slot used to hold the AUR
@@ -617,19 +723,23 @@ id = "gaming"
 
   [[category.packages]]
   name = "lutris"
+  note = { tr = "Oyun başlatıcı ve yönetici", en = "Game launcher and manager" }
   default = false
 
   [[category.packages]]
   name = "steam"
+  note = { tr = "Valve oyun platformu", en = "Valve's game platform" }
   default = false
 
   [[category.packages]]
   name = "heroic-games-launcher-bin"
+  note = { tr = "Epic, GOG ve Amazon oyunları için başlatıcı", en = "Launcher for Epic, GOG and Amazon games" }
   aur = true
   default = false
 
   [[category.packages]]
   name = "gamescope"
+  note = { tr = "Oyunlar için mikro-kompozitör (SteamOS)", en = "Micro-compositor for games (SteamOS)" }
   default = false
 
 [[category]]
@@ -638,6 +748,7 @@ group = "virt"
 
   [[category.packages]]
   name = "libvirt"
+  note = { tr = "Sanallaştırma yönetim API'si ve daemon'u", en = "Virtualization management API and daemon" }
   post_msg = "msg.virt_config_hint"
 
   # iptables-nft was merged into iptables, which provides and replaces it.
@@ -645,24 +756,31 @@ group = "virt"
   # package speaks it while writing nftables rules underneath.
   [[category.packages]]
   name = "iptables"
+  note = { tr = "Çekirdek paket filtresi (libvirt ağı buna dayanır)", en = "Kernel packet filter (libvirt networking rests on it)" }
 
   [[category.packages]]
   name = "dnsmasq"
+  note = { tr = "Sanal ağ için DNS/DHCP (libvirt NAT)", en = "DNS/DHCP for virtual networks (libvirt NAT)" }
 
   [[category.packages]]
   name = "openbsd-netcat"
+  note = { tr = "TCP/IP çakısı (OpenBSD sürümü)", en = "TCP/IP swiss army knife (OpenBSD variant)" }
 
   [[category.packages]]
   name = "dmidecode"
+  note = { tr = "DMI/SMBIOS tablolarını okur (donanım kimliği)", en = "Reads DMI/SMBIOS tables (hardware identity)" }
 
   [[category.packages]]
   name = "qemu-desktop"
+  note = { tr = "QEMU — masaüstü kullanımına göre derlenmiş", en = "QEMU — built for desktop use" }
 
   [[category.packages]]
   name = "virt-manager"
+  note = { tr = "Sanal makine yönetim arayüzü", en = "Virtual machine management GUI" }
 
   [[category.packages]]
   name = "virt-viewer"
+  note = { tr = "Misafirin ekranına bağlanan hafif görüntüleyici", en = "Lightweight viewer for a guest's display" }
 
   # UEFI guests need OVMF firmware, and qemu-desktop does not depend on it.
   # Without this, creating a UEFI VM fails at firmware selection.
@@ -672,6 +790,7 @@ group = "virt"
 
   [[category.packages]]
   name = "swtpm"
+  note = { tr = "Yazılım TPM öykünücüsü (Windows 11 ister)", en = "Software TPM emulator (Windows 11 wants one)" }
 
   # xorriso ships in libisoburn, and nothing here depended on it directly:
   # measured 2026-08-05, the only chain was virt-manager -> virt-install ->
@@ -784,15 +903,19 @@ note = { tr = "Paketler burada biter; gerisi vfioctl'de → Yapılandırma > San
 
   [[category.packages]]
   name = "libvirt"
+  note = { tr = "Sanallaştırma yönetim API'si ve daemon'u", en = "Virtualization management API and daemon" }
 
   [[category.packages]]
   name = "iptables"
+  note = { tr = "Çekirdek paket filtresi (libvirt ağı buna dayanır)", en = "Kernel packet filter (libvirt networking rests on it)" }
 
   [[category.packages]]
   name = "dnsmasq"
+  note = { tr = "Sanal ağ için DNS/DHCP (libvirt NAT)", en = "DNS/DHCP for virtual networks (libvirt NAT)" }
 
   [[category.packages]]
   name = "qemu-desktop"
+  note = { tr = "QEMU — masaüstü kullanımına göre derlenmiş", en = "QEMU — built for desktop use" }
 
   [[category.packages]]
   name = "edk2-ovmf"

@@ -9,10 +9,12 @@ condition = "gpu:amd"
 
   [[category.packages]]
   name = "mesa"
+  note = { tr = "Açık kaynak OpenGL sürücüleri", en = "Open-source OpenGL drivers" }
   post_msg = "msg.gpu_modules_hint"
 
   [[category.packages]]
   name = "lib32-mesa"
+  note = { tr = "Mesa 32-bit (Steam/Wine için)", en = "Mesa 32-bit (for Steam/Wine)" }
 
   [[category.packages]]
   name = "xf86-video-amdgpu"
@@ -21,9 +23,11 @@ condition = "gpu:amd"
 
   [[category.packages]]
   name = "vulkan-radeon"
+  note = { tr = "AMD için açık kaynak Vulkan sürücüsü", en = "Open-source Vulkan driver for AMD" }
 
   [[category.packages]]
   name = "lib32-vulkan-radeon"
+  note = { tr = "AMD Vulkan sürücüsü 32-bit", en = "AMD Vulkan driver, 32-bit" }
 
   # VA-API comes from mesa/lib32-mesa themselves: they provide (and replace)
   # libva-mesa-driver, so naming it separately only duplicated the entry.
@@ -64,16 +68,20 @@ condition = "gpu:nvidia"
 
   [[category.packages]]
   name = "nvidia-utils"
+  note = { tr = "NVIDIA sürücü kitaplıkları ve araçları", en = "NVIDIA driver libraries and utilities" }
   post_msg = "msg.gpu_modules_hint"
 
   [[category.packages]]
   name = "lib32-nvidia-utils"
+  note = { tr = "NVIDIA araçları 32-bit (Steam/Wine için)", en = "NVIDIA utilities, 32-bit (for Steam/Wine)" }
 
   [[category.packages]]
   name = "nvidia-settings"
+  note = { tr = "NVIDIA sürücü ayar arayüzü", en = "NVIDIA driver settings GUI" }
 
   [[category.packages]]
   name = "egl-wayland"
+  note = { tr = "NVIDIA'nın Wayland EGL katmanı", en = "NVIDIA's Wayland EGL layer" }
 
   [[category.packages]]
   name = "libva-nvidia-driver"
@@ -89,7 +97,7 @@ id = "openrazer"
 
   [[category.packages]]
   name = "openrazer-driver-dkms"
-  note = "DKMS"
+  note = { tr = "Razer aygıtları için çekirdek modülü kaynakları (DKMS)", en = "Kernel module sources for Razer devices (DKMS)" }
   post_msg = "msg.reboot_required"
 
   [[category.packages]]
@@ -101,29 +109,43 @@ id = "sound"
 
   [[category.packages]]
   name = "wireplumber"
+  note = { tr = "PipeWire oturum ve politika yöneticisi (wpctl)", en = "PipeWire session and policy manager (wpctl)" }
 
   [[category.packages]]
   name = "pipewire"
+  note = { tr = "Düşük gecikmeli ses/video sunucusu", en = "Low-latency audio and video server" }
 
   [[category.packages]]
   name = "pipewire-alsa"
+  note = { tr = "ALSA uygulamaları için PipeWire", en = "PipeWire for ALSA applications" }
 
   [[category.packages]]
   name = "pipewire-pulse"
+  note = { tr = "PulseAudio yerine PipeWire", en = "PipeWire in place of PulseAudio" }
 
   [[category.packages]]
   name = "pipewire-jack"
+  note = { tr = "JACK yerine PipeWire", en = "PipeWire in place of JACK" }
 
   [[category.packages]]
   name = "pipewire-v4l2"
+  note = { tr = "V4L2 kamera yakalama köprüsü", en = "V4L2 camera capture bridge" }
 
   [[category.packages]]
   name = "pipewire-zeroconf"
+  note = { tr = "Ağ üzerinden ses (Zeroconf)", en = "Audio over the network (Zeroconf)" }
 
   [[category.packages]]
   name = "pipewire-x11-bell"
+  note = { tr = "X11 zil sesi desteği", en = "X11 bell support" }
   default = false
 
   [[category.packages]]
   name = "easyeffects"
+  note = { tr = "PipeWire için ses efektleri ve ekolayzer", en = "Audio effects and equaliser for PipeWire" }
+  default = false
+
+  [[category.packages]]
+  name = "pamixer"
+  note = { tr = "Komut satırı ses karıştırıcı", en = "Command-line audio mixer" }
   default = false

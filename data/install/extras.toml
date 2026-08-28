@@ -6,10 +6,12 @@ id = "extras"
 
   [[category.packages]]
   name = "intel-ucode"
+  note = { tr = "Intel işlemci mikrokod güncellemesi", en = "Microcode updates for Intel CPUs" }
   condition = "cpu:intel"
 
   [[category.packages]]
   name = "amd-ucode"
+  note = { tr = "AMD işlemci mikrokod güncellemesi", en = "Microcode updates for AMD CPUs" }
   condition = "cpu:amd"
 
   [[category.packages]]
@@ -18,6 +20,7 @@ id = "extras"
 
   [[category.packages]]
   name = "edk2-shell"
+  note = { tr = "UEFI kabuğu", en = "UEFI shell" }
 
   # Kapalı: bir bellek testi yılda bir kez, somut bir şüphe üzerine koşulur.
   # Girdi yine de burada, çünkü asıl iş paketi kurmak değil ESP kopyası +
@@ -29,6 +32,7 @@ id = "extras"
 
   [[category.packages]]
   name = "efibootmgr"
+  note = { tr = "UEFI önyükleme girdilerini yönetir", en = "Manages UEFI boot entries" }
 
   [[category.packages]]
   name = "iwd"
@@ -36,17 +40,21 @@ id = "extras"
 
   [[category.packages]]
   name = "dhcpcd"
+  note = { tr = "DHCP istemcisi", en = "DHCP client" }
   default = false
 
   [[category.packages]]
   name = "networkmanager"
+  note = { tr = "Ağ bağlantı yöneticisi", en = "Network connection manager" }
   default = false
 
   [[category.packages]]
   name = "openssh"
+  note = { tr = "SSH istemcisi ve sunucusu", en = "SSH client and server" }
 
   [[category.packages]]
   name = "git"
+  note = { tr = "Sürüm kontrol sistemi", en = "Version control system" }
 
   # Not opsiyonel: sürümlenen bir pre-commit hook'u (core.hooksPath) gitleaks
   # çağırıyorsa, paketin olmadığı makinede commit "sızıntı var" gibi değil
@@ -57,46 +65,61 @@ id = "extras"
 
   [[category.packages]]
   name = "neovim"
+  note = { tr = "Vim türevi metin düzenleyici", en = "Vim-derived text editor" }
 
   [[category.packages]]
   name = "xdg-user-dirs"
+  note = { tr = "Ev dizinindeki standart klasörleri yönetir", en = "Manages the standard home directories" }
 
   [[category.packages]]
   name = "xdg-utils"
+  note = { tr = "Masaüstü tümleştirme araçları (xdg-open)", en = "Desktop integration tools (xdg-open)" }
 
   [[category.packages]]
   name = "util-linux"
+  note = { tr = "Temel sistem araçları (lsblk, mount)", en = "Core system tools (lsblk, mount)" }
 
   [[category.packages]]
   name = "coreutils"
+  note = { tr = "Temel GNU komutları (ls, cp, mv)", en = "Core GNU commands (ls, cp, mv)" }
 
   [[category.packages]]
   name = "usbutils"
+  note = { tr = "USB aygıt sorgulama (lsusb)", en = "USB device queries (lsusb)" }
 
   [[category.packages]]
   name = "procps-ng"
+  note = { tr = "Süreç araçları (ps, top, pgrep)", en = "Process tools (ps, top, pgrep)" }
 
   [[category.packages]]
   name = "samba"
+  note = { tr = "Windows dosya paylaşımı (SMB)", en = "Windows file sharing (SMB)" }
   default = false
 
   [[category.packages]]
   name = "nfs-utils"
+  note = { tr = "NFS istemci ve sunucu araçları", en = "NFS client and server tools" }
 
   [[category.packages]]
   name = "bind"
+  note = { tr = "DNS araçları (dig, host)", en = "DNS tools (dig, host)" }
 
   [[category.packages]]
   name = "man-db"
+  note = { tr = "man sayfası okuyucu", en = "man page reader" }
 
   [[category.packages]]
   name = "man-pages"
+  note = { tr = "Linux man sayfaları", en = "Linux man pages" }
 
   [[category.packages]]
   name = "eza"
+  note = { tr = "ls'in modern yerine geçeni", en = "A modern replacement for ls" }
 
   [[category.packages]]
   name = "bluez"
+  note = { tr = "Bluetooth yığını (daemon)", en = "Bluetooth stack (daemon)" }
 
   [[category.packages]]
   name = "bluez-utils"
+  note = { tr = "Bluetooth araçları (bluetoothctl)", en = "Bluetooth tools (bluetoothctl)" }
