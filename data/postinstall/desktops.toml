@@ -137,11 +137,10 @@ id = "hyprland"
   name = "brightnessctl"
 
   [[category.packages]]
-  name = "ddcci-driver-linux-dkms-git"
-  aur = true
+  name = "ddcutil"
   default = false
-  note = { tr = "Harici monitör parlaklığı (DDC/CI) — harici monitör varsa; paket tek başına yetmez, kurulum sonrası elle adım ister", en = "External monitor brightness (DDC/CI) — with an external monitor; the package alone is not enough, it needs manual steps afterwards" }
-  post_msg = "msg.ddcci_manual"
+  note = { tr = "Harici monitör ayarları (DDC/CI) — komut satırından parlaklık/kontrast; parlaklık tuşları dış monitöre kendiliğinden ulaşmaz", en = "External monitor controls (DDC/CI) — brightness/contrast from the command line; the brightness keys do not reach an external monitor by themselves" }
+  post_msg = "msg.ddcutil_i2c_dev"
 
 [[category]]
 id = "plasma"
