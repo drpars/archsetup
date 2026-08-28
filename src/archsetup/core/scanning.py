@@ -38,16 +38,44 @@ The proof of a working scanner is therefore a scan that finishes, and its
 criterion is variance rather than file size: an empty flatbed still produces a
 valid PNG (grey std 1.2 here against 35.3 with a document on the glass).
 
-**The address is measured, never assumed.** `avahi-browse -prt _scanner._tcp`
-is the source, and its `-p` output needed one real correction: a device
-announces once per protocol, and the IPv6 row carries a link-local `fe80::`
-address that the config file cannot use. In the measured output the IPv6 row
-came first, so taking the first resolved row writes an unusable address.
+**The address is measured, never assumed -- and it need not be an address.**
+`avahi-browse -prt _scanner._tcp` is the source. The field order was first
+read off a *control* service, because the scanner was powered down that day;
+a real `_scanner._tcp` row was finally seen on 2026-08-28 and it corrected
+one thing:
 
-That layout was read off a *control* service rather than off the scanner --
-the scanner was powered down that day, and the parseable field order belongs
-to avahi-browse rather than to any one service type. What has not been seen,
-therefore, is a real `_scanner._tcp` row going through this parser.
+    =;wlan0;IPv6;EPSON\\032L3250\\032Series;_scanner._tcp;local;scanner.local;192.0.2.14;1865;...
+    =;wlan0;IPv4;EPSON\\032L3250\\032Series;_scanner._tcp;local;scanner.local;192.0.2.14;1865;...
+
+A device does announce once per protocol, but on this one **both rows carry
+the same IPv4 address**. The link-local `fe80::` that the old IPv4-only
+filter existed for is real -- it was measured, on that control service -- yet
+it does not reproduce here, so its reason belongs to another service type
+rather than to scanners. Both shapes are handled by merging the protocol rows
+instead of filtering them, with an IPv4 address winning over one that is not.
+
+**What goes into the config file is the mDNS name, not the address.** Measured
+2026-08-28 on an Epson L3250: with its `<host>.local` name written in place
+of the address the device opened (rc 0, real capabilities) and a real scan came back
+rc 0 at 310x437 px. The name is derived from the MAC, so a new DHCP lease does
+not move it, and it is the same mechanism the printing queue already leans on
+(`ipp://<host>.local:631/ipp/print`). Before this the two halves disagreed: a
+new lease left printing working and scanning silently broken -- and broken in
+the way this module's first paragraphs are about, with `scanimage -L` still
+listing the device and the scan hanging.
+
+The name is only preferred when the machine can resolve it, which is
+`printing.mdns_ready()` reading the same `hosts:` line the printing task
+writes. Writing a name that does not resolve would rebuild that exact trap, so
+when mDNS is not set up the address is written instead and the reason is said
+out loud.
+
+**What resolves the name was not settled.** None of epsonscan2's libraries
+carry `getaddrinfo` or `gethostbyname` among their undefined symbols
+(`nm -D`), but they do carry `dlopen`/`dlsym`, so absence proves nothing here.
+The gate above is therefore conservative rather than derived: it never writes
+a name the ordinary resolver cannot reach, which is right under either
+mechanism.
 
 **The config file is the user's, and it is machine- and network-specific**, so
 it is written at task time and never shipped: an address in this repo would be
@@ -57,7 +85,16 @@ What is NOT measured here: `sane-airscan` was never installed on the machine
 this was written on, so the repo path has been reasoned about rather than
 seen finding a scanner; `simple-scan`'s GUI was installed but never opened;
 the USB path (`epsonds` over a cable) was never tried, because the device that
-drove all of this sits on Wi-Fi.
+drove all of this sits on Wi-Fi. Nor was a real lease change -- the device's
+address could not be moved, so the name's durability rests on the mechanism
+rather than on having watched it survive one -- and the name was tried on this
+one model only.
+
+One more thing this task does not write: epsonscan2 keeps the address in a
+second file as well, `Connection/PreferredInfo.dat`, which its GUI owns and
+creates. The file below is the one that makes `scanimage -L` produce the
+device, which is what was measured; the GUI was separately seen to rewrite its
+own files on exit without normalising the name back to an address.
 """
 
 from __future__ import annotations
@@ -66,9 +103,10 @@ import ipaddress
 import os
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import i18n, pacman, prompt, services
+from . import i18n, pacman, printing, prompt, services
 
 t = i18n.t
 
@@ -108,6 +146,10 @@ NETWORK_CONF = Path.home() / ".epsonscan2" / "Network" / "epsonscan2.conf"
 NETWORK_HEADER = "[Network]"
 NETWORK_COMMENT = "#"
 
+# One label of a host name, RFC 1123 shape: letters, digits, inner hyphens.
+# Used to tell a name apart from junk, not to decide whether it resolves.
+HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z")
+
 SCANNER_SERVICE = "_scanner._tcp"
 AVAHI_BROWSE = "avahi-browse"
 SCANIMAGE = "scanimage"
@@ -123,6 +165,101 @@ DEVICE_LINE = re.compile(r"device `([^']*)'")
 # that gives up -- and the browse gets its own because mDNS legitimately waits.
 LIST_TIMEOUT = 60
 BROWSE_TIMEOUT = 20
+
+
+# --------------------------------------------------------------------------
+# what may stand in for the scanner's address
+# --------------------------------------------------------------------------
+
+
+def is_ipv4(value: str) -> bool:
+    try:
+        ipaddress.IPv4Address(value)
+    except ValueError:
+        return False
+    return True
+
+
+def is_hostname(value: str) -> bool:
+    """Whether the value is a usable host name -- syntax only.
+
+    Not "does it resolve": that is a network question, and this runs while a
+    file is being read. What it has to rule out is the two ways a wrong value
+    gets in, a shifted avahi field and a typo, so a value made of nothing but
+    digits and dots is rejected here and has to pass as a real IPv4 address
+    instead. That is what keeps `192.168.1.2555` an error rather than a host
+    that will never answer.
+    """
+    if not value or len(value) > 253:
+        return False
+    if all(char.isdigit() or char == "." for char in value):
+        return False
+    return all(HOST_LABEL.match(label) for label in value.rstrip(".").split("."))
+
+
+def is_address(value: str) -> bool:
+    """Either shape the config file accepts."""
+    return is_ipv4(value) or is_hostname(value)
+
+
+def unescape_name(name: str) -> str:
+    """A service name as avahi printed it, with its byte escapes resolved.
+
+    avahi's parseable output writes a byte it will not print as a backslash
+    and three DECIMAL digits, which two measured names agree on: `\\032` for
+    the spaces in `EPSON\\032L3250\\032Series` (32 = space) and `\\196\\177` for
+    a UTF-8 `\u0131` (196, 177 = 0xC4, 0xB1). Octal would have written `\\040`
+    and `\\304\\261`, so the base is settled by the data rather than assumed.
+
+    Decoding is display-only -- the name is shown so the user can pick their
+    device and is never written anywhere -- so anything the rule does not
+    cover is left exactly as avahi printed it, including a byte sequence that
+    turns out not to be UTF-8.
+    """
+    out = bytearray()
+    index = 0
+    while index < len(name):
+        digits = name[index + 1 : index + 4]
+        if name[index] == "\\" and len(digits) == 3 and digits.isdigit():
+            value = int(digits)
+            if value < 256:
+                out.append(value)
+                index += 4
+                continue
+        out += name[index].encode("utf-8")
+        index += 1
+    try:
+        return out.decode("utf-8")
+    except UnicodeDecodeError:
+        return name
+
+
+@dataclass(frozen=True)
+class Announcement:
+    """One scanner as avahi resolved it: what to show, and what to write.
+
+    `name` is decoded for display. `hostname` and `address` are both kept
+    because they answer different questions -- which one goes in the file is
+    `address_for()`, and the other still helps the user recognise the device.
+    """
+
+    name: str
+    hostname: str
+    address: str
+    port: str
+
+
+def address_for(entry: Announcement, mdns_ready: bool) -> str:
+    """Which announced value goes into the config file, or "" for neither.
+
+    The name wins when the machine can resolve it: it comes from the MAC and
+    a new DHCP lease does not move it, while the address is exactly the thing
+    that goes stale. When mDNS is not set up the name would be a config that
+    lists a device and then hangs, so the address is written instead.
+    """
+    if mdns_ready and is_hostname(entry.hostname):
+        return entry.hostname
+    return entry.address if is_ipv4(entry.address) else ""
 
 
 # --------------------------------------------------------------------------
@@ -160,45 +297,51 @@ def scan_devices() -> list[str]:
     return devices_in(_capture([SCANIMAGE, "-L"], LIST_TIMEOUT))
 
 
-def announcements_in(output: str) -> list[tuple[str, str, str]]:
-    """(name, address, port) for every IPv4 scanner in `avahi-browse -p` output.
+def announcements_in(output: str) -> list[Announcement]:
+    """One entry per scanner in `avahi-browse -p` output.
 
-    The field layout was measured on 2026-08-27 against a service that was
-    actually on the network, because the scanner was not: resolved rows begin
-    with `=` and carry
-    `=;iface;proto;name;type;domain;hostname;address;port;txt`.
+    Resolved rows begin with `=` and carry
+    `=;iface;proto;name;type;domain;hostname;address;port;txt`, a layout first
+    measured on 2026-08-27 against a control service and confirmed on
+    2026-08-28 against a real `_scanner._tcp` row.
 
-    Two things this filter is for, both of them real:
+    **The protocol rows are merged rather than filtered.** A device announces
+    once per protocol, and on the control service the IPv6 row held a
+    link-local `fe80::` that the config file has nowhere to put a scope id
+    for -- but on the real scanner both rows carried the same IPv4 address.
+    Keeping only IPv4 rows would therefore be right for one measured shape by
+    an accident of the other, so instead the rows are collapsed on the fields
+    that identify the device and an IPv4 address displaces one that is not.
 
-    * The same device announces twice, once per protocol, and the IPv6 row
-      holds a link-local `fe80::` address. epsonscan2's config file takes a
-      bare address with nowhere to put a scope id, so taking the first
-      resolved row writes an unusable one about half the time.
-    * A `;` inside the name field would shift every index after it. Rather
-      than guess at avahi's escaping rules -- which were not measured -- the
-      address is parsed as an IPv4 address and a row that fails is dropped, so
-      a shifted line yields nothing instead of nonsense.
-
-    Names are passed through exactly as avahi prints them, escapes and all
-    (`\\196\\177` for a non-ASCII byte). Decoding them is display-only polish
-    and the rules were not measured.
+    **A `;` in the name is caught by the type field, not by the address.** Such
+    a name shifts every index after it, and the address can no longer be the
+    guard: it is allowed to be a host name now, and `scanner.local` sitting in
+    the shifted address slot would parse perfectly while the port silently
+    became an address. The anchor is that field 4 has to be the service that
+    was browsed for, which no shift survives, plus a numeric port.
     """
-    found: list[tuple[str, str, str]] = []
+    found: list[Announcement] = []
+    at: dict[tuple[str, str, str], int] = {}
     for line in output.splitlines():
         fields = line.split(";")
-        if len(fields) < 9 or fields[0] != "=" or fields[2] != "IPv4":
+        if len(fields) < 9 or fields[0] != "=" or fields[4] != SCANNER_SERVICE:
             continue
-        name, address, port = fields[3], fields[7], fields[8]
-        try:
-            ipaddress.IPv4Address(address)
-        except ValueError:
+        port = fields[8]
+        if not port.isdigit():
             continue
-        if (name, address, port) not in found:
-            found.append((name, address, port))
+        entry = Announcement(unescape_name(fields[3]), fields[6], fields[7], port)
+        # The device, not the row: what differs between the protocol rows is
+        # exactly the field being chosen between.
+        key = (entry.name, entry.hostname, entry.port)
+        if key not in at:
+            at[key] = len(found)
+            found.append(entry)
+        elif is_ipv4(entry.address) and not is_ipv4(found[at[key]].address):
+            found[at[key]] = entry
     return found
 
 
-def announced_scanners() -> list[tuple[str, str, str]]:
+def announced_scanners() -> list[Announcement]:
     return announcements_in(
         _capture(
             [AVAHI_BROWSE, "-prt", SCANNER_SERVICE],
@@ -213,20 +356,28 @@ def announced_scanners() -> list[tuple[str, str, str]]:
 
 
 def conf_content(address: str) -> str:
-    """The whole file: a section header and one address.
+    """The whole file: a section header and one address or host name.
 
     Epson's manual documents one address per line and `#` to disable a line.
-    This writes a single entry, so the ordering question never arises.
+    This writes a single entry, so the ordering question never arises. A name
+    in that slot was measured to work on 2026-08-28; the file's own syntax
+    does not distinguish the two.
     """
     return f"{NETWORK_HEADER}\n{address}\n"
 
 
 def configured_address() -> str:
-    """The address the config names, or "" when there is none.
+    """The address or name the config names, or "" when there is none.
 
-    Blank when the file is missing, has no address line, or holds something
-    that is not an IPv4 address -- the last one matters because a status row
-    saying "defined" over an unusable value is worse than one saying nothing.
+    Blank when the file is missing, has no entry, or holds something that is
+    neither shape -- that last part matters because a status row saying
+    "defined" over an unusable value is worse than one saying nothing.
+
+    It has to accept a name for the same reason, pointing the other way: an
+    IPv4-only reading calls a working `<host>.local` config *unconfigured*,
+    which is the worse half of the same mistake -- the machine this was
+    corrected on had exactly that file, and a scan through it had just been
+    measured at rc 0.
     """
     try:
         text = NETWORK_CONF.read_text(encoding="utf-8")
@@ -236,11 +387,8 @@ def configured_address() -> str:
         line = raw.strip()
         if not line or line.startswith(NETWORK_COMMENT) or line == NETWORK_HEADER:
             continue
-        try:
-            ipaddress.IPv4Address(line)
-        except ValueError:
-            continue
-        return line
+        if is_address(line):
+            return line
     return ""
 
 
@@ -250,18 +398,44 @@ def _ask_address() -> str:
     Discovery first because the handover asked for the address to be measured
     rather than assumed. Typing one in stays available for the case this was
     written in: the scanner was powered down, so nothing announced at all.
+
+    Whichever way the value arrives, the durable choice is only offered when
+    the machine can follow it -- and when the user types a name anyway, that
+    is their call and it is written, with the risk said rather than refused.
     """
+    resolves = printing.mdns_ready()
     scanners = announced_scanners()
     if scanners:
         print(t("scanning.found_header"))
-        for index, (name, address, port) in enumerate(scanners, 1):
-            print(f"  {index}) {name} — {address}:{port}")
+        for index, entry in enumerate(scanners, 1):
+            where = entry.address
+            if entry.hostname:
+                where = f"{entry.hostname} ({entry.address})"
+            print(f"  {index}) {entry.name} — {where}:{entry.port}")
         try:
             answer = input(f"{t('scanning.which_q', count=len(scanners))} ").strip()
         except EOFError:
             return ""
         if answer.isdigit() and 1 <= int(answer) <= len(scanners):
-            return scanners[int(answer) - 1][1]
+            chosen = scanners[int(answer) - 1]
+            address = address_for(chosen, resolves)
+            if not address:
+                print(t("scanning.bad_address",
+                        value=chosen.address or chosen.hostname))
+                return ""
+            if address == chosen.hostname:
+                print(t("scanning.name_preferred",
+                        name=address, address=chosen.address))
+            elif chosen.hostname:
+                print(
+                    t(
+                        "scanning.name_unresolvable",
+                        name=chosen.hostname,
+                        address=address,
+                        path=printing.NSSWITCH,
+                    )
+                )
+            return address
         if answer:
             print(t("scanning.bad_choice"))
             return ""
@@ -274,11 +448,11 @@ def _ask_address() -> str:
         return ""
     if not typed:
         return ""
-    try:
-        ipaddress.IPv4Address(typed)
-    except ValueError:
+    if not is_address(typed):
         print(t("scanning.bad_address", value=typed))
         return ""
+    if is_hostname(typed) and not resolves:
+        print(t("scanning.typed_name_unresolved", name=typed, path=printing.NSSWITCH))
     return typed
 
 
