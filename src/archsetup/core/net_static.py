@@ -45,14 +45,36 @@ one is off. The warning therefore sits in the prompt, not in a document.
 
 What this does not do, on purpose: apply the file behind the user's back.
 Writing is safe; ``networkctl reload`` on the link you are reaching the
-machine over is not. Three reloads were measured 2026-08-31 (wlan0, both
-directions, systemd 261.2) and none dropped the carrier -- but the address
-was identical across all three, so surviving TCP connections came free and
-the case that actually threatens a session, a reload that moves the address,
-is still unmeasured. core/iwd.py made the same call for the same reason -- "restarting iwd
+machine over is not -- and 2026-08-31 measured what "is not" actually means,
+on the branch that had stayed untested: a reload that *moves* the address
+(QEMU, ens3, systemd 261.2, three of them).
+
+The carrier does not drop. Two 10 ms samplers spanning those reloads,
+23011 and 143836 ticks, recorded not one carrier or operstate transition,
+and ``Lost carrier`` stayed 0 for the whole boot. Neither is a link whose
+file did not change touched at all: the second interface on that guest
+produced zero address or route events across every reload, which is what
+makes a second interface a usable control channel.
+
+What breaks is the session riding the moved link, and it breaks in the
+worst shape available: no error. The socket keeps the local address that
+has just been deleted, stays ESTABLISHED, and freezes -- the send queue
+grows, the retransmit backoff climbs, no ACK arrives -- while
+``networkctl status`` goes on reporting ``routable (configured)`` and
+``online``. Nothing on the machine reports a dead session. Put the address
+back and the frozen session resumes exactly where it was: 102 s frozen and
+not one byte lost, no gap in a 0.2 s heartbeat stream. Leave it and the
+kernel destroys the socket after 952 s. Whether the operator's terminal
+ever says anything is a property of their ssh client rather than of this
+machine: with ServerAliveInterval off -- OpenSSH's own default -- the
+client sat silent past 1136 s, and with a 60/3 in ssh_config it gave up at
+239 s.
+
+core/iwd.py made the same call for the same reason -- "restarting iwd
 drops the connection and archsetup may well be running over it" -- and this
 is the more dangerous version, because a wrong address does not come back on
-its own. Both commands, apply and undo, are printed before anything is
+its own, and because a frozen session cannot type the command that would
+bring it back. Both commands, apply and undo, are printed before anything is
 written, and applying is offered as a question whose safe answer is no.
 
 NetworkManager is out of scope in this round and says so rather than
@@ -395,20 +417,24 @@ def _pick(ifaces: list[str]) -> str:
 def _offer_reload(iface: str) -> int:
     """Applying is a question, and the safe answer is no.
 
-    `networkctl reload` re-reads the files and reconfigures the link. It does
-    not drop the carrier: measured 2026-08-31, three reloads on wlan0 in both
-    directions, no `Lost carrier` and the link stayed routable throughout;
-    and again the same day on a wired link (QEMU, ens2), two reloads across
-    the static/DHCP round trip, `Lost carrier` count 0 and the ssh session
-    riding that link survived both.
+    `networkctl reload` re-reads the files and reconfigures the link, and
+    the cost of that is now measured on both halves -- including the one
+    that used to be this docstring's caveat. It does not drop the carrier:
+    five reloads with the address unchanged (three on wlan0, two on a wired
+    link, 2026-08-31), then three more the same day that actually moved the
+    address (QEMU, ens3), with 10 ms samplers across the latter recording
+    not one carrier or operstate transition and `Lost carrier` at 0.
 
-    That is less than it sounds. The address never changed in any of the
-    five, so nothing was asked of the connections riding on it, and the
-    link in question may still be the one carrying this session -- so the
-    machine is never reconfigured without being asked, and the command is
-    printed either way so a no is not a dead end. The user-facing hint said
-    the carrier question was unmeasured long after it had been measured;
-    it now states which half is measured and which half is not.
+    Moving the address is what keeps this a question. The session riding
+    that link gets no error -- it freezes, holding a local address that no
+    longer exists, while every status reading on the machine goes on
+    calling the link routable and online. It resumes intact if the address
+    comes back (102 s frozen, no byte lost) and the kernel drops the socket
+    after 952 s if it does not. The decisive part is that a frozen session
+    cannot type the undo, so the safe answer stays no unless there is a
+    second way in; the hint printed just below says exactly that, and it is
+    the second time this string has had to catch up with a measurement the
+    repository had already made.
     """
     print(t("net_static.reload_hint"))
     if not services.is_active(NETWORKD_UNIT):

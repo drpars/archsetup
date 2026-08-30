@@ -301,19 +301,40 @@ istiyor. Bir sonraki tur için liste burada dursun.
       **kablolu linkte de, sabit yapılandırma altında da `null`**. İki reload
       boyunca `Lost carrier` sayısı **0** ve o link üzerinden gelen ssh
       oturumu ikisinde de sağ kaldı — ama adres hiç değişmedi (10.0.2.15 →
-      10.0.2.15), yani aşağıdaki madde hâlâ açık
-- [ ] **Adresi gerçekten değiştiren bir reload.** Yukarıdaki **beş**
-      reload'un (wlan0'da üç, `ens2`'de iki) hiçbirinde adres değişmedi (aynı
-      MAC, aynı kira), o yüzden açık TCP bağlantılarının hayatta kalması
-      bedava sağlandı ve **hiçbir şey kanıtlamıyor**. Ölçülen şey yalnız şu:
-      reload taşıyıcıyı düşürmüyor — beş geçişte de `Lost carrier` yok, link
-      `routable` kaldı, ve kablolu turda o link üzerinden gelen ssh oturumu
-      ikisinde de sağ çıktı. Oturumu o link üzerinden gelen bir makinede
-      *farklı* bir adres yazmanın ne yaptığı açık. Kullanıcıya basılan uyarı
-      2026-08-31'de **yeniden yazıldı**: eskiden *"kopup kopmadığı ÖLÇÜLMEDİ"*
-      diyordu ve bu, deponun kendi docstring'i ölçümü yazdıktan sonra da öyle
-      kaldı; artık ölçülen yarıyı (taşıyıcı düşmüyor) ölçülmeyenden (adresi
-      değiştiren reload) ayırıyor
+      10.0.2.15), yani o hayatta kalış bedava sağlanmıştı; adresi değiştiren
+      kol aşağıda ayrıca ölçüldü
+- [x] **Adresi gerçekten değiştiren bir reload** — 2026-08-31'de VM'de koştu
+      (`btrfs.qcow2`, arayüz `ens3`, systemd 261.2). Rig iki NIC'li: kontrol
+      kanalı `ens2`'de (slirp 10.0.2.0/24, hostfwd 2222) hiç dokunulmadan
+      kaldı, ölçülen link `ens3` (slirp 10.0.3.0/24, hostfwd 2223→`.15` ve
+      2224→`.20`), yani ölçüm kendi kanalını kesmiyor — 4. işi durduran şey
+      buydu. Araç `configure()` ile sürüldü ve adres kiradan **farklı**
+      yazıldı (10.0.3.15 → **10.0.3.20**), reload'a evet dendi.
+      **Taşıyıcı düşmüyor:** iki 10 ms sondası, **23.011** ve **143.836**
+      tick, **tek geçiş satırı yok**; boot boyunca `Lost carrier` **0**.
+      Adres takası bir sil+ekle çifti ve **2,4 ms / 1,6 ms** geniş.
+      **Dosyası değişmeyen link hiç kıpırdamıyor:** `ens2` bütün reload'lar
+      boyunca **sıfır** adres/yol netlink olayı üretti.
+      **Asıl bulgu — oturum ölmüyor, sessizce donuyor:** silinen adresi
+      taşıyan soket `ESTABLISHED` kalıyor, gönderim kuyruğu büyüyor
+      (19.860 → 42.480 → 55.200 bayt), retransmit backoff 8→9 tırmanıyor,
+      hiç ACK gelmiyor — ve `networkctl status` bu sırada `routable
+      (configured)` / `online` demeye devam ediyor. Makinede donan oturumu
+      bildiren **hiçbir okuma yok**.
+      **Adres geri alınırsa donan oturum kaldığı yerden sürüyor:** 102 sn
+      donma, 0,2 sn'lik heartbeat akışında **boşluk yok** — tek bayt
+      kaybolmadı. **Alınmazsa** misafirin çekirdeği soketi **952 sn**
+      sonra düşürüyor (1 sn sonda; `tcp_retries2=15`, sshd
+      `ClientAliveInterval 0` — yani düşüren sshd değil TCP).
+      **İstemcinin haberi olup olmaması makinenin değil ssh istemcisinin
+      özelliği:** `ServerAliveInterval` kapalıyken (OpenSSH'ın kendi
+      varsayılanı) istemci **1136 sn** boyunca tek kelime etmedi (öldürüldü,
+      yani alt sınır); `ssh_config`'te 60/3 varken **239,1 sn**'de
+      `Timeout, server localhost not responding` ile rc=255 verdi.
+      **Kapsam:** QEMU kullanıcı modu ağı (slirp). Birinci koldaki host
+      tarafı asılması kısmen slirp artefaktı — istemcinin TCP karşı tarafı
+      misafir değil QEMU. Kullanıcıya basılan uyarı bu ölçümle **yeniden
+      yazıldı** (ikinci kez: 4. iş de aynı satırı bayat bulmuştu)
 - [x] **btrfs kökü** — 2026-08-31'de uçtan uca koştu (`btrfs.qcow2`,
       hostname `btrfstest`). `mkfs.btrfs` sonrası subvolume kolu gerçekten
       çalıştı (`subvolume create /mnt/root` + `set-default`), ve **asıl bahis
