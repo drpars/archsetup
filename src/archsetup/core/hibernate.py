@@ -156,7 +156,11 @@ def _swap_offset(path: str) -> str:
     btrfs it reports a filesystem-logical address instead, and the two
     disagree: measured on a loopback btrfs holding one NOCOW swapfile,
     filefrag said 86880 where `btrfs inspect-internal map-swapfile -r` said
-    115136.
+    115136. Measured a second time on a real install rather than a loopback
+    (QEMU, 2026-08-31, btrfs root with this tool's own NOCOW swapfile):
+    filefrag 859392, map-swapfile 926976. Different numbers, same
+    disagreement -- and that install then hibernated and resumed on the
+    offset this branch returns.
 
     Neither number looks wrong from here, which is why this branches rather
     than picking the tool that works on the machine it was written on.

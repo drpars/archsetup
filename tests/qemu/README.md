@@ -297,13 +297,46 @@ istiyor. Bir sonraki tur için liste burada dursun.
       üç geçişte de `Lost carrier` yok, link `routable` kaldı. Oturumu o link
       üzerinden gelen bir makinede *farklı* bir adres yazmanın ne yaptığı
       açık; kullanıcıya basılan uyarı bu yüzden yerinde duruyor
-- [ ] **btrfs kökü** (kontrol listesi "ikinci turda deneyin" diyor; subvolume
-      oluşturmalı)
+- [x] **btrfs kökü** — 2026-08-31'de uçtan uca koştu (`btrfs.qcow2`,
+      hostname `btrfstest`). `mkfs.btrfs` sonrası subvolume kolu gerçekten
+      çalıştı (`subvolume create /mnt/root` + `set-default`), ve **asıl bahis
+      tuttu:** `mount_all()` hiçbir `subvol=` seçeneği vermeden `mount`
+      çağırıyor, `findmnt` `subvolid=256,subvol=/root` okuyor — yani
+      `rootflags=subvol=` yazmayan tasarım `set-default` sayesinde ayakta.
+      Kurulan sistem `root=PARTUUID=… rootfstype=btrfs` cmdline'ıyla açıldı.
+      `genfstab -U -p` kökü **`subvol=/root`** ile yazdı (subvolid değil), ESP
+      maskesi de fstab'a geçti. `fs_packages` `btrfs-progs`'u pacstrap satırına
+      koydu. `btrfs` bu çekirdekte **modül değil, gömülü** (`modules.builtin`;
+      `virtio_blk` de öyle) — initramfs'te `btrfs.ko` aramak yanlış sonda
+- [x] **btrfs'te takas dosyası ve hazırda bekletme** — aynı turda koştu.
+      `chattr +C` → `fallocate` → `mkswap` → `swapon` zinciri **gerçek bir
+      btrfs kökünde** ilk kez sınandı ve geçti; karşı-olgu da ölçüldü:
+      `+C`'siz bir dosyada `mkswap` **rc=0** dönüyor, `swapon` EINVAL ile
+      düşüyor — yani kol dekoratif değil, taşıyıcı. `_swap_offset()` btrfs
+      dalını seçti: `filefrag` **859392** derken `map-swapfile` **926976**
+      dedi, araç ikincisini yazdı. Tam bir S4 gidiş-dönüşü tamamlandı —
+      `boot_id` değişmedi, hazırda bekletmeden önce başlatılan işaret süreci
+      hayatta kaldı, askıda geçen süre (`BOOTTIME − MONOTONIC`) ≈0'dan
+      **76,81 s**'ye çıktı, ve `journalctl --list-boots` gidiş ile dönüşü
+      **tek boot** olarak gösteriyor
 - [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —
       ölçülemez değil, harcanabilir NVMe yok
 - [ ] **ATA Secure Erase**: doğrudan bağlı harcanabilir SATA aygıtı yok, USB
       köprüleri ATA SECURITY geçirmiyor. `disk-erase` bunu sessizce geçmiyor,
       yazıyor
+
+**Rig tuzağı — S4 dönüşünden sonra `virtio-gpu` asılıyor, ve bu kurucunun
+kusuru değil.** 2026-08-31'de bir kez ölçüldü: hazırda bekletmeden dönen misafir
+normal çalışıyordu (SSH, `findmnt`, günlük hepsi doğru), ama sonraki
+`systemctl poweroff` tamamlanmadı — makine UKI splash'ında kaldı, SSH kapandı,
+QEMU çıkmadı. Günlükte sebep açık: `INFO: task kworker/1:1:50 blocked for more
+than 122 seconds`, `Workqueue: events drm_fb_helper_damage_work`, çağrı
+`virtio_gpu_queue_ctrl_sgs`'te asılı — yani framebuffer hasar işçisi virtio-gpu
+kuyruğunu bekliyor. Ekran görüntüsü bir *kurulum* arızasına birebir benziyor
+(açılış splash'ında donmuş makine); ayıran şey `journalctl -b -1`. Monitörden
+`quit` + yeniden açış temiz geldi, ve **hazırda bekletme girmeyen** bir
+`poweroff` aynı turda sorunsuz çalıştı. Kapsam: `-device virtio-vga`,
+linux-zen 7.1.11, tek gözlem; kasten tekrarlanmadı.
 
 ## Diğer senaryolar
 
@@ -316,6 +349,12 @@ istiyor. Bir sonraki tur için liste burada dursun.
 | `SCRATCH=1 ./run-vm.sh` | Üç boş disk daha: prepare / erase / nvme format |
 
 Disk ve ISO `~/.cache/archsetup-qemu/` altında tutulur.
+
+`run-vm.sh` yalnız `disk.qcow2` / `bios.qcow2`'yi biliyor: ne disk adı ne
+`-monitor` dışarıdan verilebiliyor. Mevcut kurulumları korumak isteyen tur
+(Secure Boot kayıtlı UEFI diski, GRUB+rEFInd diski, btrfs diski) qemu komut
+satırını elle kuruyor — uefi kolunun birebir kopyası, artı kendi
+`btrfs.qcow2` / `OVMF_VARS.btrfs.fd` çifti.
 
 ## Başka bir düzenek: swap bölümünden hazırda bekletme
 
