@@ -1410,6 +1410,77 @@ def test_install_promotes_the_entry_it_just_created(order_env, monkeypatch):
     assert ["efibootmgr", "-o", "000B,0000,0006,0007,000A,000C"] in order_env.calls
 
 
+# --- GRUB on BIOS ----------------------------------------------------------
+
+
+def _lsblk_pttype(monkeypatch, stdout):
+    monkeypatch.setattr(
+        bootloaders.subprocess, "run",
+        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": stdout})(),
+    )
+
+
+@pytest.fixture
+def bios_env(boot_env, monkeypatch, runlog):
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: False)
+    monkeypatch.setattr(bootloaders.disk, "list_devices", lambda kind: [("/dev/vda", "12G", "disk")])
+    monkeypatch.setattr(bootloaders.disk, "_choose", lambda title, rows: "/dev/vda")
+    # boot_env stubs chroot_run to a bare 0; the BIOS arm's whole question is
+    # which chroot commands ran, so it is recorded here instead.
+    monkeypatch.setattr(bootloaders, "chroot_run", runlog)
+    (boot_env / "etc/default").mkdir(parents=True, exist_ok=True)
+    (boot_env / "etc/default/grub").write_text(
+        'GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"\n'
+    )
+    return runlog
+
+
+def test_grub_refuses_a_gpt_disk_with_no_bios_boot_partition(bios_env, monkeypatch):
+    """The layout this repo's own README describes is the UEFI one.
+
+    Measured in QEMU: following it in BIOS mode produces a GPT disk with
+    no ef02 partition, and `grub-install --target=i386-pc` ends in "will
+    not proceed with blocklists". The fix -- a 1 MiB ef02 partition -- is
+    nowhere in that message, so the question is asked before the install
+    rather than after it fails.
+    """
+    _lsblk_pttype(monkeypatch, "gpt\n     0fc63daf-8483-4772-8e79-3d69d8477de4\n")
+    assert bootloaders.install_grub() == 1
+    assert not any(c[0] == "grub-install" for c in bios_env.calls)
+    assert not any("grub-mkconfig" in c for c in bios_env.calls)
+
+
+def test_grub_proceeds_when_the_bios_boot_partition_is_there(bios_env, monkeypatch):
+    _lsblk_pttype(monkeypatch, "gpt\n     21686148-6449-6e6f-744e-656564454649\n")
+    assert bootloaders.install_grub() == 0
+    assert ["grub-install", "--target=i386-pc", "/dev/vda"] in bios_env.calls
+
+
+def test_an_mbr_disk_is_never_asked_the_gpt_question(bios_env, monkeypatch):
+    """An MBR label has the gap after the boot record, so the question
+    does not arise -- and asking it anyway would refuse a working setup."""
+    _lsblk_pttype(monkeypatch, "dos\n     0x83\n")
+    assert bootloaders.install_grub() == 0
+    assert ["grub-install", "--target=i386-pc", "/dev/vda"] in bios_env.calls
+
+
+def test_a_failed_grub_install_does_not_reach_grub_mkconfig(bios_env, monkeypatch):
+    """It used to, and grub-mkconfig succeeds on its own.
+
+    Measured in the BIOS run: grub-install refused, the flow carried on,
+    and the step ended on the word "done" with the real error scrolled
+    off the top -- on a disk with no boot code in it.
+    """
+    _lsblk_pttype(monkeypatch, "dos\n     0x83\n")
+    def failing(cmd):
+        bios_env(cmd)
+        return 1 if cmd[0] == "grub-install" else 0
+
+    monkeypatch.setattr(bootloaders, "chroot_run", failing)
+    assert bootloaders.install_grub() != 0
+    assert not any("grub-mkconfig" in c for c in bios_env.calls)
+
+
 # --- loader.conf timeout ---------------------------------------------------
 
 

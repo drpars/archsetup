@@ -234,6 +234,33 @@ def install_systemd_boot() -> int:
     return rc
 
 
+# GPT type GUID of a BIOS boot partition, as lsblk reports PARTTYPE.
+# Measured 2026-08-30 in the guest against a loop device partitioned with
+# `sgdisk -t 1:ef02`: 21686148-... with PARTTYPENAME "BIOS boot".
+BIOS_BOOT_GUID = "21686148-6449-6e6f-744e-656564454649"
+
+
+def _gpt_without_bios_boot(target: str) -> bool:
+    """True when `target` is GPT and carries no BIOS boot partition.
+
+    That combination is the one `grub-install --target=i386-pc` refuses:
+    with no gap to embed core.img into it falls back to blocklists and
+    then declines to use them. On an MBR label there is a gap after the
+    boot record and the question does not arise, so the check is narrowed
+    to GPT rather than asked of every disk.
+    """
+    out = subprocess.run(
+        ["lsblk", "-n", "-o", "PTTYPE,PARTTYPE", target],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        return False  # unreadable is not a finding; grub-install still speaks
+    lines = out.stdout.splitlines()
+    if not lines or lines[0].split()[0:1] != ["gpt"]:
+        return False
+    return BIOS_BOOT_GUID not in out.stdout.lower()
+
+
 def install_grub() -> int:
     if not target_ready():
         return 1
@@ -249,11 +276,28 @@ def install_grub() -> int:
         ])
     else:
         disks = disk.list_devices("disk")
-        target = disk._choose(t("inst.pick_disk"), disks)
+        target = disk._choose(t("inst.grub_pick_disk"), disks)
         if not target:
+            return 1
+        # Asked before the install rather than after it fails, because the
+        # failure is a wall of grub-install warnings ending in "will not
+        # proceed with blocklists" and the fix -- a 1 MiB ef02 partition --
+        # is nowhere in it. Measured in QEMU: a GPT disk laid out the way
+        # this repo's own README describes (which is the UEFI layout) hits
+        # exactly this, and the layout is what the user was told to make.
+        if _gpt_without_bios_boot(target):
+            print(t("inst.grub_needs_bios_boot", dev=target))
             return 1
         rc = run(["pacstrap", str(MNT), "grub"])
         rc |= chroot_run(["grub-install", "--target=i386-pc", target])
+
+    # Stop here when grub-install failed. It used to fall through to
+    # grub-mkconfig, which succeeds on its own and prints "done" -- so a
+    # disk with no boot code in it ended the step on the word done, with
+    # the real error scrolled off the top. Measured in the BIOS run.
+    if rc != 0:
+        print(t("inst.grub_install_failed", rc=rc))
+        return rc
 
     grub_default = MNT / "etc/default/grub"
     text = grub_default.read_text(encoding="utf-8")
