@@ -826,14 +826,22 @@ def make_target_menu() -> MenuScreen:
     return MenuScreen(t("inst.target_title"), items)
 
 
-def make_installer_menu() -> MenuScreen:
-    from ..installer import base, chroot, disk, erase, pickers
+def _phase_item(id_: str, key: str, factory) -> MenuItem:
+    """A row that opens one phase of the install.
 
-    def extras_screen(screen: MenuScreen) -> None:
-        categories = data.load_categories("extras.toml", section="install")
-        screen.app.push_screen(
-            PackageScreen(categories[0], install_fn=chroot.chroot_install)
-        )
+    The description comes from the locale here, unlike the rows inside a
+    phase: those carry the command they run (`mkfs`, `wipefs`, `loadkeys`),
+    which is the same word in every language, while a phase description is
+    prose naming its steps.
+    """
+    return MenuItem(
+        id_, t(key), t(f"{key}_desc"),
+        lambda screen: screen.app.push_screen(factory()),
+    )
+
+
+def make_live_phase() -> MenuScreen:
+    from ..installer import base, pickers
 
     items = [
         MenuItem(
@@ -844,6 +852,14 @@ def make_installer_menu() -> MenuScreen:
         ),
         _run_item("reflector", "inst.reflector", "mirrorlist", base.run_reflector),
         _run_item("parallel", "inst.parallel", "pacman.conf", base.parallel_downloads),
+    ]
+    return MenuScreen(t("inst.phase_live"), items)
+
+
+def make_disk_phase() -> MenuScreen:
+    from ..installer import disk, erase
+
+    items = [
         # Prepare before cfdisk: it is what makes a second-hand disk enter
         # partitioning without a stale identity. Erase sits next to it
         # rather than inside it because the two ask different questions.
@@ -853,22 +869,60 @@ def make_installer_menu() -> MenuScreen:
         _run_item("select", "inst.select", "boot/swap/root/home", disk.select_partitions),
         _run_item("format", "inst.format", "mkfs", disk.format_devices),
         _run_item("mount", "inst.mount", "/mnt", disk.mount_all),
+    ]
+    return MenuScreen(t("inst.phase_disk"), items)
+
+
+def make_base_phase() -> MenuScreen:
+    from ..installer import base, chroot
+
+    def extras_screen(screen: MenuScreen) -> None:
+        categories = data.load_categories("extras.toml", section="install")
+        screen.app.push_screen(
+            PackageScreen(categories[0], install_fn=chroot.chroot_install)
+        )
+
+    items = [
         _run_item("pacstrap", "inst.pacstrap", "base + kernel", base.pacstrap_base),
         # Extras before system configuration: it brings sbctl (Secure Boot),
         # efibootmgr and the microcode, all of which the chroot steps need.
-        MenuItem(
-            "extras", t("inst.extras"), "arch-chroot pacman",
-            extras_screen,
-        ),
-        MenuItem(
-            "target", t("inst.target_title"), "arch-chroot /mnt",
-            lambda screen: screen.app.push_screen(make_target_menu()),
-        ),
+        MenuItem("extras", t("inst.extras"), "arch-chroot pacman", extras_screen),
+    ]
+    return MenuScreen(t("inst.phase_base"), items)
+
+
+def make_finish_phase() -> MenuScreen:
+    from ..installer import disk
+
+    items = [
         _run_item("unmount", "inst.unmount", "umount -R /mnt", disk.unmount_all),
         _run_item("reboot", "inst.reboot", "systemctl reboot",
                   lambda: pacman.run(["systemctl", "reboot"])),
         _run_item("poweroff", "inst.poweroff", "systemctl poweroff",
                   lambda: pacman.run(["systemctl", "poweroff"])),
+    ]
+    return MenuScreen(t("inst.phase_finish"), items)
+
+
+def make_installer_menu() -> MenuScreen:
+    """The installer root: five phases, in the order they must be done.
+
+    Flat, this was fifteen rows that read as equals while being a strict
+    sequence -- partition before select before format before mount before
+    pacstrap -- and one of them (`target`) was already a submenu, so the
+    surface was half-phased and inconsistent. Naming the phases makes the
+    order the menu's first statement rather than something the reader has
+    to infer from fifteen sibling rows.
+
+    Phase 4 is make_target_menu() unchanged: it was already exactly this
+    shape, which is what suggested the rest.
+    """
+    items = [
+        _phase_item("phase-live", "inst.phase_live", make_live_phase),
+        _phase_item("phase-disk", "inst.phase_disk", make_disk_phase),
+        _phase_item("phase-base", "inst.phase_base", make_base_phase),
+        _phase_item("phase-system", "inst.phase_system", make_target_menu),
+        _phase_item("phase-finish", "inst.phase_finish", make_finish_phase),
     ]
     return MainMenuScreen(t("inst.title"), items)
 

@@ -40,10 +40,20 @@ cd archsetup
 curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash
 ```
 
-Kurucu akışı: klavye → yansılar → (disk hazırla / disk sil) → cfdisk → bölüm seçimi →
-biçimlendir → bağla → pacstrap → **ek paketler** → sistem yapılandırması
-(hostname, locale, kullanıcı, önyükleyici: systemd-boot/UKI, GRUB veya
-rEFInd, Secure Boot) → yeniden başlat.
+Kurucu menüsü **beş aşamadır** ve sıra bağlayıcıdır:
+
+| # | Aşama | Adımlar |
+|---|---|---|
+| 1 | Canlı Ortam | klavye · yansılar · paralel indirme |
+| 2 | Disk | hazırla · sil · bölümle · seç · biçimlendir · bağla |
+| 3 | Temel Kurulum | pacstrap · ek paketler |
+| 4 | Sistem Yapılandırması | hostname, locale, kullanıcı, önyükleyici (systemd-boot/UKI, GRUB veya rEFInd), Secure Boot |
+| 5 | Bitir | bağı ayır · yeniden başlat · kapat |
+
+Aşamalar düz bir listeyken on beş satırdı ve hepsi eşitmiş gibi duruyordu; oysa
+`bölümle → seç → biçimlendir → bağla → pacstrap` zorunlu bir sıra. Dördüncüsü
+zaten alt menüydü, yani yüzey yarı-aşamalıydı. Numaralandırma sırayı menünün
+**ilk cümlesi** yapıyor.
 
 Ek paketler sistem yapılandırmasından **önce** gelir: sbctl, efibootmgr ve
 mikrokod oradan kurulur, chroot adımları da bunlara dayanır. `linux-ogc`

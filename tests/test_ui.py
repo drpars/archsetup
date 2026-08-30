@@ -255,25 +255,64 @@ async def test_the_refresh_does_not_depend_on_how_the_child_left():
         assert "tamamlanan=7" in _rendered(app, "phase")
 
 
-async def test_installer_menu_structure():
+async def test_installer_menu_is_five_phases_in_order():
+    """The installer root is a sequence, not a set, and now says so.
+
+    Flat, the same steps were fifteen sibling rows that read as equals while
+    partition-before-select-before-format-before-mount-before-pacstrap was
+    mandatory. The phase ids carry the order; the labels carry the numbers
+    and never participate in dispatch.
+    """
     app = ArchSetupApp(ask_language=False, installer=True)
     async with app.run_test(size=(110, 45)) as pilot:
         await pilot.pause()
-        ids = list(app.screen._items)
-        assert ids[:3] == ["keymap", "reflector", "parallel"]
-        assert "pacstrap" in ids and "target" in ids
-        # Prepare comes before partitioning: a second-hand disk should
-        # enter cfdisk without a stale identity on it.
-        assert ids.index("disk-prepare") < ids.index("cfdisk")
-        assert ids.index("disk-erase") < ids.index("cfdisk")
-        # Ek Paketler sbctl/efibootmgr/ucode getirir; chroot adımları bunlara
-        # dayandığı için Sistem Yapılandırması'ndan önce gelmeli.
-        assert ids.index("pacstrap") < ids.index("extras") < ids.index("target")
+        assert list(app.screen._items) == [
+            "phase-live", "phase-disk", "phase-base", "phase-system",
+            "phase-finish",
+        ]
 
-        app.screen.query_one(OptionList).highlighted = ids.index("target")
-        await pilot.press("enter")
+
+async def _enter(pilot, phase_id: str) -> list[str]:
+    app = pilot.app
+    ids = list(app.screen._items)
+    app.screen.query_one(OptionList).highlighted = ids.index(phase_id)
+    await pilot.press("enter")
+    await pilot.pause()
+    return list(app.screen._items)
+
+
+async def test_each_phase_holds_its_steps_in_the_order_they_must_run():
+    app = ArchSetupApp(ask_language=False, installer=True)
+    async with app.run_test(size=(110, 45)) as pilot:
         await pilot.pause()
-        target_ids = list(app.screen._items)
+
+        assert await _enter(pilot, "phase-live") == [
+            "keymap", "reflector", "parallel",
+        ]
+        app.screen.action_go_back()
+        await pilot.pause()
+
+        # Prepare comes before partitioning: a second-hand disk should enter
+        # cfdisk without a stale identity on it.
+        disk_ids = await _enter(pilot, "phase-disk")
+        assert disk_ids == [
+            "disk-prepare", "disk-erase", "cfdisk", "select", "format", "mount",
+        ]
+        app.screen.action_go_back()
+        await pilot.pause()
+
+        # Ek Paketler sbctl/efibootmgr/ucode getirir; chroot adımları bunlara
+        # dayandığı için Sistem Yapılandırması'ndan önce gelmeli. Bu kısıt
+        # artık aşamalar arası: 3. aşama 4.'den önce.
+        assert await _enter(pilot, "phase-base") == ["pacstrap", "extras"]
+
+
+async def test_the_system_phase_is_the_target_menu_unchanged():
+    """Phase 4 was already this shape, which is what suggested the rest."""
+    app = ArchSetupApp(ask_language=False, installer=True)
+    async with app.run_test(size=(110, 45)) as pilot:
+        await pilot.pause()
+        target_ids = await _enter(pilot, "phase-system")
         assert "bootloader" in target_ids and "secureboot" in target_ids
 
         app.screen.query_one(OptionList).highlighted = target_ids.index("bootloader")
@@ -359,7 +398,8 @@ async def test_extras_screen_uses_chroot_installer():
     app = ArchSetupApp(ask_language=False, installer=True)
     async with app.run_test(size=(110, 45)) as pilot:
         await pilot.pause()
-        ids = list(app.screen._items)
+        # Extras lives in phase 3 now, not at the root.
+        ids = await _enter(pilot, "phase-base")
         app.screen.query_one(OptionList).highlighted = ids.index("extras")
         await pilot.press("enter")
         await pilot.pause()
