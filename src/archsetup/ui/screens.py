@@ -84,6 +84,25 @@ class MenuScreen(Screen):
         for item in computed:
             options.replace_option_prompt(item.id, self._prompt(item))
 
+    def on_screen_resume(self) -> None:
+        """Re-read the computed rows whenever this screen becomes active again.
+
+        The task-run edge of this was closed when the computed rows landed:
+        `_run_task` calls refresh_state() because the row the user just ran is
+        the row most likely to have changed. The other edge stayed open --
+        a row can also be made stale by something that happened on a *child*
+        screen, and coming back from that child refreshed nothing. Measured:
+        a parent row still read `tamamlanan=0` after its child had moved the
+        value to 4.
+
+        Handled on arrival rather than in `action_go_back` on purpose. Leaving
+        a screen has seven call sites across six screen classes here, and
+        go_back is one of them; a package or picker screen that dismisses
+        itself would have kept the bug. Becoming active again is one event no
+        matter which of them ran.
+        """
+        self.refresh_state()
+
     def on_option_list_option_selected(
         self, event: OptionList.OptionSelected
     ) -> None:

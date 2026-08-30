@@ -192,6 +192,69 @@ async def test_theme_default_and_switch():
         assert config.load()["theme"] == "tokyo-night-day"
 
 
+def _phase_row(state: dict, action) -> screens.MenuItem:
+    """A parent row whose description is computed, like a phase row would be."""
+    return screens.MenuItem(
+        "phase", "Disk", desc=lambda: f"tamamlanan={state['done']}", action=action
+    )
+
+
+def _rendered(app, option_id: str) -> str:
+    return str(app.screen.query_one(OptionList).get_option(option_id).prompt)
+
+
+async def test_a_computed_row_refreshes_when_a_child_screen_goes_back():
+    """Coming back from a child is the other edge of the staleness _run_task
+    already closes: the row can be made stale by what happened *inside* the
+    child, and returning used to refresh nothing."""
+    state = {"done": 0}
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.push_screen(screens.MenuScreen("parent", [
+            _phase_row(state, lambda screen: screen.app.push_screen(
+                screens.MenuScreen("child", [screens.MenuItem("leaf", "leaf", "x")])
+            )),
+        ]))
+        await pilot.pause()
+        assert "tamamlanan=0" in _rendered(app, "phase")
+
+        app.screen.query_one(OptionList).action_select()
+        await pilot.pause()
+        assert app.screen._menu_title == "child"
+        state["done"] = 4
+        app.screen.action_go_back()
+        await pilot.pause()
+
+        assert app.screen._menu_title == "parent"
+        assert "tamamlanan=4" in _rendered(app, "phase")
+
+
+async def test_the_refresh_does_not_depend_on_how_the_child_left():
+    """go_back is one of seven pop sites across six screen classes; a picker
+    or package screen dismissing itself has to refresh the parent too. Handled
+    on arrival, so the exit path cannot matter -- and this test is what says
+    so, because the arrival handler is invisible from the parent's side."""
+    state = {"done": 0}
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        app.push_screen(screens.MenuScreen("parent", [
+            _phase_row(state, lambda screen: screen.app.push_screen(
+                screens.MenuScreen("child", [screens.MenuItem("leaf", "leaf", "x")])
+            )),
+        ]))
+        await pilot.pause()
+        app.screen.query_one(OptionList).action_select()
+        await pilot.pause()
+        state["done"] = 7
+        # Not action_go_back(): the way every other screen here leaves.
+        app.pop_screen()
+        await pilot.pause()
+
+        assert "tamamlanan=7" in _rendered(app, "phase")
+
+
 async def test_installer_menu_structure():
     app = ArchSetupApp(ask_language=False, installer=True)
     async with app.run_test(size=(110, 45)) as pilot:
