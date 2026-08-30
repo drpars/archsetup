@@ -104,7 +104,23 @@ def prepare_disk() -> int:
         return 0
 
     print(t("prepare.wiping"))
-    rc = run(["wipefs", "-a", disk.path])
+    # Partitions first, then the disk. Measured 2026-08-30 in QEMU: `wipefs
+    # -a` on the whole disk removes only the signatures the *disk* carries
+    # (GPT, PMBR). An ext4 superblock inside a partition sits at a
+    # partition-relative offset that a whole-disk wipefs never looks at, so
+    # it survives -- and the next partition table written at the same
+    # alignment brings the old UUID straight back. Measured: prepare
+    # reported "no partitions visible", one sgdisk later blkid answered
+    # with the same UUID it had before, which is the exact thing this
+    # surface exists to prevent. blkdiscard does not cover it either: the
+    # discard was accepted (rc=0, discard_max_bytes non-zero) and changed
+    # nothing, and on the paths erase.py already measured -- both spinning
+    # disks, the USB-bridged SSD -- discard_max_bytes is 0, so there is no
+    # discard to rely on in the first place.
+    rc = 0
+    for part in blockdev.partitions(disk.name):
+        rc |= run(["wipefs", "-a", part])
+    rc |= run(["wipefs", "-a", disk.path])
     if rc != 0:
         print(t("prepare.failed", dev=disk.path, rc=rc))
         return rc

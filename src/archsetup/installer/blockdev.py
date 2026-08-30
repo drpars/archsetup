@@ -179,6 +179,21 @@ def list_disks() -> list[Disk]:
     return disks
 
 
+def partitions(name: str) -> list[str]:
+    """/dev paths of `name`'s partitions, in on-disk order.
+
+    From sysfs rather than `lsblk`, for the reason size_bytes() gives: this
+    runs before a destructive step and needs no privilege to answer. A
+    partition directory is the one that carries a `partition` file, which is
+    what separates `vda1` from the `queue`/`holders` siblings next to it.
+    """
+    try:
+        entries = sorted((BLOCK / name).iterdir())
+    except OSError:
+        return []
+    return [f"/dev/{d.name}" for d in entries if (d / "partition").exists()]
+
+
 def busy(dev: str) -> str | None:
     """Mountpoint or 'swap' if `dev` -- or any partition of it -- is in use.
 

@@ -1038,6 +1038,46 @@ def test_prepare_discards_when_the_path_advertises_it(erase_env, monkeypatch):
     assert ["blkdiscard", "/dev/nvme0n1"] in erase_env.calls
 
 
+def test_prepare_wipes_partition_signatures_before_the_table(erase_env, monkeypatch, tmp_path):
+    """Measured 2026-08-30 in QEMU, and this is what prepare exists to stop.
+
+    `wipefs -a` on the whole disk removes the GPT and PMBR the *disk*
+    carries and nothing else. An ext4 superblock inside a partition sits at
+    a partition-relative offset the whole-disk call never looks at, so it
+    survives -- and the guest showed it plainly: prepare reported "no
+    partitions visible", one sgdisk at the same alignment later, blkid
+    answered with UUID 7e83f00d-... , the UUID that was there before.
+
+    The order is the assertion. Wiping the disk first drops the partition
+    table, and with it the names of the partitions still holding
+    signatures.
+    """
+    block = tmp_path / "block"
+    for part in ("nvme0n1p1", "nvme0n1p2"):
+        (block / "nvme0n1" / part).mkdir(parents=True)
+        (block / "nvme0n1" / part / "partition").write_text("1\n")
+    (block / "nvme0n1" / "queue").mkdir()  # a sibling that is not a partition
+    monkeypatch.setattr(blockdev, "BLOCK", block)
+    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
+    _feed(monkeypatch, erase, ["1"])
+
+    assert erase.prepare_disk() == 0
+    wipes = [c[2] for c in erase_env.calls if c[0] == "wipefs"]
+    assert wipes == ["/dev/nvme0n1p1", "/dev/nvme0n1p2", "/dev/nvme0n1"]
+
+
+def test_prepare_still_wipes_a_disk_with_no_partitions(erase_env, monkeypatch, tmp_path):
+    """The partition sweep must not become a precondition for the disk one."""
+    block = tmp_path / "block"
+    (block / "nvme0n1" / "queue").mkdir(parents=True)
+    monkeypatch.setattr(blockdev, "BLOCK", block)
+    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
+    _feed(monkeypatch, erase, ["1"])
+
+    assert erase.prepare_disk() == 0
+    assert [c[2] for c in erase_env.calls if c[0] == "wipefs"] == ["/dev/nvme0n1"]
+
+
 def test_format_devices_refuses_a_mounted_device(monkeypatch, tmp_path, runlog):
     """Until the shared gate existed, one ask_yes stood between a mounted
     device and mkfs -- the in-use test was private to the NVMe surface."""
