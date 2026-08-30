@@ -26,6 +26,10 @@ t = i18n.t
 
 MNT = Path("/mnt")
 
+# Constant so tests can point the mount reader somewhere that is not the
+# machine running them.
+MOUNTS = Path("/proc/mounts")
+
 # GPT type GUID / MBR type byte of an EFI System Partition.
 ESP_GUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 ESP_MBR = "0xef"
@@ -93,6 +97,48 @@ def _choose(title: str, rows: list, allow_none: bool = False) -> str | None:
         if raw.isdigit() and 1 <= int(raw) <= len(rows):
             return rows[int(raw) - 1][0]
         print(t("inst.invalid"))
+
+
+def mounted() -> bool:
+    """Whether /mnt itself is a mountpoint.
+
+    Read out of /proc/mounts rather than through `findmnt` because this runs
+    while the menu is being drawn: a file read costs nothing and cannot fail
+    on a machine with no findmnt. Exact match on the mountpoint -- /mnt/boot
+    being mounted does not make /mnt one.
+    """
+    try:
+        text = MOUNTS.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(
+        len(fields) > 1 and fields[1] == str(MNT)
+        for fields in (line.split() for line in text.splitlines())
+    )
+
+
+def mount_state() -> str:
+    return t("inst.phase_mounted") if mounted() else t("inst.phase_unmounted")
+
+
+def selection_state() -> str:
+    """What the disk phase can honestly report.
+
+    Selections and the mount are real: one is memory, the other is a file.
+    Whether anything was *formatted* is deliberately absent -- nothing
+    records it. `fs_packages` looks like it would, and does not: ext4 is not
+    in FS_PACKAGES, so an ext4 install leaves the list empty and the row
+    would report "not formatted" over a formatted disk.
+    """
+    chosen = [d for d in (state.bootdev, state.swapdev, state.rootdev, state.homedev) if d]
+    if not chosen:
+        return t("inst.phase_disk_none")
+    return t(
+        "inst.phase_disk_sel",
+        count=len(chosen),
+        root=state.rootdev or "?",
+        mount=mount_state(),
+    )
 
 
 def _lsblk_value(dev: str, column: str) -> str:

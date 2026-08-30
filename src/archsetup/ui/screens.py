@@ -826,16 +826,28 @@ def make_target_menu() -> MenuScreen:
     return MenuScreen(t("inst.target_title"), items)
 
 
-def _phase_item(id_: str, key: str, factory) -> MenuItem:
+def _phase_item(id_: str, key: str, factory, state=None) -> MenuItem:
     """A row that opens one phase of the install.
 
     The description comes from the locale here, unlike the rows inside a
     phase: those carry the command they run (`mkfs`, `wipefs`, `loadkeys`),
     which is the same word in every language, while a phase description is
     prose naming its steps.
+
+    `state` is optional on purpose, and most phases do not have one. A row
+    reports what it can measure and stays quiet about the rest: nothing
+    records whether a keymap was set or a partition formatted, so phases 1
+    and 4 say only what they do. Inventing a progress line for them would
+    make the honest ones unreadable -- a row that is sometimes a guess is a
+    guess everywhere. Layout follows _task_items: what is true now, then
+    what this row does.
     """
+    fixed = t(f"{key}_desc")
+    desc: str | Callable[[], str] = fixed
+    if state is not None:
+        desc = lambda: f"{state()}\n{fixed}"  # noqa: E731
     return MenuItem(
-        id_, t(key), t(f"{key}_desc"),
+        id_, t(key), desc,
         lambda screen: screen.app.push_screen(factory()),
     )
 
@@ -917,12 +929,20 @@ def make_installer_menu() -> MenuScreen:
     Phase 4 is make_target_menu() unchanged: it was already exactly this
     shape, which is what suggested the rest.
     """
+    from ..installer import base, disk
+
     items = [
         _phase_item("phase-live", "inst.phase_live", make_live_phase),
-        _phase_item("phase-disk", "inst.phase_disk", make_disk_phase),
-        _phase_item("phase-base", "inst.phase_base", make_base_phase),
+        _phase_item(
+            "phase-disk", "inst.phase_disk", make_disk_phase, disk.selection_state
+        ),
+        _phase_item(
+            "phase-base", "inst.phase_base", make_base_phase, base.install_state
+        ),
         _phase_item("phase-system", "inst.phase_system", make_target_menu),
-        _phase_item("phase-finish", "inst.phase_finish", make_finish_phase),
+        _phase_item(
+            "phase-finish", "inst.phase_finish", make_finish_phase, disk.mount_state
+        ),
     ]
     return MainMenuScreen(t("inst.title"), items)
 

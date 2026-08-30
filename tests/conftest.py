@@ -15,7 +15,7 @@ from archsetup.core import (  # noqa: E402
     secureboot,
     wifi_power_save,
 )
-from archsetup.installer import blockdev  # noqa: E402
+from archsetup.installer import blockdev, disk  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -143,6 +143,18 @@ def sealed_block_state(monkeypatch, tmp_path):
     monkeypatch.setattr(blockdev, "BLOCK", empty_block)
     monkeypatch.setattr(blockdev, "IN_USE_SOURCES", ((str(empty_mounts), None),))
     monkeypatch.setattr(blockdev, "ARCHISO_MOUNT", str(tmp_path / "sealed-never-created"))
+    # The installer root menu computes two of its phase rows while drawing,
+    # and both of them ask whether /mnt is mounted. Unsealed, every pilot
+    # test that opens that menu reports the machine running the suite -- and
+    # on a box that happens to have something at /mnt it would report it as
+    # installer progress.
+    monkeypatch.setattr(disk, "MOUNTS", empty_mounts)
+    # MNT itself is deliberately left alone. It is only ever reached behind
+    # mounted(), which this empty file already answers no to, so sealing it
+    # buys nothing -- and it would weaken a test that pins the production
+    # path (`btrfs subvolume set-default /mnt/root`) by turning the constant
+    # into a tmp dir. A test that fakes a mount seals MNT itself, and must
+    # seal both: disk and base each define their own.
 
 
 @pytest.fixture

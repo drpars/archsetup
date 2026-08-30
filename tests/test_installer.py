@@ -986,6 +986,64 @@ def test_format_devices_refuses_a_mounted_device(monkeypatch, tmp_path, runlog):
     assert runlog.calls == []
 
 
+# --- phase progress rows ---------------------------------------------------
+
+
+def _mounts(monkeypatch, tmp_path, *lines: str) -> None:
+    path = tmp_path / "phase-mounts"
+    path.write_text("".join(f"{line}\n" for line in lines))
+    monkeypatch.setattr(disk, "MOUNTS", path)
+
+
+def test_mounted_wants_the_mountpoint_itself(monkeypatch, tmp_path):
+    """/mnt/boot being mounted does not make /mnt a mountpoint."""
+    _mounts(monkeypatch, tmp_path, "/dev/sda1 /mnt/boot vfat rw 0 0")
+    assert disk.mounted() is False
+    _mounts(monkeypatch, tmp_path, "/dev/sda2 /mnt ext4 rw 0 0")
+    assert disk.mounted() is True
+
+
+def test_the_disk_row_reports_selection_and_mount(monkeypatch, tmp_path):
+    i18n.load("en")
+    _mounts(monkeypatch, tmp_path)
+    assert disk.selection_state() == "No device selected yet"
+
+    state.rootdev = "/dev/sda2"
+    state.bootdev = "/dev/sda1"
+    assert disk.selection_state() == "2 device(s) selected (root /dev/sda2) · /mnt is not mounted"
+
+    _mounts(monkeypatch, tmp_path, "/dev/sda2 /mnt ext4 rw 0 0")
+    assert disk.selection_state().endswith("/mnt is mounted")
+
+
+def test_the_disk_row_never_claims_a_format(monkeypatch, tmp_path):
+    """Nothing records whether a device was formatted, so the row must not
+    imply it. fs_packages is the attractive wrong answer: ext4 is not in
+    FS_PACKAGES, so an ext4 install leaves it empty and a row keyed off it
+    would report "not formatted" over a formatted disk. Moving it must not
+    move the row."""
+    _mounts(monkeypatch, tmp_path)
+    state.rootdev = "/dev/sda2"
+    before = disk.selection_state()
+    state.fs_packages.extend(["btrfs-progs", "dosfstools"])
+    assert disk.selection_state() == before
+
+
+def test_the_base_row_has_three_states(monkeypatch, tmp_path):
+    i18n.load("en")
+    _mounts(monkeypatch, tmp_path)
+    assert base.install_state() == "/mnt is not mounted -- phase 2 first"
+
+    _mounts(monkeypatch, tmp_path, "/dev/sda2 /mnt ext4 rw 0 0")
+    monkeypatch.setattr(base, "MNT", tmp_path / "target")
+    assert base.install_state() == "Ready; pacstrap has not run"
+
+    pacman_bin = tmp_path / "target/usr/bin/pacman"
+    pacman_bin.parent.mkdir(parents=True)
+    pacman_bin.write_text("")
+    assert base.install_state() == "A base system is installed on /mnt"
+
+
 # --- wireless: addressing and credentials ----------------------------------
 
 

@@ -272,6 +272,25 @@ async def test_installer_menu_is_five_phases_in_order():
         ]
 
 
+async def test_only_the_phases_that_can_measure_progress_report_it():
+    """A row reports what it measured and stays quiet about the rest.
+
+    Phases 2, 3 and 5 have real signals: the selections are in memory, the
+    mount is a line in /proc/mounts, and pacman's binary under /mnt says a
+    base system landed. Phases 1 and 4 have none -- nothing records that a
+    keymap was set or that a chroot step ran -- so they carry the plain
+    description. Inventing a progress line for them would make the honest
+    ones unreadable: a row that is sometimes a guess is a guess everywhere.
+    """
+    app = ArchSetupApp(ask_language=False, installer=True)
+    async with app.run_test(size=(110, 45)) as pilot:
+        await pilot.pause()
+        computed = {
+            item.id for item in app.screen._items.values() if callable(item.desc)
+        }
+        assert computed == {"phase-disk", "phase-base", "phase-finish"}
+
+
 async def _enter(pilot, phase_id: str) -> list[str]:
     app = pilot.app
     ids = list(app.screen._items)

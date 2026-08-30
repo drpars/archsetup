@@ -104,6 +104,21 @@ def _apply_parallel_to_target() -> None:
         print(t("inst.parallel_target_missed", path=str(conf)))
 
 
+def install_state() -> str:
+    """What the base-install phase can report without running anything.
+
+    Three states, and the marker is pacman's own binary in the target:
+    pacstrap installs `base`, `base` brings pacman, so its presence is the
+    cheapest true answer to "did a base system land here". One stat, no
+    subprocess -- this is read while the menu is drawn.
+    """
+    if not disk.mounted():
+        return t("inst.phase_base_nomnt")
+    if (MNT / "usr/bin/pacman").exists():
+        return t("inst.phase_base_done")
+    return t("inst.phase_base_ready")
+
+
 def pacstrap_base() -> int:
     if not disk.guard():
         return 1
