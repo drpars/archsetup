@@ -71,6 +71,30 @@ olarak bırakılmış bir FAT32 bölümü biçimlenir, bağlanır ve dosyaları 
 iş yalnızca `bootctl install` aşamasında patlar. Yanlış tip bulunursa
 `sfdisk --part-type` ile düzeltmesi önerilir (veri silinmez).
 
+**systemd-boot kurulumu firmware önyükleme sırasını da düzeltir.** `bootctl
+install` **yeni** bir girdiyi daima sıranın sonuna ekler — bu ISO'ya özel
+değil, systemd'nin davranışıdır (`insert_into_order()`: yeni slot `order[n]`'e,
+başa alınan yalnızca zaten sırada olan girdidir). Sonucu, üzerinde ağ önyükleme
+girdileri ya da başka bir işletim sistemi olan her makinede aynı: kurulum
+"bitti" der, makine başka bir şey açar, **ekranda hiçbir hata olmaz**. Kurucu
+bu yüzden adımın sonunda sırayı okuyup Arch girdisini `efibootmgr -o` ile öne
+alıyor ve ne yaptığını basıyor. Eşleşme hem bölümün PARTUUID'si hem yükleyici
+yolu üzerinden: kurtarma girdisi aynı PARTUUID'yi taşıyor ve onu öne almak
+yanlış imajı açardı. Sıra okunamazsa ya da girdi bulunamazsa kurulum
+düşürülmez — durum yazılır ve devam edilir.
+
+**BIOS (UEFI olmayan) kurulumda GPT kullanacaksanız bir BIOS boot bölümü
+gerekir:** 1 MiB, tip **ef02**, dosya sistemi yok, bağlanmaz. GRUB `core.img`'i
+oraya gömüyor; bölüm olmadan blocklist'e düşüyor ve `grub-install` bunu
+reddediyor. Kurucu bunu kurulumdan **önce** söyler ve orada durur. MBR (dos)
+etiketinde gerekmez — önyükleme kaydının ardındaki boşluk zaten o iş için.
+
+**Secure Boot adımı preset'in ürettiği *her* UKI'yi imzalar**, kurtarma
+(`-fallback`) imajı dahil. Yalnız birincisini imzalamak, firmware'ın kurtarma
+girdisini `Access Denied` ile reddettiği bir makine üretiyor — yani var
+sandığınız kurtarma yolu tam ihtiyaç duyulduğunda yok. Adım kendi `sbctl
+verify` raporunu da basar; oradaki tek bir `✗` bulgudur.
+
 Gereksinimler: `python` ve `python-textual` (resmi depoda). Root olarak
 çalıştırmayın; sudo gerektiğinde sorulur.
 
@@ -385,7 +409,10 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
 - [x] Kurucu modu: disk bölümleme, pacstrap, chroot yapılandırması,
       önyükleyici kurulumu (systemd-boot/UKI, GRUB, rEFInd), Secure Boot
       (sbctl), ek paketler — `iso.sh` ile tek komut başlatma
-- [x] pytest test paketi (242 test) ve QEMU test düzeneği (`tests/qemu/`)
+- [x] pytest test paketi ve QEMU test düzeneği (`tests/qemu/`; Secure Boot
+      firmware'ı ve harcanabilir diskler dahil). Test **sayısı buraya
+      yazılmıyor** — bir kez yazıldı ve üç yüz test geride kaldı; sayıyı
+      `pytest -q` verir
 - [x] Önyükleme süresi ve boot hatası düzeltmeleri (ölçüm: 2dk 20sn → 35sn):
       networkd-wait-online `--any --timeout=3` (servis disable edilmez, smb ve
       keyring-wkd-sync ona bağlı), Samba'nın boot'ta başlaması artık soruluyor,
@@ -393,7 +420,11 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       eklenmiyor, binder DKMS yalnızca çekirdek binder'ı vermiyorsa kuruluyor
       (`/proc/filesystems`), ESP `fmask/dmask=0077` ile bağlanıyor
 - [x] Disk hazırlama ve silme, **her taşıyıcı için tek yüzey**: `disk-prepare`
-      imzaları siler (`wipefs`, artı aygıt bildiriyorsa `blkdiscard`),
+      imzaları siler — **önce bölümlerin, sonra diskin** (tersi eski UUID'yi
+      geri getiriyordu: bir bölüm süperbloğu bölüme göreli bir ofsette durur ve
+      diske verilen `wipefs` oraya hiç bakmaz). `blkdiscard` yalnız aygıt
+      bildiriyorsa ek olarak koşar ve **güvenilecek şey değildir**: ölçüldü,
+      `rc=0` döndü ve hiçbir şey değişmedi. `disk-erase` içeriği yok eder.
       `disk-erase` içeriği yok eder. Bağlı aygıt ve canlı oturumun açıldığı
       medya reddedilir; silme onayı aygıt yolunu yazdırtır. Dal **sınıfa değil
       yeteneğe** bakar: NVMe'de denetleyiciye `nvme format` (kripto silme
@@ -424,6 +455,15 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       yeniden yazmaz, önce yedekler. `ssh-forget` sıfırlanan bir makinenin
       bayat `known_hosts` kaydını `ssh-keygen -R` ile siler, her zaman açık
       onay ister
-- [ ] Kurucu modun QEMU'da uçtan uca doğrulanması (kontrol listesi hazır)
+- [x] Kurucu modun QEMU'da uçtan uca doğrulanması: **UEFI turu** (systemd-boot
+      + UKI, Secure Boot anahtarları gerçekten kaydedilmiş firmware'da) ve
+      **BIOS turu** (GRUB, i386-pc) ayrı ayrı koştu; ikisi de açılan bir sistem
+      üretti. Tur beş kusur buldu ve beşi de kurulumun ekranında **hiç
+      görünmüyordu**: `disk-prepare` sildiğini sandığı imzaları bırakıyordu,
+      Secure Boot adımı kurtarma imajını imzasız bırakıyordu, `edit-*`
+      satırları kurucunun kendisini öldürüyordu, BIOS kolu düşen bir
+      `grub-install`'dan sonra devam edip `done` yazıyordu, ve onay istemi iki
+      "evet" gösteriyordu. Kalan iki kol (GRUB'un **UEFI** yolu ve **rEFInd**)
+      hâlâ koşmadı → [tests/qemu/README.md](tests/qemu/README.md)
 - [ ] Geliştirme: `installarch` (archfi türevi) + `installarchde` betiklerinin
       birleşimi. Teşekkürler [MatMoul/archfi](https://github.com/MatMoul/archfi).
