@@ -176,6 +176,32 @@ def preset_passes(text: str) -> list[str]:
     return [entry.strip("'\"") for entry in read_array(text, "PRESETS") or []]
 
 
+def preset_ukis(text: str) -> list[str]:
+    """Every UKI path this preset names -- fallback included.
+
+    Separate from preset_outputs() because the two answer different
+    questions: that one lists everything a rebuild overwrites, `.img`
+    initramfs files included, and a plain initramfs is not signed on any
+    setup. This one is the list of things Secure Boot has to be able to
+    verify, and the fallback is in it. Measured 2026-08-30 in QEMU with
+    keys actually enrolled: the Secure Boot step read `default_uki` alone,
+    signed `arch-linux-zen.efi`, and its own `sbctl verify` closed the run
+    with `\u2717 /efi/EFI/Linux/arch-linux-zen-fallback.efi is not signed` --
+    the recovery entry, unbootable on the machine that most needs it, on a
+    step that exited 0.
+
+    Every uncommented `<name>_uki` line counts, rather than only the passes
+    PRESETS lists. A preset with no PRESETS array would otherwise answer
+    "no UKIs" and the caller would sign nothing -- silence in the direction
+    that costs the most. Naming a pass that is not active cannot do harm
+    the other way: the caller signs paths that exist, and an inactive pass
+    writes none.
+    """
+    return [m.group(2).strip() for m in re.finditer(
+        r'^(\w+)_uki="?([^"\n]+)"?', text, re.MULTILINE
+    )]
+
+
 def preset_outputs(text: str) -> list[Path]:
     """Every image a `mkinitcpio -p` run over this preset will overwrite.
 

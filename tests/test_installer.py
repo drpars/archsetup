@@ -671,9 +671,16 @@ def sb_env(tmp_path, monkeypatch, runlog):
     (esp / "EFI/BOOT/BOOTX64.EFI").write_bytes(b"MZ")
     (esp / "EFI/Linux").mkdir(parents=True)
     (esp / "EFI/Linux/arch.efi").write_bytes(b"MZ")
+    (esp / "EFI/Linux/arch-fallback.efi").write_bytes(b"MZ")
     presets = tmp_path / "etc/mkinitcpio.d"
     presets.mkdir(parents=True)
-    (presets / "linux-zen.preset").write_text('default_uki="/efi/EFI/Linux/arch.efi"\n')
+    # Both passes, the way gen_uki() writes the file when a fallback was
+    # asked for -- which is the default whenever the ESP has room.
+    (presets / "linux-zen.preset").write_text(
+        "PRESETS=('default' 'fallback')\n"
+        'default_uki="/efi/EFI/Linux/arch.efi"\n'
+        'fallback_uki="/efi/EFI/Linux/arch-fallback.efi"\n'
+    )
 
     monkeypatch.setattr(chroot, "MNT", tmp_path)
     monkeypatch.setattr(chroot, "ESP", esp)
@@ -715,6 +722,39 @@ def test_secure_boot_keeps_the_uki_out_of_the_sbctl_database(sb_env, monkeypatch
     assert uki == ["sbctl", "sign", "/efi/EFI/Linux/arch.efi"]
     # ...while the long-lived boot binaries do get recorded.
     assert ["sbctl", "sign", "-s", "/efi/EFI/BOOT/BOOTX64.EFI"] in runlog.calls
+
+
+def test_secure_boot_signs_the_fallback_uki_too(sb_env, monkeypatch, runlog):
+    """The recovery image is the one that must boot when the default will not.
+
+    Measured 2026-08-30 in QEMU under Secure Boot firmware with keys really
+    enrolled -- the first time this arm ran anywhere. The step signed
+    `arch-linux-zen.efi`, exited 0, and closed with its own verify saying
+    `arch-linux-zen-fallback.efi is not signed`. On an enrolled machine that
+    entry is refused by the firmware, so the run produced exactly what the
+    QEMU README calls worse than having no recovery entry at all: you think
+    you have one.
+
+    The cause was reading `default_uki` and nothing else, while the preset
+    the same tool writes names two passes.
+    """
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    assert chroot.setup_secure_boot() == 0
+
+    signed = {call[-1] for call in runlog.calls if call[:2] == ["sbctl", "sign"]}
+    assert "/efi/EFI/Linux/arch.efi" in signed
+    assert "/efi/EFI/Linux/arch-fallback.efi" in signed
+
+
+def test_a_uki_the_preset_names_but_never_wrote_is_not_signed(sb_env, monkeypatch, runlog):
+    """Paths are signed because the file is there, not because it was named."""
+    preset = sb_env / "etc/mkinitcpio.d/linux-zen.preset"
+    preset.write_text(
+        preset.read_text() + 'rescue_uki="/efi/EFI/Linux/never-built.efi"\n'
+    )
+    monkeypatch.setattr(chroot, "setup_mode", lambda: True)
+    assert chroot.setup_secure_boot() == 0
+    assert not any(c[-1].endswith("never-built.efi") for c in runlog.calls)
 
 
 def test_secure_boot_plants_no_resigning_hook(sb_env, monkeypatch, runlog):

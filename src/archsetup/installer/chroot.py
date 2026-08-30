@@ -860,22 +860,26 @@ def setup_secure_boot() -> int:
 
     signed_uki = False
     for preset in _presets():  # every kernel, not just the first alphabetically
-        uki = default_uki_path(preset)
-        if uki and (MNT / uki.lstrip("/")).is_file():
-            # No -s here, unlike the boot binaries above. sbctl's database is
-            # a permanent list and a UKI is not permanent: it dies with its
-            # kernel, and on an mkinitcpio-preset machine nothing takes the
-            # entry back out -- sbctl's own remove-file runs from
-            # kernel-install.d, which this layout never calls. The leftover
-            # entry then fails `sbctl sign-all`, which sbctl ships as a pacman
-            # PostTransaction hook, so *every* later transaction ends in an
-            # error. Measured 2026-08-17: removing linux-g14 left its UKI in
-            # files.json and zz-sbctl.hook reported "failed signing ... does
-            # not exist" from then on. The entry buys nothing either -- the
-            # package's mkinitcpio post hook re-signs the UKI by path on
-            # every rebuild.
-            rc |= chroot_run(["sbctl", "sign", uki])
-            signed_uki = True
+        # Every UKI the preset writes, not just `default_uki`. The fallback
+        # is the one image whose whole purpose is to boot when the default
+        # will not, so leaving it unsigned kills the recovery path on
+        # exactly the machines Secure Boot is enrolled on.
+        for uki in mkinitcpio.preset_ukis(preset.read_text(encoding="utf-8")):
+            if (MNT / uki.lstrip("/")).is_file():
+                # No -s here, unlike the boot binaries above. sbctl's database is
+                # a permanent list and a UKI is not permanent: it dies with its
+                # kernel, and on an mkinitcpio-preset machine nothing takes the
+                # entry back out -- sbctl's own remove-file runs from
+                # kernel-install.d, which this layout never calls. The leftover
+                # entry then fails `sbctl sign-all`, which sbctl ships as a pacman
+                # PostTransaction hook, so *every* later transaction ends in an
+                # error. Measured 2026-08-17: removing linux-g14 left its UKI in
+                # files.json and zz-sbctl.hook reported "failed signing ... does
+                # not exist" from then on. The entry buys nothing either -- the
+                # package's mkinitcpio post hook re-signs the UKI by path on
+                # every rebuild.
+                rc |= chroot_run(["sbctl", "sign", uki])
+                signed_uki = True
     if not signed_uki:
         print(t("inst.sb_no_uki"))
 
