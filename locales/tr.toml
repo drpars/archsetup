@@ -658,6 +658,9 @@ sound = "Ses Sistemi (PipeWire)"
 virt = "Sanallaştırma ve GPU Passthrough"
 virt_desc = "Aynı paketler iki eksende: genel sanal makine kullanımı, ve passthrough'un gerektirdikleri"
 
+[prompt]
+yes_no = "[e/h]"
+
 [inst]
 title = "Arch Linux Kurucusu (Canlı ISO)"
 phase_live = "1. Canlı Ortam"

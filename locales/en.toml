@@ -658,6 +658,9 @@ sound = "Audio System (PipeWire)"
 virt = "Virtualization and GPU Passthrough"
 virt_desc = "The same packages on two axes: general virtual machine use, and what passthrough requires"
 
+[prompt]
+yes_no = "[y/n]"
+
 [inst]
 title = "Arch Linux Installer (Live ISO)"
 phase_live = "1. Live Environment"

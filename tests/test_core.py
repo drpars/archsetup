@@ -1,6 +1,6 @@
 """i18n, config, data files and hardware condition parsing."""
 
-from archsetup.core import config, data, hardware, i18n
+from archsetup.core import config, data, hardware, i18n, prompt
 
 
 def test_translation_and_fallback():
@@ -259,3 +259,31 @@ def test_no_source_line_silences_an_aur_helper():
         if silences_a_helper(line)
     ]
     assert offenders == []
+
+
+def test_the_yes_no_hint_names_a_yes_and_a_no(monkeypatch):
+    """`[e/y]` named two yeses and no negative, in a bilingual tool.
+
+    `evet` and `yes` -- it reads as an ordinary pair in either language and
+    is wrong in both. Found by walking into it during a QEMU install: `y`
+    was typed at "add kernel headers?" meaning no, and the headers were
+    installed. The same prompt two rows earlier asks whether to format the
+    selected devices, so the reflex costs a disk there.
+    """
+    seen = []
+    monkeypatch.setattr(prompt, "input", lambda text: seen.append(text) or "", raising=False)
+
+    i18n.load("tr")
+    prompt.ask_yes("Devam?")
+    i18n.load("en")
+    prompt.ask_yes("Continue?")
+
+    assert seen == ["Devam? [e/h]: ", "Continue? [y/n]: "]
+
+
+def test_both_languages_answer_yes_and_nothing_else_does(monkeypatch):
+    answers = iter(["e", "evet", "y", "YES", "h", "n", "", "hayir", "belki"])
+    monkeypatch.setattr(prompt, "input", lambda text: next(answers), raising=False)
+    assert [prompt.ask_yes("?") for _ in range(9)] == [
+        True, True, True, True, False, False, False, False, False,
+    ]
