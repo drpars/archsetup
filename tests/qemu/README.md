@@ -184,6 +184,12 @@ rm ~/.cache/archsetup-qemu/OVMF_VARS.secboot.fd   # sonraki sb koşusu anahtars�
 rm -rf /mnt/var/lib/sbctl                          # yoksa create-keys eskisini bulur
 ```
 
+> **Kurulu bir diskte `-boot d` ISO'yu açmaz.** NVRAM'de kalıcı bir
+> `BootOrder` varsa OVMF onu komut satırındaki boot sırasına tercih ediyor —
+> ölçüldü (2026-08-30, `grub.qcow2`): `-boot d` dururken makine kurulu sisteme
+> girdi. Canlı ortama geçmek için kurulu sistemden tek seferlik
+> `efibootmgr -n <DVD slotu>` + `reboot`; kalıcı sırayı bozmaz.
+
 `./run-vm.sh reset` ikisini de halleder ama **kurulumu da siler** (disk, iki
 NVRAM ve scratch diskler gider; ISO kalır) — yani sıfırdan bir tur demektir.
 
@@ -265,12 +271,13 @@ istiyor. Bir sonraki tur için liste burada dursun.
       `-boot d` olmadan açılan makine `BootCurrent: 0009` dedi). Yani
       systemd-boot'a yazılan `efibootmgr -o` kolu **buraya gerekmiyor** —
       sorun `bootctl install`'a özel
-- [ ] **rEFInd** (`refind-install`). Hiç koşmadı. `efibootmgr -c` sorusunun
-      cevabı GRUB'da ölçüldü ve **aynı araç, aynı bayrak** — ama rEFInd'de
-      ölçülmedi, ve beklenti ölçüm değildir. Sıfırdan kurulum gerekmiyor:
-      `grub.qcow2` kurulu duruyor, ISO'dan açıp `/mnt`'i bağladıktan sonra
-      yalnız o menü satırı koşar (iki önyükleyici yan yana durur, rig için
-      sorun değil)
+- [x] **rEFInd** (`refind-install`) — 2026-08-30'da koştu. Girdi
+      `BootOrder`'ın başına, üstelik zaten başta duran **GRUB girdisinin**
+      önüne geçti; sistem hem varsayılan kolundan (GRUB'a zincirleme) hem
+      `refind_linux.conf` kolundan (`Boot boot\vmlinuz-linux-zen from root`)
+      ayrı ayrı açıldı. Mekanizma GRUB'ınkiyle aynı değil: `refind-install`
+      `efibootmgr -c` kullanıyor **ama** girdi başta değilse onu silip yeniden
+      yaratıyor
 - [ ] **btrfs kökü** (kontrol listesi "ikinci turda deneyin" diyor; subvolume
       oluşturmalı)
 - [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —
