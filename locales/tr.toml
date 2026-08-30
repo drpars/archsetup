@@ -793,6 +793,9 @@ net_copy_q = "Bu ağlar hedef sisteme kopyalansın mı? (parolalar dahil)"
 net_copied = "{count} ağ profili kopyalandı: {path} (0600)"
 efi_required = "Bu önyükleyici yalnızca UEFI sistemlerde kurulabilir!"
 blkid_failed = "blkid {dev} için PARTUUID/TYPE okuyamadı."
+editor_missing = "Bu ortamda düzenleyici bulunamadı ({editors}) ve EDITOR ayarlı değil. Kurun ya da EDITOR'ü var olan bir düzenleyiciye ayarlayın."
+editor_unusable = "EDITOR '{editor}' olarak ayarlı ama bulunamadı; var olan bir düzenleyiciye geçiliyor."
+editor_failed = "{editor} çalıştırılamadı: {error}"
 sdboot_done = "systemd-boot kuruldu. Bu düzende önyükleyici yalnızca UKI açabilir."
 order_before = "Firmware önyükleme sırası: {order}"
 order_after = "Yeni sıra: {order} — Arch girdisi öne alındı."
@@ -809,6 +812,7 @@ swap_fallocate_fallback = "fallocate bu dosya sisteminde çalışmadı; dd ile y
 cancelled = "İşlem iptal edildi."
 
 [msg]
+crashed = "Bu adım beklenmedik bir hatayla durdu; yukarıdaki iz sebebi söylüyor. Kurulum sürüyor — menüye dönülüyor."
 done = "İşlem tamamlandı."
 failed = "İşlem hata ile bitti!"
 no_orphans = "Yetim paket yok, temizlenecek bir şey bulunamadı."

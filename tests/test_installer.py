@@ -1410,6 +1410,51 @@ def test_install_promotes_the_entry_it_just_created(order_env, monkeypatch):
     assert ["efibootmgr", "-o", "000B,0000,0006,0007,000A,000C"] in order_env.calls
 
 
+# --- the editor rows -------------------------------------------------------
+
+
+def test_edit_file_falls_back_to_an_editor_that_exists(monkeypatch, runlog):
+    """The default was a bare "nvim" handed to subprocess.call.
+
+    Measured 2026-08-30 on the stock Arch ISO: it ships `nano` and `vim`,
+    never neovim, and EDITOR is unset in the live environment. So all
+    three edit rows raised FileNotFoundError, and the exception took the
+    whole installer down mid-install with the target still mounted. They
+    cannot ever have worked from an unmodified ISO.
+    """
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.setattr(chroot.shutil, "which", lambda name: name in ("vim", "nano"))
+    monkeypatch.setattr(chroot.subprocess, "call", runlog)
+    assert chroot.edit_file("/mnt/etc/fstab") == 0
+    assert runlog.calls == [["vim", "/mnt/etc/fstab"]]
+
+
+def test_edit_file_prefers_EDITOR_when_it_resolves(monkeypatch, runlog):
+    monkeypatch.setenv("EDITOR", "micro")
+    monkeypatch.setattr(chroot.shutil, "which", lambda name: name in ("micro", "nano"))
+    monkeypatch.setattr(chroot.subprocess, "call", runlog)
+    assert chroot.edit_file("/mnt/etc/fstab") == 0
+    assert runlog.calls == [["micro", "/mnt/etc/fstab"]]
+
+
+def test_an_unresolvable_EDITOR_falls_back_rather_than_raising(monkeypatch, runlog):
+    monkeypatch.setenv("EDITOR", "nosucheditor")
+    monkeypatch.setattr(chroot.shutil, "which", lambda name: name == "nano")
+    monkeypatch.setattr(chroot.subprocess, "call", runlog)
+    assert chroot.edit_file("/mnt/etc/fstab") == 0
+    assert runlog.calls == [["nano", "/mnt/etc/fstab"]]
+
+
+def test_no_editor_at_all_is_a_message_not_an_exception(monkeypatch):
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.setattr(chroot.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        chroot.subprocess, "call",
+        lambda *a, **k: pytest.fail("calistirilmamaliydi"),
+    )
+    assert chroot.edit_file("/mnt/etc/fstab") == 1
+
+
 # --- GRUB on BIOS ----------------------------------------------------------
 
 

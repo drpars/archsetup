@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -51,12 +52,53 @@ def target_ready() -> bool:
     return False
 
 
-def _editor() -> str:
-    return os.environ.get("EDITOR", "nvim")
+# In preference order, and every one of them is a real answer somewhere:
+# nvim is what this repo's own machines use, vim and nano are what the Arch
+# ISO ships. Measured 2026-08-30 on the 2026-07-29 image -- `nano 9.1-1` and
+# `vim 9.2.0735-1` are in its package list, neovim is not, and EDITOR is
+# unset in the live environment.
+EDITORS = ("nvim", "vim", "nano")
+
+
+def _editor() -> str | None:
+    """The editor to open a target file with, or None when there is none.
+
+    $EDITOR wins when it resolves. When it is set and does *not* resolve the
+    fallback still runs, but says so first: silently opening something else
+    than what the user asked for is its own surprise, and on a file like
+    /etc/fstab the difference in keybindings is the difference between
+    saving and not.
+    """
+    chosen = os.environ.get("EDITOR")
+    if chosen:
+        if shutil.which(chosen):
+            return chosen
+        print(t("inst.editor_unusable", editor=chosen))
+    return next((name for name in EDITORS if shutil.which(name)), None)
 
 
 def edit_file(path: str) -> int:
-    return subprocess.call([_editor(), path])
+    """Open `path` in an editor, or say why not.
+
+    The default used to be a bare "nvim" handed straight to
+    subprocess.call, which raises FileNotFoundError where neovim is not
+    installed -- and that is the stock Arch ISO, every time. Measured
+    2026-08-30 in QEMU: the exception came out of the menu row and took
+    the whole installer down with it, mid-install, with the target still
+    mounted. All three edit rows did it, and they cannot ever have worked
+    from an unmodified ISO.
+    """
+    editor = _editor()
+    if editor is None:
+        print(t("inst.editor_missing", editors=", ".join(EDITORS)))
+        return 1
+    try:
+        return subprocess.call([editor, path])
+    except OSError as error:
+        # which() said yes a moment ago; a failure here is a broken binary,
+        # a full disk, a missing interpreter. Still not worth the session.
+        print(t("inst.editor_failed", editor=editor, error=error))
+        return 1
 
 
 def set_hostname() -> int:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import termios
+import traceback
 import time
 from typing import Callable
 
@@ -156,11 +157,30 @@ class ArchSetupApp(App):
             pass
 
     def run_in_terminal(self, fn: Callable[[], int]) -> None:
-        """Suspend the TUI, run fn in the real terminal, report the result."""
+        """Suspend the TUI, run fn in the real terminal, report the result.
+
+        An exception out of `fn` used to end the process. Measured
+        2026-08-30 in QEMU: the `edit-*` rows call subprocess with a
+        default editor the Arch ISO does not ship, the FileNotFoundError
+        came back through here, and the whole installer died -- half
+        configured, with the target still mounted, and nothing on screen
+        but a traceback. An install is long and stateful, and the row that
+        raised is almost never the row that matters; losing the session
+        costs far more than the failure did.
+
+        The traceback is printed rather than swallowed. It is still a
+        crash, it is still visible, and the reader is still in front of a
+        terminal that has it -- what changes is that the menu comes back.
+        """
         with self.suspend():
             self._drain_stdin()
             print()
-            rc = fn()
+            try:
+                rc = fn()
+            except Exception:  # noqa: BLE001 -- see the docstring
+                traceback.print_exc()
+                print(f"\n{t('msg.crashed')}")
+                rc = 1
             print()
             try:
                 input(t("ui.press_enter"))

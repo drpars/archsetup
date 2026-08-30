@@ -793,6 +793,9 @@ net_copy_q = "Copy these networks into the target system? (passphrases included)
 net_copied = "Copied {count} network profile(s) to {path} (0600)"
 efi_required = "This bootloader can only be installed on UEFI systems!"
 blkid_failed = "blkid could not read PARTUUID/TYPE for {dev}."
+editor_missing = "No editor found in this environment ({editors}) and EDITOR is not set. Install one, or point EDITOR at an editor that exists."
+editor_unusable = "EDITOR is set to '{editor}' but it was not found; falling back to one that exists."
+editor_failed = "Could not run {editor}: {error}"
 sdboot_done = "systemd-boot installed. In this layout it can only boot a UKI."
 order_before = "Firmware boot order: {order}"
 order_after = "New order: {order} -- the Arch entry was moved to the front."
@@ -809,6 +812,7 @@ swap_fallocate_fallback = "fallocate did not work on this filesystem; falling ba
 cancelled = "Cancelled."
 
 [msg]
+crashed = "This step stopped with an unexpected error; the trace above says why. The install is still going -- returning to the menu."
 done = "Operation completed."
 failed = "Operation finished with errors!"
 no_orphans = "No orphan packages, nothing to clean."

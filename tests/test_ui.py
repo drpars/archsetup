@@ -1,5 +1,7 @@
 """Textual pilot tests: menu structure and theme handling."""
 
+from contextlib import nullcontext
+
 import pytest
 from textual.widgets import OptionList, SelectionList, Static
 
@@ -600,3 +602,31 @@ async def test_network_menu_draws_state_lines_without_touching_the_machine(
         wifi = str(options.get_option("wifi-power-save-off").prompt)
         assert i18n.t("ethernet_pm.status_no_device") in eth
         assert i18n.t("wifi_power_save.status_no_device") in wifi
+
+
+async def test_a_raising_step_does_not_end_the_installer(monkeypatch, capfd):
+    """It used to. Measured 2026-08-30 in QEMU: an edit row called
+    subprocess with an editor the Arch ISO does not ship, the
+    FileNotFoundError came back out of run_in_terminal, and the whole
+    installer died half configured with the target still mounted.
+
+    The traceback is still printed -- what changes is that the app is
+    still there afterwards.
+    """
+    app = ArchSetupApp(ask_language=False)
+
+    def boom() -> int:
+        raise FileNotFoundError(2, "No such file or directory", "nvim")
+
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        monkeypatch.setattr(app, "_drain_stdin", lambda: None)
+        monkeypatch.setattr(app.__class__, "suspend", lambda self: nullcontext())
+        monkeypatch.setattr("builtins.input", lambda prompt="": "")
+
+        app.run_in_terminal(boom)
+        await pilot.pause()
+
+        assert app.is_running
+        captured = capfd.readouterr()  # capfd, not capsys: Textual replaces sys.stderr
+        assert "FileNotFoundError" in captured.out + captured.err
