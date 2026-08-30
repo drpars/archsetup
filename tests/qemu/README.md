@@ -278,20 +278,25 @@ istiyor. Bir sonraki tur için liste burada dursun.
       ayrı ayrı açıldı. Mekanizma GRUB'ınkiyle aynı değil: `refind-install`
       `efibootmgr -c` kullanıyor **ama** girdi başta değilse onu silip yeniden
       yaratıyor
-- [ ] **Sabit IP (`net-static` / `net-dhcp`)** — kurulu sistemde koşturun.
-      Modül bu makinede uçtan uca çalıştı ama üretilen `.network` dosyası
-      **hiç çalışan bir networkd'ye verilmedi**: anahtar adları
-      `systemd.network(5)`'ten doğrulandı, davranışı doğrulanmadı — ve bir
-      adın davranışı söylemesi için onu okuyan mekanizmanın koşması gerekir.
-      Sıra: `net-static` ile kirayı dondurun, `sudo networkctl reload`,
-      ardından `networkctl status <arayüz>` ile **`ConfigSource` `static`
-      dönmeli** ve varsayılan yol yerinde olmalı (asıl sınanan şey bu: JSON'un
-      `Gateways` alanı `null` döndüğü için ağ geçidi `Routes[]`'tan okunuyor).
-      Sonra `net-dhcp` + reload ile geri dönün ve `ConfigSource` yeniden
-      `DHCPv4` olsun. İki yan soru daha: dosya `20-*.network`'ü gerçekten
-      **geçersiz kılıyor mu** (ilk eşleşen kazanır kuralı), ve `Metric=`
-      yazılan yol tablosuna gerçekten o metrikle mi giriyor
-      (`ip route`). VM'de kablolu arayüz `en*` olduğu için metrik 100 beklenir
+- [x] **Sabit IP (`net-static` / `net-dhcp`)** — 2026-08-31'de gerçek bir
+      networkd'ye verildi (bu makine, `wlan0`, systemd 261.2). Dosya joker
+      `20-wireless.network`'ü gerçekten geçersiz kıldı (`NetworkFile:` ve
+      günlük geçişi), `ConfigSource` adres/yol/DNS üçünde de **`static`**,
+      varsayılan yol `proto static metric 600` — yani `Metric=` yol tablosuna
+      yazıldığı metrikle giriyor. `net-dhcp` + reload üçünü de **`DHCPv4`**'e
+      döndürdü, yani "ilk eşleşen kazanır" iki yönde de ölçüldü. `Gateways`
+      alanı **sabit yapılandırma altında da `null`** — `Routes[]` okuması DHCP
+      kolunun tuhaflığı değil. `enp4s0` boyunca `20-wired.network` okumaya
+      devam etti: arayüz başına dosya kararı ölçüldü, drop-in adresi her porta
+      düşürürdü. **Kablolu arayüzde sabit adres hâlâ koşmadı** (VM'de `en*`
+      beklenen metrik 100), NetworkManager kolu da yok
+- [ ] **Adresi gerçekten değiştiren bir reload.** Yukarıdaki üç reload'un
+      hiçbirinde adres değişmedi (aynı MAC, aynı kira), o yüzden açık TCP
+      bağlantılarının hayatta kalması bedava sağlandı ve **hiçbir şey
+      kanıtlamıyor**. Ölçülen şey yalnız şu: reload taşıyıcıyı düşürmüyor —
+      üç geçişte de `Lost carrier` yok, link `routable` kaldı. Oturumu o link
+      üzerinden gelen bir makinede *farklı* bir adres yazmanın ne yaptığı
+      açık; kullanıcıya basılan uyarı bu yüzden yerinde duruyor
 - [ ] **btrfs kökü** (kontrol listesi "ikinci turda deneyin" diyor; subvolume
       oluşturmalı)
 - [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —

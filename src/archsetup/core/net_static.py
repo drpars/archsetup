@@ -25,7 +25,10 @@ stops preferring the cable.
 --json=short status <link>`` reports ``"Gateways": null`` while a default
 route is up and the human-readable output prints ``Gateway: 192.168.1.1``.
 Measured on systemd 261.2, all four links on the machine this was written on,
-working and idle alike. The gateway comes out of ``Routes[]``, the entry
+working and idle alike -- and re-measured 2026-08-31 on a link this task had
+just made static, so the null is the field, not something DHCP does. (Those
+first four readings were all DHCP; a reader could have taken the quirk for a
+property of the lease.) The gateway comes out of ``Routes[]``, the entry
 whose destination prefix length is 0. A reader written against the obvious
 field name gets None and writes a static config with an address and no route
 -- which presents as "the network is broken", not as "archsetup wrote a bad
@@ -42,8 +45,11 @@ one is off. The warning therefore sits in the prompt, not in a document.
 
 What this does not do, on purpose: apply the file behind the user's back.
 Writing is safe; ``networkctl reload`` on the link you are reaching the
-machine over is not, and whether it keeps the link up was never measured
-here. core/iwd.py made the same call for the same reason -- "restarting iwd
+machine over is not. Three reloads were measured 2026-08-31 (wlan0, both
+directions, systemd 261.2) and none dropped the carrier -- but the address
+was identical across all three, so surviving TCP connections came free and
+the case that actually threatens a session, a reload that moves the address,
+is still unmeasured. core/iwd.py made the same call for the same reason -- "restarting iwd
 drops the connection and archsetup may well be running over it" -- and this
 is the more dangerous version, because a wrong address does not come back on
 its own. Both commands, apply and undo, are printed before anything is
@@ -389,11 +395,14 @@ def _pick(ifaces: list[str]) -> str:
 def _offer_reload(iface: str) -> int:
     """Applying is a question, and the safe answer is no.
 
-    `networkctl reload` re-reads the files and reconfigures the link. Whether
-    it does that without dropping the link was not measured here, and the
-    link in question may be the one carrying this session -- so the machine
-    is never reconfigured without being asked, and the command is printed
-    either way so a no is not a dead end.
+    `networkctl reload` re-reads the files and reconfigures the link. It does
+    not drop the carrier: measured 2026-08-31, three reloads on wlan0 in both
+    directions, no `Lost carrier` and the link stayed routable throughout.
+    That is less than it sounds. The address never changed in any of the
+    three, so nothing was asked of the connections riding on it, and the
+    link in question may still be the one carrying this session -- so the
+    machine is never reconfigured without being asked, and the command is
+    printed either way so a no is not a dead end.
     """
     print(t("net_static.reload_hint"))
     if not services.is_active(NETWORKD_UNIT):
