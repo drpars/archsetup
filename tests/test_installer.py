@@ -1,11 +1,22 @@
 """Installer (live ISO) mode: disk, pacstrap prep, chroot config, bootloaders."""
 
+import ast
 import re
+from pathlib import Path
 
 import pytest
 
 from archsetup.core import hardware, i18n, repos, writeback
-from archsetup.installer import base, bootloaders, chroot, disk, nvme, pickers
+from archsetup.installer import (
+    base,
+    blockdev,
+    bootloaders,
+    chroot,
+    disk,
+    erase,
+    nvme,
+    pickers,
+)
 from archsetup.installer.state import state
 
 
@@ -785,45 +796,194 @@ def test_secure_boot_signs_every_helper_on_the_esp(sb_env, monkeypatch, runlog):
     assert ["sbctl", "sign", "-s", "/efi/EFI/memtest86+/memtest.efi"] in runlog.calls
 
 
-# --- NVMe reset ------------------------------------------------------------
+# --- disk inventory, shared gates, prepare and erase ------------------------
+
+
+def _disk(path, *, tran="nvme", size="1T", model="SSD", discard=0, size_bytes=1024):
+    return blockdev.Disk(
+        path=path, size=size, tran=tran, model=model,
+        discard=discard, size_bytes=size_bytes,
+    )
 
 
 @pytest.fixture
-def nvme_env(monkeypatch, runlog):
-    monkeypatch.setattr(nvme, "guard", lambda: True)
+def erase_env(monkeypatch, runlog):
+    monkeypatch.setattr(erase, "guard", lambda: True)
+    monkeypatch.setattr(erase, "run", runlog)
     monkeypatch.setattr(nvme, "ensure_tool", lambda: True)
-    monkeypatch.setattr(nvme, "list_namespaces", lambda: [("/dev/nvme0n1", "SSD", "1T")])
     monkeypatch.setattr(nvme, "crypto_supported", lambda dev: False)
     monkeypatch.setattr(nvme, "run", runlog)
-    # busy() stays real; tests point it at a fixture file instead of /proc.
-    monkeypatch.setattr(nvme, "IN_USE_SOURCES", ())
+    monkeypatch.setattr(blockdev, "list_disks", lambda: [_disk("/dev/nvme0n1")])
     return runlog
 
 
-def test_nvme_reset_requires_the_device_path_typed_out(nvme_env, monkeypatch):
+def test_list_disks_keeps_spaces_in_model_names(monkeypatch):
+    """Measured 2026-08-30: -n shifts columns when TRAN is empty and -r
+    escapes the spaces to \\x20, so the reader parses JSON."""
+    payload = (
+        '{"blockdevices":['
+        '{"name":"/dev/sda","size":"58,7G","type":"disk","tran":"usb",'
+        '"model":"Cruzer Force"},'
+        '{"name":"/dev/zram0","size":"8G","type":"disk","tran":null,"model":null},'
+        '{"name":"/dev/sda1","size":"1G","type":"part","tran":"usb","model":null}]}'
+    )
+    monkeypatch.setattr(
+        blockdev.subprocess, "run",
+        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": payload})(),
+    )
+    disks = blockdev.list_disks()
+    assert [d.path for d in disks] == ["/dev/sda", "/dev/zram0"]
+    assert disks[0].model == "Cruzer Force"
+    assert disks[1].tran == ""
+
+
+def test_the_classifier_never_reads_rotational():
+    """rotational is not a class signal and must not become one.
+
+    Measured 2026-08-30: a SanDisk Cruzer Force USB *flash* stick reports
+    rotational=1, exactly as the two platter drives on the other machine
+    do. A branch built on it calls a memory stick a hard disk.
+
+    The scan is over the AST rather than the raw lines because the prose
+    here has to be free to explain the measurement -- a line-based version
+    of this test flagged its own docstrings. Docstrings are dropped, every
+    other string constant counts, and the detector is proved both ways on
+    planted sources first.
+    """
+
+    def reads_rotational(source: str) -> bool:
+        tree = ast.parse(source)
+        docstrings = {
+            ast.get_docstring(node, clean=False)
+            for node in ast.walk(tree)
+            if isinstance(
+                node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+            )
+        }
+        return any(
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "rotational" in node.value
+            and node.value not in docstrings
+            for node in ast.walk(tree)
+        )
+
+    assert reads_rotational('x = read(dev / "queue/rotational")')
+    assert reads_rotational('def f():\n    """doc"""\n    return "rotational"\n')
+    assert not reads_rotational('"""rotational is deliberately not read."""\nx = 1\n')
+    assert not reads_rotational("# rotational is not consulted\nx = 1\n")
+
+    root = Path(__file__).resolve().parents[1] / "src/archsetup/installer"
+    offenders = [
+        path.name
+        for path in sorted(root.rglob("*.py"))
+        if reads_rotational(path.read_text(encoding="utf-8"))
+    ]
+    assert offenders == []
+
+
+def test_erase_requires_the_device_path_typed_out(erase_env, monkeypatch):
     """A y/n prompt is too easy to answer by reflex for a whole-disk erase."""
-    _feed(monkeypatch, nvme, ["1", "1", "evet"])
-    assert nvme.reset_namespace() == 1
-    assert nvme_env.calls == []
+    _feed(monkeypatch, erase, ["1", "1", "evet"])
+    assert erase.erase_disk() == 1
+    assert erase_env.calls == []
 
 
-def test_nvme_reset_formats_after_confirmation(nvme_env, monkeypatch):
-    _feed(monkeypatch, nvme, ["1", "1", "/dev/nvme0n1"])
+def test_erase_formats_an_nvme_after_confirmation(erase_env, monkeypatch):
+    _feed(monkeypatch, erase, ["1", "1", "/dev/nvme0n1"])
     state.rootdev = "/dev/nvme0n1p2"
-    assert nvme.reset_namespace() == 0
-    assert ["nvme", "format", "--ses", "1", "--force", "/dev/nvme0n1"] in nvme_env.calls
+    assert erase.erase_disk() == 0
+    assert ["nvme", "format", "--ses", "1", "--force", "/dev/nvme0n1"] in erase_env.calls
     # The partition it pointed at no longer exists.
     assert state.rootdev is None
 
 
-def test_nvme_reset_refuses_a_namespace_in_use(nvme_env, monkeypatch, tmp_path):
-    """A mounted partition means the whole namespace is off limits."""
+def test_erase_refuses_a_disk_in_use(erase_env, monkeypatch, tmp_path):
+    """A mounted partition means the whole disk is off limits."""
     mounts = tmp_path / "mounts"
     mounts.write_text("/dev/nvme0n1p2 /mnt ext4 rw 0 0\n")
-    monkeypatch.setattr(nvme, "IN_USE_SOURCES", ((str(mounts), None),))
-    _feed(monkeypatch, nvme, ["1"])
-    assert nvme.reset_namespace() == 1
-    assert nvme_env.calls == []
+    monkeypatch.setattr(blockdev, "IN_USE_SOURCES", ((str(mounts), None),))
+    _feed(monkeypatch, erase, ["1"])
+    assert erase.erase_disk() == 1
+    assert erase_env.calls == []
+
+
+def test_erase_refuses_the_medium_it_booted_from(erase_env, monkeypatch):
+    """guard() asks whether we are in the live ISO, which is a different
+    question from whether this is the stick we are running on."""
+    monkeypatch.setattr(blockdev, "live_medium", lambda: "/dev/nvme0n1")
+    _feed(monkeypatch, erase, ["1"])
+    assert erase.erase_disk() == 1
+    assert erase_env.calls == []
+
+
+def test_erase_overwrites_a_non_nvme_disk_to_an_exact_length(erase_env, monkeypatch):
+    """Sized to the byte because dd exits 1 on ENOSPC.
+
+    Measured 2026-08-30 against /dev/full: an unbounded dd reports an error
+    and exits 1 at the moment it has finished, so a completed wipe would be
+    filed as a failure.
+    """
+    monkeypatch.setattr(
+        blockdev, "list_disks",
+        lambda: [_disk("/dev/sdb", tran="usb", model="KINGSTON", size_bytes=240057409536)],
+    )
+    _feed(monkeypatch, erase, ["1", "/dev/sdb"])
+    assert erase.erase_disk() == 0
+    assert [
+        "dd", "if=/dev/zero", "of=/dev/sdb", "count=240057409536",
+        "bs=8M", "iflag=count_bytes", "status=progress", "conv=fsync",
+    ] in erase_env.calls
+
+
+def test_erase_refuses_to_overwrite_a_disk_it_cannot_size(erase_env, monkeypatch):
+    monkeypatch.setattr(
+        blockdev, "list_disks", lambda: [_disk("/dev/sdb", tran="usb", size_bytes=0)]
+    )
+    _feed(monkeypatch, erase, ["1", "/dev/sdb"])
+    assert erase.erase_disk() == 1
+    assert erase_env.calls == []
+
+
+def test_prepare_skips_blkdiscard_when_the_path_advertises_none(erase_env, monkeypatch):
+    """Measured 2026-08-30: a Kingston SATA SSD reads discard_max_bytes=0
+    through a USB enclosure although the drive supports TRIM. 0 means no
+    discard on this path, and calling it anyway turns a supported no-op
+    into an error the user has to read past."""
+    monkeypatch.setattr(
+        blockdev, "list_disks", lambda: [_disk("/dev/sdb", tran="usb", discard=0)]
+    )
+    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
+    _feed(monkeypatch, erase, ["1"])
+    assert erase.prepare_disk() == 0
+    assert ["wipefs", "-a", "/dev/sdb"] in erase_env.calls
+    assert not any(call[0] == "blkdiscard" for call in erase_env.calls)
+
+
+def test_prepare_discards_when_the_path_advertises_it(erase_env, monkeypatch):
+    monkeypatch.setattr(
+        blockdev, "list_disks",
+        lambda: [_disk("/dev/nvme0n1", discard=2199023255040)],
+    )
+    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
+    _feed(monkeypatch, erase, ["1"])
+    assert erase.prepare_disk() == 0
+    assert ["blkdiscard", "/dev/nvme0n1"] in erase_env.calls
+
+
+def test_format_devices_refuses_a_mounted_device(monkeypatch, tmp_path, runlog):
+    """Until the shared gate existed, one ask_yes stood between a mounted
+    device and mkfs -- the in-use test was private to the NVMe surface."""
+    mounts = tmp_path / "mounts"
+    mounts.write_text("/dev/sda2 / ext4 rw 0 0\n")
+    monkeypatch.setattr(blockdev, "IN_USE_SOURCES", ((str(mounts), None),))
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(
+        disk, "ask_yes", lambda q: pytest.fail("bagli aygit icin soru sorulmamali")
+    )
+    state.rootdev = "/dev/sda2"
+    assert disk.format_devices() == 1
+    assert runlog.calls == []
 
 
 # --- wireless: addressing and credentials ----------------------------------

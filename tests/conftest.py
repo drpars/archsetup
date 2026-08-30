@@ -15,6 +15,7 @@ from archsetup.core import (  # noqa: E402
     secureboot,
     wifi_power_save,
 )
+from archsetup.installer import blockdev  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -113,6 +114,35 @@ def sealed_network_state(monkeypatch, tmp_path):
     monkeypatch.setattr(scanning, "SANE_DLL", tmp_path / "sealed-dll.conf")
     monkeypatch.setattr(scanning, "NONFREE_BACKEND", tmp_path / "sealed-backend.so")
     monkeypatch.setattr(scanning, "NETWORK_CONF", tmp_path / "sealed-network.conf")
+
+
+@pytest.fixture(autouse=True)
+def sealed_block_state(monkeypatch, tmp_path):
+    """The live-machine reads behind every destructive disk step.
+
+    `blockdev.refuse()` is now on the format path as well as the erase one,
+    so any installer test that formats or erases asks the machine running
+    the suite whether its devices are mounted. A test that names /dev/sda2
+    would pass or fail depending on what the box has plugged in.
+
+    Sealed the sealed_network_state way -- roots repointed, readers left
+    running: IN_USE_SOURCES gets an empty file, so busy() really parses and
+    really finds nothing.
+
+    ARCHISO_MOUNT is the one that needs care, and the path is deliberately
+    one that is never created. Measured 2026-08-30: `findmnt --target` on a
+    missing path exits 1 with no output, but on a path that *exists* it
+    answers with the filesystem containing it -- so sealing it to tmp_path
+    itself would hand back whatever /tmp lives on, which on a box with /tmp
+    on disk is a real device node.
+    """
+    empty_block = tmp_path / "sealed-block"
+    empty_block.mkdir()
+    empty_mounts = tmp_path / "sealed-mounts"
+    empty_mounts.write_text("")
+    monkeypatch.setattr(blockdev, "BLOCK", empty_block)
+    monkeypatch.setattr(blockdev, "IN_USE_SOURCES", ((str(empty_mounts), None),))
+    monkeypatch.setattr(blockdev, "ARCHISO_MOUNT", str(tmp_path / "sealed-never-created"))
 
 
 @pytest.fixture

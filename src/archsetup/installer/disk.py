@@ -19,6 +19,7 @@ from pathlib import Path
 from ..core import env, i18n
 from ..core.pacman import run
 from ..core.prompt import ask_yes
+from . import blockdev
 from .state import state
 
 t = i18n.t
@@ -236,6 +237,16 @@ def format_devices() -> int:
         return 1
 
     devices = [d for d in (state.bootdev, state.swapdev, state.rootdev, state.homedev) if d]
+
+    # Asked before the warning, not after it: a device that must not be
+    # formatted is not a question to put to the user. Until this was here the
+    # only thing between a mounted device and mkfs was one ask_yes -- the
+    # in-use test existed but was private to the NVMe surface.
+    if refusals := [r for d in devices if (r := blockdev.refuse(d)) is not None]:
+        for reason in refusals:
+            print(reason)
+        return 1
+
     print(t("inst.format_warning"))
     print("  " + "  ".join(devices))
     if not ask_yes(t("inst.format_q")):

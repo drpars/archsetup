@@ -808,7 +808,7 @@ def make_target_menu() -> MenuScreen:
 
 
 def make_installer_menu() -> MenuScreen:
-    from ..installer import base, chroot, disk, nvme, pickers
+    from ..installer import base, chroot, disk, erase, pickers
 
     def extras_screen(screen: MenuScreen) -> None:
         categories = data.load_categories("extras.toml", section="install")
@@ -825,7 +825,11 @@ def make_installer_menu() -> MenuScreen:
         ),
         _run_item("reflector", "inst.reflector", "mirrorlist", base.run_reflector),
         _run_item("parallel", "inst.parallel", "pacman.conf", base.parallel_downloads),
-        _run_item("nvme-reset", "inst.nvme_reset", "nvme format", nvme.reset_namespace),
+        # Prepare before cfdisk: it is what makes a second-hand disk enter
+        # partitioning without a stale identity. Erase sits next to it
+        # rather than inside it because the two ask different questions.
+        _run_item("disk-prepare", "inst.disk_prepare", "wipefs", erase.prepare_disk),
+        _run_item("disk-erase", "inst.disk_erase", "nvme format / dd", erase.erase_disk),
         _run_item("cfdisk", "inst.cfdisk", "", disk.run_cfdisk),
         _run_item("select", "inst.select", "boot/swap/root/home", disk.select_partitions),
         _run_item("format", "inst.format", "mkfs", disk.format_devices),

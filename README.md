@@ -40,7 +40,7 @@ cd archsetup
 curl -L https://raw.githubusercontent.com/drpars/archsetup/main/iso.sh | bash
 ```
 
-Kurucu akışı: klavye → yansılar → (NVMe sıfırlama) → cfdisk → bölüm seçimi →
+Kurucu akışı: klavye → yansılar → (disk hazırla / disk sil) → cfdisk → bölüm seçimi →
 biçimlendir → bağla → pacstrap → **ek paketler** → sistem yapılandırması
 (hostname, locale, kullanıcı, önyükleyici: systemd-boot/UKI, GRUB veya
 rEFInd, Secure Boot) → yeniden başlat.
@@ -320,7 +320,8 @@ locales/     tr.toml, en.toml — tüm arayüz metinleri
 src/archsetup/
   core/      i18n, pacman, donanım tespiti, önyükleyici, görevler
   ui/        Textual ekranları
-  installer/ canlı ISO modu: disk, pacstrap, chroot, önyükleyiciler
+  installer/ canlı ISO modu: blockdev (envanter + ortak kapılar), erase,
+             disk, pacstrap, chroot, önyükleyiciler
 ```
 
 ## Testler
@@ -381,8 +382,17 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       libvirtd soket aktivasyonuna geçti, host'a virtio *guest* modülleri
       eklenmiyor, binder DKMS yalnızca çekirdek binder'ı vermiyorsa kuruluyor
       (`/proc/filesystems`), ESP `fmask/dmask=0077` ile bağlanıyor
-- [x] NVMe ad alanı sıfırlama (`nvme format`, kriptografik/kullanıcı verisi
-      silme), bağlı aygıt reddi ve aygıt yolunu yazdırarak onay
+- [x] Disk hazırlama ve silme, **her taşıyıcı için tek yüzey**: `disk-prepare`
+      imzaları siler (`wipefs`, artı aygıt bildiriyorsa `blkdiscard`),
+      `disk-erase` içeriği yok eder. Bağlı aygıt ve canlı oturumun açıldığı
+      medya reddedilir; silme onayı aygıt yolunu yazdırtır. Dal **sınıfa değil
+      yeteneğe** bakar: NVMe'de denetleyiciye `nvme format` (kripto silme
+      yalnız `fna` onaylarsa), geri kalanında tam boya sabitlenmiş `dd`.
+      Gerekçesi ölçüm: aynı bus'taki iki NVMe farklı `sanicap` bildiriyor ve
+      bir USB *flash* bellek `rotational=1` diyor, yani "tip" doğru ekseni
+      vermiyor. **ATA Secure Erase bilerek yok** — yarım kalan silme diski
+      parola-kilitli bırakır ve o dal ulaşılabilir hiçbir donanımda
+      ölçülemedi; `disk-erase` bunu sessizce geçmek yerine yazıyor
 - [x] Kurucuda kablosuz ağ: `wl*` için networkd dosyası ve iwd'nin yalnızca
       kimlik doğrulamaya sabitlenmesi; canlı ortamda kayıtlı Wi-Fi
       profillerini (parolalarıyla) hedef sisteme kopyalama

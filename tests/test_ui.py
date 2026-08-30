@@ -199,7 +199,10 @@ async def test_installer_menu_structure():
         ids = list(app.screen._items)
         assert ids[:3] == ["keymap", "reflector", "parallel"]
         assert "pacstrap" in ids and "target" in ids
-        assert ids.index("nvme-reset") < ids.index("cfdisk")
+        # Prepare comes before partitioning: a second-hand disk should
+        # enter cfdisk without a stale identity on it.
+        assert ids.index("disk-prepare") < ids.index("cfdisk")
+        assert ids.index("disk-erase") < ids.index("cfdisk")
         # Ek Paketler sbctl/efibootmgr/ucode getirir; chroot adımları bunlara
         # dayandığı için Sistem Yapılandırması'ndan önce gelmeli.
         assert ids.index("pacstrap") < ids.index("extras") < ids.index("target")
