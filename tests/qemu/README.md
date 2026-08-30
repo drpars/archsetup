@@ -278,6 +278,20 @@ istiyor. Bir sonraki tur için liste burada dursun.
       ayrı ayrı açıldı. Mekanizma GRUB'ınkiyle aynı değil: `refind-install`
       `efibootmgr -c` kullanıyor **ama** girdi başta değilse onu silip yeniden
       yaratıyor
+- [ ] **Sabit IP (`net-static` / `net-dhcp`)** — kurulu sistemde koşturun.
+      Modül bu makinede uçtan uca çalıştı ama üretilen `.network` dosyası
+      **hiç çalışan bir networkd'ye verilmedi**: anahtar adları
+      `systemd.network(5)`'ten doğrulandı, davranışı doğrulanmadı — ve bir
+      adın davranışı söylemesi için onu okuyan mekanizmanın koşması gerekir.
+      Sıra: `net-static` ile kirayı dondurun, `sudo networkctl reload`,
+      ardından `networkctl status <arayüz>` ile **`ConfigSource` `static`
+      dönmeli** ve varsayılan yol yerinde olmalı (asıl sınanan şey bu: JSON'un
+      `Gateways` alanı `null` döndüğü için ağ geçidi `Routes[]`'tan okunuyor).
+      Sonra `net-dhcp` + reload ile geri dönün ve `ConfigSource` yeniden
+      `DHCPv4` olsun. İki yan soru daha: dosya `20-*.network`'ü gerçekten
+      **geçersiz kılıyor mu** (ilk eşleşen kazanır kuralı), ve `Metric=`
+      yazılan yol tablosuna gerçekten o metrikle mi giriyor
+      (`ip route`). VM'de kablolu arayüz `en*` olduğu için metrik 100 beklenir
 - [ ] **btrfs kökü** (kontrol listesi "ikinci turda deneyin" diyor; subvolume
       oluşturmalı)
 - [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —

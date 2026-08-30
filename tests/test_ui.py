@@ -570,13 +570,17 @@ async def test_network_menu_draws_state_lines_without_touching_the_machine(
     duser. Muhursuz bir suit, altindaki donanima gore farkli cevap verirdi --
     bu deponun uc kez odedigi sizinti.
     """
-    from archsetup.core import i18n, wifi_power_save
+    from archsetup.core import i18n, net_static, wifi_power_save
     from archsetup.ui.app import ArchSetupApp
 
     def explode(*args, **kwargs):
         raise AssertionError("menu cizilirken alt surec calisti")
 
     monkeypatch.setattr(wifi_power_save.subprocess, "run", explode)
+    # The static-address rows read files only, so the seal here is a real
+    # assertion rather than a formality: if either row ever grows a
+    # networkctl call, this is where it fires.
+    monkeypatch.setattr(net_static.subprocess, "run", explode)
 
     app = ArchSetupApp(ask_language=False)
     async with app.run_test(size=(100, 40)) as pilot:
@@ -594,6 +598,8 @@ async def test_network_menu_draws_state_lines_without_touching_the_machine(
             "ethernet-power-save-off",
             "wifi-power-save-off",
             "wifi-power-save-on",
+            "net-static",
+            "net-dhcp",
         ):
             assert task_id in ids
 
@@ -602,6 +608,8 @@ async def test_network_menu_draws_state_lines_without_touching_the_machine(
         wifi = str(options.get_option("wifi-power-save-off").prompt)
         assert i18n.t("ethernet_pm.status_no_device") in eth
         assert i18n.t("wifi_power_save.status_no_device") in wifi
+        static = str(options.get_option("net-static").prompt)
+        assert i18n.t("net_static.status_no_device") in static
 
 
 async def test_a_raising_step_does_not_end_the_installer(monkeypatch, capfd):

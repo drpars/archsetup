@@ -28,6 +28,7 @@ from . import (
     kms_hook,
     kmscon,
     mirrors,
+    net_static,
     network,
     nvidia_laptop,
     pacman,
@@ -272,6 +273,20 @@ TASKS: tuple[Task, ...] = (
         wifi_power_save.turn_on,
         group="network",
         state=wifi_power_save.status,
+    ),
+    Task(
+        "net-static",
+        "task.net_static",
+        net_static.configure,
+        group="network",
+        state=net_static.status,
+    ),
+    Task(
+        "net-dhcp",
+        "task.net_dhcp",
+        net_static.revert,
+        group="network",
+        state=net_static.status,
     ),
     Task(
         "printing",

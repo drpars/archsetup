@@ -10,6 +10,7 @@ from archsetup.core import (  # noqa: E402
     ethernet_pm,
     i18n,
     mkinitcpio,
+    net_static,
     printing,
     scanning,
     secureboot,
@@ -112,6 +113,16 @@ def sealed_network_state(monkeypatch, tmp_path):
     # machine running the suite -- and on the box this was written on it would
     # report a configured scanner.
     monkeypatch.setattr(scanning, "SANE_DLL", tmp_path / "sealed-dll.conf")
+    # The two static-address rows read /sys/class/net for the interface list
+    # and /etc/systemd/network for the files this task writes. Unsealed they
+    # would report the box running the suite -- and on the machine this was
+    # written on that means a real wlan0 and a real enp4s0, so the row would
+    # answer differently in CI than on a laptop. Sealed the same way as the
+    # rows above: empty roots, readers left running for real.
+    empty_networkd = tmp_path / "sealed-networkd"
+    empty_networkd.mkdir()
+    monkeypatch.setattr(net_static, "NET_DEVICES", empty_net)
+    monkeypatch.setattr(net_static, "NETWORK_DIR", empty_networkd)
     monkeypatch.setattr(scanning, "NONFREE_BACKEND", tmp_path / "sealed-backend.so")
     monkeypatch.setattr(scanning, "NETWORK_CONF", tmp_path / "sealed-network.conf")
 
