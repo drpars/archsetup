@@ -269,6 +269,16 @@ def install_grub() -> int:
         return 1
 
     if disk.is_efi():
+        # No promote_boot_entry() here, and that is measured rather than
+        # assumed: grub-install creates its entry through `efibootmgr -c`,
+        # which prepends. Measured in QEMU/OVMF on 2026-08-30 against the
+        # same nine firmware entries (four of them PXE/HTTP) that push a
+        # fresh `bootctl install` to the back -- GRUB came out at the head
+        # of BootOrder, a second run added no duplicate, and a machine
+        # booted with the ISO still attached and no -boot d reported
+        # BootCurrent: 0009. The ordering problem is bootctl's, not the
+        # firmware's. Not measured on real firmware, and not measured for
+        # refind-install.
         rc = run(["pacstrap", str(MNT), "grub", "efibootmgr"])
         rc |= chroot_run([
             "grub-install", "--target=x86_64-efi",

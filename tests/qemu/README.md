@@ -258,15 +258,19 @@ SCRATCH=1 ./run-vm.sh
 Bunlar kasten açık: her biri bir menü satırı, ama her biri kendi kurulumunu
 istiyor. Bir sonraki tur için liste burada dursun.
 
-- [ ] **GRUB'un UEFI kolu** (`grub-install --target=x86_64-efi`). BIOS kolu
-      2026-08-30'da koştu, EFI kolu **ayrı kod yolu**. Yan soru: GRUB girdisini
-      `efibootmgr -c` üzerinden oluşturuyor ve onun sırayı başa koyup koymadığı
-      **ölçülmedi** — systemd-boot'a yazılan `efibootmgr -o` kolu buraya
-      gerekiyor mu, cevabı o ölçüm verir. Canlı ISO'nun içinden ölçülemez:
-      `grub-install` orada `failed to get canonical path of 'airootfs'` diyor,
-      yani soru ancak `arch-chroot /mnt` içinden cevaplanır
-- [ ] **rEFInd** (`refind-install`). Hiç koşmadı; aynı `efibootmgr -c` sorusu
-      onun için de açık
+- [x] **GRUB'un UEFI kolu** (`grub-install --target=x86_64-efi`) — 2026-08-30'da
+      uçtan uca koştu. Yan soru da kapandı: `efibootmgr -c` girdiyi sıranın
+      **başına** koyuyor (taze NVRAM'de dokuz firmware girdisi varken GRUB
+      `BootOrder`'ın başına geçti; ikinci koşu kopya üretmedi; ISO takılıyken
+      `-boot d` olmadan açılan makine `BootCurrent: 0009` dedi). Yani
+      systemd-boot'a yazılan `efibootmgr -o` kolu **buraya gerekmiyor** —
+      sorun `bootctl install`'a özel
+- [ ] **rEFInd** (`refind-install`). Hiç koşmadı. `efibootmgr -c` sorusunun
+      cevabı GRUB'da ölçüldü ve **aynı araç, aynı bayrak** — ama rEFInd'de
+      ölçülmedi, ve beklenti ölçüm değildir. Sıfırdan kurulum gerekmiyor:
+      `grub.qcow2` kurulu duruyor, ISO'dan açıp `/mnt`'i bağladıktan sonra
+      yalnız o menü satırı koşar (iki önyükleyici yan yana durur, rig için
+      sorun değil)
 - [ ] **btrfs kökü** (kontrol listesi "ikinci turda deneyin" diyor; subvolume
       oluşturmalı)
 - [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —
