@@ -135,13 +135,19 @@ def list_disks() -> list[Disk]:
     column under `-n`, and `-r` escapes the spaces inside model names to
     `\\x20`. JSON gives null and keeps the string intact.
 
-    `-e 7,11` drops loop and sr the way disk.list_devices() does; the
-    `device/` link is not consulted here because TYPE=disk already
+    `-e` drops device-mapper majors by number: 7 loop, 11 sr, 2 floppy.
+    The floppy was added after a QEMU run put `/dev/fd0` in the list of
+    disks offered for erasure -- 4 KB, TYPE=disk, major 2, and no
+    hardware here has one to notice it on. It matters more than its size
+    suggests: this list is the one a user picks a disk to destroy from,
+    and QEMU is where the installer gets exercised.
+
+    The `device/` link is not consulted here because TYPE=disk already
     excludes the dm/md nodes that made trim.py need it.
     """
     try:
         out = subprocess.run(
-            ["lsblk", "-p", "-d", "-o", "NAME,SIZE,TYPE,TRAN,MODEL", "-e", "7,11", "--json"],
+            ["lsblk", "-p", "-d", "-o", "NAME,SIZE,TYPE,TRAN,MODEL", "-e", "2,7,11", "--json"],
             capture_output=True,
             text=True,
         )

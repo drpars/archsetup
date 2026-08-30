@@ -69,7 +69,9 @@ def is_efi() -> bool:
 
 def list_devices(kind: str | None = None) -> list[tuple[str, str, str]]:
     out = subprocess.run(
-        ["lsblk", "-p", "-n", "-l", "-o", "NAME,SIZE,TYPE", "-e", "7,11"],
+        # 2 floppy, 7 loop, 11 sr -- see blockdev.list_disks() for why the
+        # floppy is on the list.
+        ["lsblk", "-p", "-n", "-l", "-o", "NAME,SIZE,TYPE", "-e", "2,7,11"],
         capture_output=True,
         text=True,
     )

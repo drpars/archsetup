@@ -837,6 +837,29 @@ def test_list_disks_keeps_spaces_in_model_names(monkeypatch):
     assert disks[1].tran == ""
 
 
+def test_the_disk_list_excludes_the_floppy():
+    """A QEMU run put /dev/fd0 among the disks offered for erasure.
+
+    4 KB, TYPE=disk, major 2, and no hardware here has a floppy to notice
+    it on -- but QEMU is where the installer is exercised, and this is the
+    list a user picks a disk to destroy from. Majors measured in the guest:
+    fd0 2, loop 7, sr0 11.
+    """
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+        return type("P", (), {"returncode": 0, "stdout": '{"blockdevices":[]}'})()
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(blockdev.subprocess, "run", fake_run)
+    blockdev.list_disks()
+    monkey.undo()
+
+    excluded = seen["cmd"][seen["cmd"].index("-e") + 1]
+    assert set(excluded.split(",")) == {"2", "7", "11"}
+
+
 def test_the_classifier_never_reads_rotational():
     """rotational is not a class signal and must not become one.
 
