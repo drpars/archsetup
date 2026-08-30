@@ -118,10 +118,52 @@ grep ^MODULES /etc/mkinitcpio.conf    # virtio_* ve radeon OLMAMALI
 
 - [ ] `MODULES` içinde `virtio_blk`/`virtio_pci`/`virtio_net`/`radeon` yok
 
+**Secure Boot** (`./run-vm.sh sb`, kendi NVRAM'iyle):
+
+```bash
+bootctl status | grep -i 'secure boot'   # "enabled (user)" olmalı
+sbctl verify                             # HER UKI imzalı olmalı, fallback dahil
+bootctl set-oneshot <fallback>.efi       # ve fallback gerçekten açılmalı
+```
+
+- [ ] Anahtarlar gerçekten kaydedildi (düz OVMF'de `SetupMode` değişkeni yok,
+      `enroll-keys` düşer ve adım *"imzalama atlandı"* der — kapı doğru
+      davranır, kol hiç koşmaz)
+- [ ] `sbctl verify` çıktısında **tek bir `✗` yok**. Bir ✗ imzasız bir imaj
+      demektir ve firmware onu `Access Denied` ile reddeder; 2026-08-30'da
+      imzasız kalan şey tam olarak **fallback UKI** idi, yani kurtarma girdisi.
+
 > Bu bölüm QEMU içinde çalıştırıldığında bir uyarı: VM'de kök disk gerçekten
 > virtio üzerindedir, dolayısıyla `autodetect` `virtio_blk`'i **imaja** koyar.
 > Bu doğrudur ve beklenendir — kontrol edilen şey `MODULES=()` satırına elle
 > yazılmamış olması, imajda bulunmaması değil.
+
+## BIOS turu: bölümleme listesi UEFI'ye özeldir
+
+Yukarıdaki kontrol listesi bir ESP kurar; BIOS modunda ESP diye bir şey yok
+ve **listeyi olduğu gibi izlemek GRUB'u kurdurtmaz.** Ölçüldü (2026-08-30):
+GPT etiketli, BIOS boot bölümü olmayan bir diskte
+`grub-install --target=i386-pc` gömecek yer bulamıyor, blocklist'e düşüyor ve
+*"will not proceed with blocklists"* ile duruyor. archsetup bunu artık
+kurulumdan **önce** söylüyor, ama düzeltmesi bölümlemede:
+
+- [ ] **GPT kullanılacaksa** 1 MiB'lık bir bölüm açılıp tipi **ef02**
+      (BIOS boot) yapılır — dosya sistemi yok, bağlanmaz, sadece GRUB'un
+      `core.img`'i orada durur. cfdisk'te tip listesinde "BIOS boot" diye
+      geçiyor.
+- [ ] **MBR (dos) kullanılacaksa** gerekmiyor: önyükleme kaydının ardındaki
+      boşluk zaten o iş için.
+- [ ] **Bölüm Seçimi**'nde boot = `-` (ESP yok), swap ve root normal.
+- [ ] **Önyükleyici → GRUB**; sorulan disk, bölüm değil **diskin kendisi**
+      (`/dev/vda`), çünkü yazılan yer MBR.
+
+Açılıştan sonra doğrulama listesi aynıdır, şu ikisi hariç: ESP izinleri ve
+UKI bölümleri BIOS'ta karşılıksız. Yerlerine:
+
+```bash
+ls -la /boot/grub/grub.cfg          # üretilmiş olmalı
+dd if=/dev/vda bs=440 count=1 | strings | head   # MBR'de GRUB kodu
+```
 
 ## Diğer senaryolar
 
@@ -130,6 +172,8 @@ grep ^MODULES /etc/mkinitcpio.conf    # virtio_* ve radeon OLMAMALI
 | `./run-vm.sh bios` | BIOS modunda GRUB kurulumu testi |
 | `./run-vm.sh reset && ./run-vm.sh` | Temiz diskle yeniden başla (rEFInd turu) |
 | `./run-vm.sh boot` / `bios-boot` | Kurulu sistemi diskten başlat |
+| `./run-vm.sh sb` / `sb-boot` | Secure Boot destekli firmware (sbctl'in gerçek kolu) |
+| `SCRATCH=1 ./run-vm.sh` | Üç boş disk daha: prepare / erase / nvme format |
 
 Disk ve ISO `~/.cache/archsetup-qemu/` altında tutulur.
 
