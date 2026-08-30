@@ -288,15 +288,32 @@ istiyor. Bir sonraki tur için liste burada dursun.
       alanı **sabit yapılandırma altında da `null`** — `Routes[]` okuması DHCP
       kolunun tuhaflığı değil. `enp4s0` boyunca `20-wired.network` okumaya
       devam etti: arayüz başına dosya kararı ölçüldü, drop-in adresi her porta
-      düşürürdü. **Kablolu arayüzde sabit adres hâlâ koşmadı** (VM'de `en*`
-      beklenen metrik 100), NetworkManager kolu da yok
-- [ ] **Adresi gerçekten değiştiren bir reload.** Yukarıdaki üç reload'un
-      hiçbirinde adres değişmedi (aynı MAC, aynı kira), o yüzden açık TCP
-      bağlantılarının hayatta kalması bedava sağlandı ve **hiçbir şey
-      kanıtlamıyor**. Ölçülen şey yalnız şu: reload taşıyıcıyı düşürmüyor —
-      üç geçişte de `Lost carrier` yok, link `routable` kaldı. Oturumu o link
-      üzerinden gelen bir makinede *farklı* bir adres yazmanın ne yaptığı
-      açık; kullanıcıya basılan uyarı bu yüzden yerinde duruyor
+      düşürürdü. NetworkManager kolu yok
+- [x] **Kablolu arayüzde sabit adres** — 2026-08-31'de VM'de koştu
+      (`btrfs.qcow2`, `ens2`, systemd 261.2). Joker dosya kurucunun **kendi
+      sabitinden** (`chroot.py: WIRED_NETWORK_CONF`) kuruldu, elle yazılmış bir
+      taklitten değil. Gidiş: `NetworkFile` `20-wired.network` → **`10-static-
+      ens2.network`**, IPv4 `ConfigSource` `DHCPv4` → **`static`**, varsayılan
+      yol `proto dhcp metric 100` → **`proto static metric 100`** — yani
+      **kablolu metrik 100 gerçekten korunuyor** (host turu yalnız kablosuzun
+      600'ünü göstermişti), `Required For Online: yes` de yeniden yazılıyor.
+      Dönüş (`net-dhcp`) üçünü de geri aldı ve dosyayı sildi. `Gateways` alanı
+      **kablolu linkte de, sabit yapılandırma altında da `null`**. İki reload
+      boyunca `Lost carrier` sayısı **0** ve o link üzerinden gelen ssh
+      oturumu ikisinde de sağ kaldı — ama adres hiç değişmedi (10.0.2.15 →
+      10.0.2.15), yani aşağıdaki madde hâlâ açık
+- [ ] **Adresi gerçekten değiştiren bir reload.** Yukarıdaki **beş**
+      reload'un (wlan0'da üç, `ens2`'de iki) hiçbirinde adres değişmedi (aynı
+      MAC, aynı kira), o yüzden açık TCP bağlantılarının hayatta kalması
+      bedava sağlandı ve **hiçbir şey kanıtlamıyor**. Ölçülen şey yalnız şu:
+      reload taşıyıcıyı düşürmüyor — beş geçişte de `Lost carrier` yok, link
+      `routable` kaldı, ve kablolu turda o link üzerinden gelen ssh oturumu
+      ikisinde de sağ çıktı. Oturumu o link üzerinden gelen bir makinede
+      *farklı* bir adres yazmanın ne yaptığı açık. Kullanıcıya basılan uyarı
+      2026-08-31'de **yeniden yazıldı**: eskiden *"kopup kopmadığı ÖLÇÜLMEDİ"*
+      diyordu ve bu, deponun kendi docstring'i ölçümü yazdıktan sonra da öyle
+      kaldı; artık ölçülen yarıyı (taşıyıcı düşmüyor) ölçülmeyenden (adresi
+      değiştiren reload) ayırıyor
 - [x] **btrfs kökü** — 2026-08-31'de uçtan uca koştu (`btrfs.qcow2`,
       hostname `btrfstest`). `mkfs.btrfs` sonrası subvolume kolu gerçekten
       çalıştı (`subvolume create /mnt/root` + `set-default`), ve **asıl bahis

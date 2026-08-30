@@ -397,12 +397,18 @@ def _offer_reload(iface: str) -> int:
 
     `networkctl reload` re-reads the files and reconfigures the link. It does
     not drop the carrier: measured 2026-08-31, three reloads on wlan0 in both
-    directions, no `Lost carrier` and the link stayed routable throughout.
+    directions, no `Lost carrier` and the link stayed routable throughout;
+    and again the same day on a wired link (QEMU, ens2), two reloads across
+    the static/DHCP round trip, `Lost carrier` count 0 and the ssh session
+    riding that link survived both.
+
     That is less than it sounds. The address never changed in any of the
-    three, so nothing was asked of the connections riding on it, and the
+    five, so nothing was asked of the connections riding on it, and the
     link in question may still be the one carrying this session -- so the
     machine is never reconfigured without being asked, and the command is
-    printed either way so a no is not a dead end.
+    printed either way so a no is not a dead end. The user-facing hint said
+    the carrier question was unmeasured long after it had been measured;
+    it now states which half is measured and which half is not.
     """
     print(t("net_static.reload_hint"))
     if not services.is_active(NETWORKD_UNIT):
