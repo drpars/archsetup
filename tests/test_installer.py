@@ -1281,6 +1281,95 @@ def test_declined_fix_blocks_the_bootloader(monkeypatch, esp_env):
     assert bootloaders._require_efi() is False
 
 
+# --- firmware boot order ---------------------------------------------------
+
+# `efibootmgr -v` output, trimmed to the shape the parser cares about. The
+# order is the one QEMU produced on 2026-08-30 after a first `bootctl
+# install` from the live ISO: the two new entries land behind four PXE/HTTP
+# entries and the EFI shell, which is how that guest ended up at a PXE
+# prompt with nothing on screen to say why.
+EFIBOOTMGR_V = """BootCurrent: 0002
+Timeout: 0 seconds
+BootOrder: 0000,0006,0007,000A,000B,000C
+Boot0000* BootManagerMenuApp	FvVol(7cb8bdc9)/FvFile(eec25bdc)
+Boot0006* UEFI PXEv4 (MAC:525400123456)	PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,1)
+Boot0007* UEFI PXEv6 (MAC:525400123456)	PciRoot(0x0)/Pci(0x2,0x0)/MAC(525400123456,1)
+Boot000A* EFI Internal Shell	FvVol(7cb8bdc9)/FvFile(7c04a583)
+Boot000B* Arch Linux	HD(1,GPT,36b445f0-b7dc-4f18-be44-52c3d3a1f1ab,0x800,0xff7df)/\\EFI\\systemd\\systemd-bootx64.efi
+Boot000C* Fallback Arch Linux	HD(1,GPT,36b445f0-b7dc-4f18-be44-52c3d3a1f1ab,0x800,0xff7df)/\\EFI\\systemd\\systemd-boot-fallbackx64.efi
+"""
+
+PARTUUID = "36b445f0-b7dc-4f18-be44-52c3d3a1f1ab"
+
+
+@pytest.fixture
+def order_env(boot_env, monkeypatch, runlog):
+    """A firmware that answers, with the primary entry stuck at the back."""
+    monkeypatch.setattr(bootloaders, "EFIBOOTMGR", "efibootmgr")
+    monkeypatch.setattr(
+        bootloaders.subprocess, "run",
+        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": EFIBOOTMGR_V})(),
+    )
+    monkeypatch.setattr(bootloaders, "_blkid", lambda dev, tag: PARTUUID)
+    return runlog
+
+
+def test_boot_entry_is_promoted_to_the_front(order_env):
+    """`bootctl install` appends a *new* entry; nothing else moves it.
+
+    Read in systemd v261 (bootctl-install.c, insert_into_order): the slot
+    goes to order[n] when the operation is INSTALL_NEW. Measured twice in
+    QEMU on 2026-08-30 with the same command on the same ESP -- first run
+    appended, second run (entry already in the order) moved it to the
+    front. So the first install on any machine that already has firmware
+    entries leaves Arch behind them.
+    """
+    assert bootloaders.promote_boot_entry("/dev/vda1") == 0
+    assert ["efibootmgr", "-o", "000B,0000,0006,0007,000A,000C"] in order_env.calls
+
+
+def test_the_fallback_entry_is_not_the_one_promoted(order_env):
+    """Both entries carry the ESP's PARTUUID; only the loader path splits
+    them, and promoting the fallback would boot the recovery image."""
+    bootloaders.promote_boot_entry("/dev/vda1")
+    written = [c for c in order_env.calls if c[:2] == ["efibootmgr", "-o"]]
+    assert written and written[0][2].split(",")[0] == "000B"
+
+
+def test_an_entry_already_first_is_left_alone(boot_env, monkeypatch, runlog):
+    monkeypatch.setattr(bootloaders, "EFIBOOTMGR", "efibootmgr")
+    monkeypatch.setattr(
+        bootloaders.subprocess, "run",
+        lambda *a, **k: type("P", (), {
+            "returncode": 0,
+            "stdout": EFIBOOTMGR_V.replace(
+                "BootOrder: 0000,0006", "BootOrder: 000B,0000,0006"
+            ).replace(",000B,000C", ",000C"),
+        })(),
+    )
+    monkeypatch.setattr(bootloaders, "_blkid", lambda dev, tag: PARTUUID)
+    assert bootloaders.promote_boot_entry("/dev/vda1") == 0
+    assert not any(c[:2] == ["efibootmgr", "-o"] for c in runlog.calls)
+
+
+def test_an_unreadable_order_does_not_fail_the_install(boot_env, monkeypatch, runlog):
+    """The bootloader is installed either way; losing the ordering is worth
+    a sentence, not a non-zero exit from the last step of an install."""
+    monkeypatch.setattr(bootloaders, "EFIBOOTMGR", "/nonexistent/efibootmgr")
+    monkeypatch.setattr(bootloaders, "_blkid", lambda dev, tag: PARTUUID)
+    assert bootloaders.promote_boot_entry("/dev/vda1") == 0
+    assert not any(c[:2] == ["efibootmgr", "-o"] for c in runlog.calls)
+
+
+def test_install_promotes_the_entry_it_just_created(order_env, monkeypatch):
+    monkeypatch.setattr(bootloaders.disk, "is_efi", lambda: True)
+    monkeypatch.setattr(bootloaders, "ask_yes", lambda q: False)
+    monkeypatch.setattr(disk, "ensure_esp_type", lambda dev: 0)
+    state.bootdev = "/dev/vda1"
+    assert bootloaders.install_systemd_boot() == 0
+    assert ["efibootmgr", "-o", "000B,0000,0006,0007,000A,000C"] in order_env.calls
+
+
 # --- loader.conf timeout ---------------------------------------------------
 
 

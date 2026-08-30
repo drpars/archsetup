@@ -15,7 +15,7 @@ from archsetup.core import (  # noqa: E402
     secureboot,
     wifi_power_save,
 )
-from archsetup.installer import blockdev, disk  # noqa: E402
+from archsetup.installer import blockdev, bootloaders, disk  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -149,6 +149,15 @@ def sealed_block_state(monkeypatch, tmp_path):
     # on a box that happens to have something at /mnt it would report it as
     # installer progress.
     monkeypatch.setattr(disk, "MOUNTS", empty_mounts)
+    # The firmware reach behind the systemd-boot step. promote_boot_entry()
+    # reads the boot order with `efibootmgr -v` and, when the new entry is
+    # not first, writes a new order back -- so an unsealed test that sets
+    # state.bootdev and installs would reorder the boot entries of the box
+    # running the suite. Sealed the way the readers above are: the constant
+    # points at a name that cannot be executed, the reader still runs, and
+    # the OSError branch answers "order unreadable". A test that wants the
+    # branch points it at its own fake.
+    monkeypatch.setattr(bootloaders, "EFIBOOTMGR", str(tmp_path / "sealed-no-efibootmgr"))
     # MNT itself is deliberately left alone. It is only ever reached behind
     # mounted(), which this empty file already answers no to, so sealing it
     # buys nothing -- and it would weaken a test that pins the production

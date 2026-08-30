@@ -91,6 +91,97 @@ def _loader_conf() -> str:
     return f"timeout  {timeout}\nconsole-mode  max\n"
 
 
+# `bootctl install` never puts a *new* entry first. Read in systemd v261
+# (src/bootctl/bootctl-install.c, insert_into_order): the slot goes to
+# `order[n]` when the operation is INSTALL_NEW, and to `order[0]` only when
+# it is not -- so the very first install on a machine lands behind whatever
+# the firmware already had. Reproduced twice in QEMU on 2026-08-30, same
+# command, same ESP, same live ISO: run one appended the entry after four
+# PXE/HTTP entries and the EFI shell, run two (the entry now already in the
+# order) moved it to the front. The rig booted to PXE after run one, with
+# nothing on screen to say why.
+#
+# systemd exposes no switch for this: `after_slot` exists in that function
+# but only so the fallback lands next to the primary, and bootctl.c parses
+# no option for it. So the move is ours to make, and efibootmgr is the tool
+# for it -- measured present in the ISO's own package list (efibootmgr 18-4
+# in /run/archiso/bootmnt/arch/pkglist.x86_64.txt), so the live environment
+# always has it.
+#
+# The policy is not invented here: `bootctl update` moves its entry to the
+# front itself. This applies that same policy to the first install, which is
+# the one case systemd leaves at the back.
+LOADER = "\\EFI\\systemd\\systemd-bootx64.efi"
+# Named rather than inlined so the suite can seal it: this function reads
+# firmware state and, one branch later, writes it. A test that sets
+# state.bootdev and installs would otherwise reorder the boot entries of
+# the machine running the suite.
+EFIBOOTMGR = "efibootmgr"
+
+
+def _boot_entries() -> tuple[list[str], dict[str, str]]:
+    """(BootOrder, {slot: efibootmgr -v line}), empty when it cannot be read."""
+    try:
+        out = subprocess.run([EFIBOOTMGR, "-v"], capture_output=True, text=True)
+    except OSError:
+        return [], {}
+    if out.returncode != 0:
+        return [], {}
+    order: list[str] = []
+    entries: dict[str, str] = {}
+    for line in out.stdout.splitlines():
+        if line.startswith("BootOrder:"):
+            order = [s.strip() for s in line.split(":", 1)[1].split(",") if s.strip()]
+        elif line.startswith("Boot") and len(line) > 8 and line[4:8].isalnum():
+            entries[line[4:8]] = line
+    return order, entries
+
+
+def promote_boot_entry(esp_device: str) -> int:
+    """Move this ESP's systemd-boot entry to the front of BootOrder.
+
+    Never fails the install: a firmware that will not answer, a missing
+    entry or an unreadable order are all reported and stepped over. The
+    bootloader is installed either way; what is lost is the ordering, and
+    saying so is more use than a non-zero exit from the last step.
+    """
+    partuuid = _blkid(esp_device, "PARTUUID")
+    if not partuuid:
+        print(t("inst.order_no_partuuid", dev=esp_device))
+        return 0
+
+    order, entries = _boot_entries()
+    if not order:
+        print(t("inst.order_unreadable"))
+        return 0
+
+    # Both the PARTUUID and the loader path, because the fallback entry
+    # carries the same PARTUUID and must not be the one promoted.
+    slot = next(
+        (
+            s for s in order
+            if partuuid.lower() in entries.get(s, "").lower()
+            and LOADER.lower() in entries.get(s, "").lower()
+        ),
+        None,
+    )
+    if slot is None:
+        print(t("inst.order_not_found", dev=esp_device))
+        return 0
+    if order[0] == slot:
+        print(t("inst.order_already_first", slot=slot))
+        return 0
+
+    new_order = [slot] + [s for s in order if s != slot]
+    print(t("inst.order_before", order=",".join(order)))
+    rc = run([EFIBOOTMGR, "-o", ",".join(new_order)])
+    if rc != 0:
+        print(t("inst.order_failed", rc=rc))
+        return 0
+    print(t("inst.order_after", order=",".join(new_order)))
+    return 0
+
+
 def install_systemd_boot() -> int:
     if not target_ready() or not _require_efi():
         return 1
@@ -122,6 +213,9 @@ def install_systemd_boot() -> int:
 
     if rc != 0:
         return rc
+
+    if state.bootdev:
+        promote_boot_entry(state.bootdev)
 
     # Helpers go on now that loader.conf exists: the memtest entry is only
     # written where there is a systemd-boot menu to put it in, and this is
