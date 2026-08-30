@@ -30,6 +30,9 @@ MNT = Path("/mnt")
 # machine running them.
 MOUNTS = Path("/proc/mounts")
 
+# Same reason, for the swap reader.
+SWAPS = Path("/proc/swaps")
+
 # GPT type GUID / MBR type byte of an EFI System Partition.
 ESP_GUID = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 ESP_MBR = "0xef"
@@ -347,8 +350,48 @@ def mount_all() -> int:
     return rc
 
 
+def _active_swaps_under(path: Path) -> list[str]:
+    """Active swap areas whose backing file sits inside `path`.
+
+    Only a file can match: a swap partition is named /dev/... in
+    /proc/swaps, so the prefix test never picks one up, and the caller
+    handles that case from state.
+    """
+    try:
+        text = SWAPS.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    prefix = f"{path}/"
+    return [
+        fields[0]
+        for fields in (line.split() for line in text.splitlines()[1:])
+        if fields and fields[0].startswith(prefix)
+    ]
+
+
 def unmount_all() -> int:
-    rc = run(["umount", "-R", str(MNT)])
+    """Swap off first: the swapfile this installer creates is inside /mnt.
+
+    An active swap makes the kernel a user of the mount it lives on, so
+    `umount -R /mnt` fails with "target is busy" and the last step of an
+    otherwise finished install reports failure. Measured in QEMU
+    2026-08-30, after the tool's own swapfile step: `fuser -vm /mnt`
+    named the holder -- `kernel swap /mnt/swapfile` -- and the same menu
+    item succeeded once the swap was off.
+
+    Knowing about `state.swapdev` was not enough on two counts. It is a
+    partition chosen in the disk phase, which is not where
+    create_swapfile() puts anything; and the swapoff came *after* the
+    umount it has to unblock, so even a swapfile recorded there would
+    have been freed only once the thing it was blocking had failed.
+    /proc/swaps is read instead of assuming the path, because it reports
+    what is actually on -- including a swapfile some earlier session
+    turned on under a different name.
+    """
+    rc = 0
+    for swap in _active_swaps_under(MNT):
+        rc |= run(["swapoff", swap])
     if state.swapdev:
         rc |= run(["swapoff", state.swapdev])
+    rc |= run(["umount", "-R", str(MNT)])
     return rc

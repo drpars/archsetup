@@ -79,6 +79,50 @@ def test_non_vfat_boot_partition_gets_no_mask(tmp_path, monkeypatch, runlog):
     assert ["mount", "/dev/sda1", f"{tmp_path}/efi"] in runlog.calls
 
 
+def _swaps_file(tmp_path, *entries) -> Path:
+    path = tmp_path / "swaps"
+    header = "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n"
+    body = "".join(f"{name}\t\t\t\tfile\t\t3993596\t\t0\t\t-2\n" for name in entries)
+    path.write_text(header + body, encoding="utf-8")
+    return path
+
+
+def test_unmount_swaps_off_our_own_swapfile_first(tmp_path, monkeypatch, runlog):
+    """A swapfile inside /mnt holds the mount: `umount -R` gets EBUSY.
+
+    Measured in QEMU 2026-08-30, on the path the tool itself builds --
+    the swapfile step then the finish step: `fuser -vm /mnt` reported
+    `kernel swap /mnt/swapfile`, and umount failed with "target is busy".
+    """
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(disk, "MNT", tmp_path)
+    monkeypatch.setattr(disk, "SWAPS", _swaps_file(tmp_path, f"{tmp_path}/swapfile"))
+    state.swapdev = None
+
+    assert disk.unmount_all() == 0
+    swapoff = ["swapoff", f"{tmp_path}/swapfile"]
+    assert swapoff in runlog.calls
+    # Order is the whole point: a swapoff after the umount frees the mount
+    # only once the thing it was blocking has already failed.
+    assert runlog.calls.index(swapoff) < runlog.calls.index(
+        ["umount", "-R", str(tmp_path)]
+    )
+
+
+def test_unmount_still_swaps_off_the_chosen_partition(tmp_path, monkeypatch, runlog):
+    """A swap partition is /dev/... in /proc/swaps, so the prefix misses it."""
+    monkeypatch.setattr(disk, "run", runlog)
+    monkeypatch.setattr(disk, "MNT", tmp_path)
+    monkeypatch.setattr(disk, "SWAPS", _swaps_file(tmp_path, "/dev/sda3"))
+    state.swapdev = "/dev/sda3"
+
+    assert disk.unmount_all() == 0
+    assert ["swapoff", "/dev/sda3"] in runlog.calls
+    assert [call for call in runlog.calls if call[0] == "swapoff"] == [
+        ["swapoff", "/dev/sda3"]
+    ]
+
+
 def test_guard_refuses_outside_iso(monkeypatch):
     monkeypatch.delenv("ARCHSETUP_UNSAFE")
     monkeypatch.setattr(disk.env, "is_archiso", lambda: False)
