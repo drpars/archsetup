@@ -239,25 +239,42 @@ SCRATCH=1 ./run-vm.sh
 > yanlış adla koşan bir `mkfs` kurulumu götürür. (Kurucunun kendi kapıları
 > bağlı diski reddeder, ama kabuktan atılan komut o kapıdan geçmez.)
 
-- [ ] **`disk-prepare`:** önce boş diske bir tablo + dosya sistemi yaz
-      (`sgdisk -n 1:0:0 /dev/vdb && partprobe /dev/vdb && mkfs.ext4 /dev/vdb1`),
-      `blkid` ile UUID'sini not et, sonra adımı koştur ve `/dev/vdb`'yi seç.
-      Ardından **aynı hizada** yeni bir bölüm açıp `blkid` sor: **eski UUID
-      dönmemeli.** 2026-08-30'da dönüyordu — bu yüzeyin var olma sebebi tam
-      olarak buydu
-- [ ] **`disk-erase` üzerine yazma kolu** (NVMe olmayan diskte, `/dev/vdc`):
-      tanınır bir desen yaz, sil, `cmp /dev/vdc /dev/zero` ile **disk boyunun
-      son baytına kadar** sıfır olduğunu doğrula (`cmp` tam boyda EOF
-      demeli). Küçük disk kasten: 64 MiB `dd` saniyeler sürer ve tam boy
-      bilinmeden "sonuna kadar gitti" doğrulanamaz
-- [ ] **`nvme format`** emüle denetleyicide. `--ses 0` kipinde veri
-      **okunamaz hâle gelmek zorunda değil**: bu cihazın `dlfeat`'i öyle
-      diyorsa sıfır döner, başka denetleyicide dönmeyebilir (`nvme id-ns`).
-      Kripto silme menüde çıkmamalı — QEMU `fna=0x0` bildiriyor
-- [ ] **Ortak kapılar:** bağlı bir bölümü olan disk reddedilmeli ve mesaj
-      bağlama noktasını adıyla vermeli (`mount /dev/vdb1 /mnt2` sonra
-      `/dev/vdb`'yi seçmeyi deneyin); `/dev/fd0` (QEMU'nun 4 KB disketi)
-      listede **görünmemeli** — misafirde vardır, listede olmamalıdır
+- [x] **`disk-prepare`** — 2026-08-30'da arayüzden koştu ve **bu yüzeyin var
+      olma sebebini yakaladı:** ekran *"hazır; üzerinde bölüm görünmüyor"*
+      dedi, ama **aynı hizada** bir `sgdisk` sonrası `blkid` eski ext4
+      UUID'sini geri verdi. Sebep: `wipefs -a <disk>` yalnız **diskin**
+      taşıdığını (GPT, PMBR) siliyor, bölüm içindeki süperblok bölüme göreli
+      bir ofsette ve o çağrı oraya hiç bakmıyor. `blkdiscard` kurtarmıyor —
+      `discard_max_bytes` sıfırdan farklıydı, komut `rc=0` döndü ve **hiçbir
+      şey değişmedi**. Sıra bağlayıcı yapıldı (**önce bölümler, sonra disk**;
+      tersi tabloyu düşürüp imza taşıyan bölümlerin adlarını da götürüyor) ve
+      düzeltmeden sonra gerçek çekirdeğe karşı tekrarlandı: `wipefs -a
+      /dev/vda1` ext4 sihrini siliyor, yeniden bölümlemede geriye yalnız taze
+      PARTUUID kalıyor, ofsette `00 00`. Ayrıca **gerçek donanımda uçtan uca**
+      koştu (`/dev/sda`, Cruzer Force 58,7G): üç imza da düştü (GPT birincil
+      `0x200`, GPT yedek `0xeaefffe00`, PMBR `0x1fe`), `blkdiscard` **atlandı**
+      — `discard=0` kapısı gerçekte ateşledi
+- [x] **`disk-erase` üzerine yazma kolu** — 2026-08-30'da arayüzden koştu,
+      kusursuz: tam bayt sayısıyla (`count=67108864`, 64 MiB'ın tamı), `rc=0`,
+      ve `cmp <disk> /dev/zero` diskin **son baytına kadar** sıfır okuyup EOF
+      veriyor. `count=`'ın var olma sebebi bu — sınırsız `dd` başarı anında
+      `error writing` + rc=1 veriyor, yani "bitti" ile "doldu" ayırt edilmiyor
+- [x] **`nvme format --ses 0`** — 2026-08-30'da emüle denetleyicide koştu:
+      *"Success formatting namespace:1"*, kanarya gitti ve **tüm ad alanı
+      sıfır** okudu. Ama bu **denetleyiciye özel**: `dlfeat=0x9`, yani
+      "serbest bırakılmış blok okuması sıfır döner" — `--ses 0`'ın veriyi
+      okunamaz kılıp kılmadığı cihazın `dlfeat` alanının fonksiyonu, aracın
+      vaadi değil (`nvme id-ns`). `crypto_supported()` de doğru cevapladı:
+      QEMU `fna=0x0` bildiriyor ve kripto silme menüde çıkmadı
+- [x] **Ortak kapılar** — 2026-08-30'da arayüzden koştu ve **bir kusur
+      çıkardı.** Bağlama kapısı doğruydu: bağlı bir bölümü olan disk
+      reddedildi ve mesaj bağlama noktasını **adıyla** verdi. `/dev/fd0` ise
+      silinecek diskler listesindeydi (`1f54d6b`): 4 KB, `TYPE=disk`, major
+      **2** — var olan `-e 7,11` süzgeci yalnız loop ile sr'yi eliyordu.
+      Buradaki hiçbir makinede disket yok, o yüzden hiç görünmemişti; ve
+      durduğu liste kullanıcının **silinecek diski seçtiği** listeydi, yani
+      boyutu önemsiz gösteriyor. Süzgeç `-e 2` ile genişletildi ve fd0
+      misafirde **var**ken listede **yok**
 
 ## Henüz hiç koşmamış kollar
 
