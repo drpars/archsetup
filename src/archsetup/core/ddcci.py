@@ -85,8 +85,15 @@ def files() -> tuple[tuple[str, Path, str], ...]:
 
     The sibling .bak that write_with_backup leaves behind is read by nothing in
     these four directories: systemd-modules-load globs *.conf, udev reads
-    *.rules, systemd loads only known unit suffixes, and a non-executable
-    .sh.bak in /usr/local/bin is not what anyone execs.
+    *.rules, systemd loads only known unit suffixes, and nothing enumerates
+    /usr/local/bin -- the unit names one exact path.
+
+    It IS executable, though, and that was measured rather than reasoned: the
+    backup goes through `sudo cp`, which copies the mode, so replacing the
+    0755 helper leaves a 0755 ddcci-attach.sh.bak behind (2026-08-31, on the
+    desktop, first real run of this task). Harmless here for the reason above,
+    but it is litter and the earlier version of this comment claimed the
+    opposite.
     """
     return (
         ("ddcci-attach.sh", HELPER, "0755"),
