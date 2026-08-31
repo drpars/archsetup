@@ -349,7 +349,8 @@ loginctl show-session "$XDG_SESSION_ID" -p Type -p Seat -p Active
 
 ```
 data/        paket tanımları (TOML) — betiğin "içeriği"; `audio/` altında
-             EasyEffects presetleri ve port izleyici servisi
+             EasyEffects presetleri ve port izleyici servisi, `ddcci/`
+             altında DDC/CI backlight görevinin dağıttığı dört dosya
 locales/     tr.toml, en.toml — tüm arayüz metinleri
 src/archsetup/
   core/      i18n, pacman, donanım tespiti, önyükleyici, görevler

@@ -1,0 +1,4 @@
+# Re-run the attach helper whenever a DRM connector changes state.
+# --no-block so a udev worker is never held: ddcci-discover blocks inside RUN+=
+# for up to 10 seconds by default, which is what made its udev path suspect.
+SUBSYSTEM=="drm", ACTION=="change", RUN+="/usr/bin/systemctl --no-block restart ddcci-attach.service"

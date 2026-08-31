@@ -18,6 +18,7 @@ from . import (
     bootloader,
     coding_agents,
     coredump,
+    ddcci,
     dotfiles,
     ethernet_pm,
     gitid,
@@ -311,6 +312,13 @@ TASKS: tuple[Task, ...] = (
         group="virt",
     ),
     Task("audio-dsp", "task.audio_dsp", audio_dsp.configure, group="drivers"),
+    Task(
+        "ddcci-backlight",
+        "task.ddcci_backlight",
+        ddcci.configure,
+        group="drivers",
+        state=ddcci.status,
+    ),
     Task(
         "coredump-cap",
         "task.coredump_cap",

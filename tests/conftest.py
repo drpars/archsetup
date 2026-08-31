@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from archsetup.core import (  # noqa: E402
+    ddcci,
     ethernet_pm,
     i18n,
     mkinitcpio,
@@ -125,6 +126,20 @@ def sealed_network_state(monkeypatch, tmp_path):
     monkeypatch.setattr(net_static, "NETWORK_DIR", empty_networkd)
     monkeypatch.setattr(scanning, "NONFREE_BACKEND", tmp_path / "sealed-backend.so")
     monkeypatch.setattr(scanning, "NETWORK_CONF", tmp_path / "sealed-network.conf")
+    # The DDC/CI backlight row is the same shape as the four above: it reads
+    # /sys/class/backlight plus the four files that task distributes. Unsealed
+    # it reports the box running the suite -- and on the desktop this was
+    # written against, that means a real ddcci2 and 4/4 files, so the row would
+    # answer differently there than in CI or on the laptop. The paths under
+    # sealed-ddcci are deliberately never created; the readers still run.
+    empty_backlight = tmp_path / "sealed-backlight"
+    empty_backlight.mkdir()
+    sealed_ddcci = tmp_path / "sealed-ddcci"
+    monkeypatch.setattr(ddcci, "BACKLIGHT", empty_backlight)
+    monkeypatch.setattr(ddcci, "HELPER", sealed_ddcci / "ddcci-attach.sh")
+    monkeypatch.setattr(ddcci, "UNIT", sealed_ddcci / "ddcci-attach.service")
+    monkeypatch.setattr(ddcci, "UDEV_RULES", sealed_ddcci / "99-ddcci-attach.rules")
+    monkeypatch.setattr(ddcci, "MODULES_LOAD", sealed_ddcci / "ddcci.conf")
 
 
 @pytest.fixture(autouse=True)

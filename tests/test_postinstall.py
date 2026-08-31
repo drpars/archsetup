@@ -13,6 +13,7 @@ from archsetup.core import (
     audio_dsp,
     coding_agents,
     coredump,
+    dkms,
     dotfiles,
     ethernet_pm,
     i18n,
@@ -1347,6 +1348,9 @@ def _pin_kernel_tree(tmp_path, monkeypatch, *, headers: bool, pkgbase: str | Non
     the headers installed, so the branch that matters would silently never
     run. Same leak the chassis check, the Samba tests and repo_usable() each
     shipped once.
+
+    The constant lives in core/dkms.py since the ddcci task started needing the
+    same check; waydroid reads it from there, so this pins it there.
     """
     release = os.uname().release
     tree = tmp_path / "modules" / release
@@ -1355,7 +1359,7 @@ def _pin_kernel_tree(tmp_path, monkeypatch, *, headers: bool, pkgbase: str | Non
         (tree / "build").mkdir()
     if pkgbase is not None:
         (tree / "pkgbase").write_text(f"{pkgbase}\n")
-    monkeypatch.setattr(waydroid, "KERNEL_MODULES", tmp_path / "modules")
+    monkeypatch.setattr(dkms, "KERNEL_MODULES", tmp_path / "modules")
 
 
 def test_waydroid_builtin_vs_dkms(tmp_path, monkeypatch, fake_write):

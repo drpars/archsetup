@@ -412,11 +412,27 @@ done = "libvirt configured. Log out and back in for group membership."
 vfioctl_needs_base_devel = "vfioctl is built from source and base-devel is not installed. First: sudo pacman -S --needed base-devel"
 vfioctl_done = "vfioctl installed. There is no automatic update channel: it is not in the AUR, so 'pacman -Syu' will not refresh it -- run this task again for a newer version."
 
+# Shared by every task that installs a DKMS package (core/dkms.py).
+[dkms]
+headers_needed = "This kernel's headers are not installed, and a DKMS build fails silently without them (pacman still reports success). Installing alongside: {package}"
+headers_unknown = "This kernel's headers are not installed and the package name could not be determined: /usr/lib/modules/{release}/pkgbase is unreadable. Installing a DKMS module without headers fails the build silently -- pacman reports success and the module simply never appears -- so this stopped instead. Install your kernel's -headers package and try again."
+
+[ddcci]
+plan = "An external monitor has no backlight device, so the brightness keys, waybar's backlight module and a dimming idle daemon have nothing to act on. This creates one over DDC/CI: ddcutil from the repositories, {pkg} from the AUR, and four files -- an attach helper in /usr/local/bin, a systemd unit, a udev rule for connector changes, and a modules-load.d entry. The cost is ongoing rather than one-off: DKMS rebuilds the module on every kernel update, and on a Secure Boot machine the UKI has to be regenerated and re-signed after that."
+plan_q = "Set up DDC/CI backlight?"
+module_missing = "The package installed but DKMS left no {module} module for {release}. The four files are still placed, because the next kernel update rebuilds it; until then no backlight device will appear. Read the build log with: dkms status"
+asset_missing = "Could not read the file to install ({path}): {error}"
+files_failed = "One of the four files could not be placed, so the unit was not enabled -- a half-installed setup is worse than one that never started."
+done = "DDC/CI backlight is set up and the device is there: {devices}. Brightness goes through it now -- try the brightness keys, or 'ddcutil detect'."
+no_device_yet = "The files are in place and the unit is enabled, but no ddcci backlight device has appeared yet. That is not a failure by itself: the helper waits up to 15 seconds for the GPU and may still be looking. Read it with: systemctl status {unit} -- if it says no DDC/CI display was found, the monitor or the cable is not answering DDC/CI (DisplayPort or HDMI, not a passive adapter)."
+undo = "To undo: sudo systemctl disable --now {unit}, delete the four files, then 'pacman -Rns {pkg}'."
+status_device = "device: {devices}"
+status_no_device = "no device"
+status_line = "Now: {files}/{total} files in place, {device}"
+
 [waydroid]
 missing = "waydroid is not installed; install it from Applications > Common Applications first."
 builtin = "The kernel ships binder built in; the DKMS module was skipped and only the service enabled."
-headers_needed = "This kernel's headers are not installed, and a DKMS build fails silently without them (pacman still reports success). Installing alongside: {package}"
-headers_unknown = "This kernel's headers are not installed and the package name could not be determined: /usr/lib/modules/{release}/pkgbase is unreadable. Installing the DKMS module without headers would fail the build silently and the binder device would never appear, so this stopped instead. Install your kernel's -headers package and try again."
 done = "Waydroid binder configured. Reboot before running it!"
 
 [ssh]
@@ -557,6 +573,8 @@ nvim_remove = "Remove Neovim Dotfiles"
 nvim_remove_desc = "Delete nvim configuration, data and cache"
 audio_dsp = "Speaker Audio DSP"
 audio_dsp_desc = "EasyEffects + ROG G513RM preset; bypassed on headphones"
+ddcci_backlight = "DDC/CI Backlight (External Monitor)"
+ddcci_backlight_desc = "Gives an external monitor a backlight device so the brightness keys reach it: ddcutil + the DKMS driver + the attach helper that names the i2c bus. Costs a DKMS rebuild on every kernel update"
 coredump_cap = "Core Dump Cap"
 coredump_cap_desc = "Limit systemd-coredump to 1 GB (default: 4 GiB)"
 ssd_trim = "SSD TRIM Timer"

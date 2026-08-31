@@ -412,11 +412,27 @@ done = "libvirt yapılandırıldı. Grup üyeliği için oturumu kapatıp açın
 vfioctl_needs_base_devel = "vfioctl kaynaktan derleniyor ve base-devel kurulu değil. Önce: sudo pacman -S --needed base-devel"
 vfioctl_done = "vfioctl kuruldu. Otomatik güncelleme kanalı yok: AUR'da olmadığı için 'pacman -Syu' onu tazelemez — yeni sürüm için bu görevi yeniden çalıştırın."
 
+# DKMS paketi kuran her görevin paylaştığı metinler (core/dkms.py).
+[dkms]
+headers_needed = "Bu çekirdeğin başlıkları kurulu değil; DKMS derlemesi onlarsız sessizce düşer (pacman yine 'başarılı' der). Birlikte kuruluyor: {package}"
+headers_unknown = "Bu çekirdeğin başlıkları kurulu değil ve paket adı belirlenemedi: /usr/lib/modules/{release}/pkgbase okunamıyor. DKMS modülü başlıksız kurulursa derleme sessizce düşer — pacman 'başarılı' der, modül hiç oluşmaz — onun için durduk. Çekirdeğinizin -headers paketini kurup tekrar deneyin."
+
+[ddcci]
+plan = "Harici monitörün backlight aygıtı yoktur; parlaklık tuşları, waybar'ın backlight modülü ve karartma yapan bir idle servisi bu yüzden dokunacak bir şey bulamaz. Bu görev DDC/CI üzerinden bir tane oluşturur: depodan ddcutil, AUR'dan {pkg}, ve dört dosya — /usr/local/bin'e bir bağlama betiği, bir systemd unit'i, bağlayıcı değişimleri için bir udev kuralı, ve bir modules-load.d girdisi. Bedel tek seferlik değil, süreklidir: modül her çekirdek güncellemesinde DKMS ile yeniden derlenir, ve Secure Boot açık bir makinede ardından UKI yeniden üretilip imzalanmak zorundadır."
+plan_q = "DDC/CI backlight kurulsun mu?"
+module_missing = "Paket kuruldu ama DKMS {release} için {module} modülü bırakmadı. Dört dosya yine yerleştiriliyor, çünkü bir sonraki çekirdek güncellemesi modülü yeniden derler; o zamana kadar backlight aygıtı oluşmaz. Derleme kaydı: dkms status"
+asset_missing = "Kurulacak dosya okunamadı ({path}): {error}"
+files_failed = "Dört dosyadan biri yerleştirilemedi, o yüzden unit etkinleştirilmedi — yarım kurulmuş bir düzenek, hiç başlamamış olandan kötüdür."
+done = "DDC/CI backlight kuruldu ve aygıt yerinde: {devices}. Parlaklık artık buradan geçiyor — parlaklık tuşlarını ya da 'ddcutil detect' komutunu deneyin."
+no_device_yet = "Dosyalar yerinde ve unit etkin, ama henüz bir ddcci backlight aygıtı oluşmadı. Bu tek başına bir başarısızlık değil: betik GPU için 15 saniyeye kadar bekliyor, hâlâ arıyor olabilir. Okumak için: systemctl status {unit} — DDC/CI ekranı bulunamadı diyorsa monitör ya da kablo DDC/CI'ya cevap vermiyor (DisplayPort ya da HDMI; pasif çevirici olmaz)."
+undo = "Geri almak için: sudo systemctl disable --now {unit}, dört dosyayı silin, sonra 'pacman -Rns {pkg}'."
+status_device = "aygıt: {devices}"
+status_no_device = "aygıt yok"
+status_line = "Şimdi: {files}/{total} dosya yerinde, {device}"
+
 [waydroid]
 missing = "waydroid kurulu değil; önce Uygulamalar > Ortak Uygulamalar'dan kurun."
 builtin = "Çekirdek binder'ı yerleşik veriyor; DKMS modülü kurulmadı, yalnızca servis etkinleştirildi."
-headers_needed = "Bu çekirdeğin başlıkları kurulu değil; DKMS derlemesi onlarsız sessizce düşer (pacman yine 'başarılı' der). Birlikte kuruluyor: {package}"
-headers_unknown = "Bu çekirdeğin başlıkları kurulu değil ve paket adı belirlenemedi: /usr/lib/modules/{release}/pkgbase okunamıyor. DKMS modülü başlıksız kurulsaydı derleme sessizce düşer ve binder aygıtı hiç oluşmazdı; onun için durduk. Çekirdeğinizin -headers paketini kurup tekrar deneyin."
 done = "Waydroid binder yapılandırıldı. Çalıştırmadan önce yeniden başlatın!"
 
 [ssh]
@@ -557,6 +573,8 @@ nvim_remove = "Neovim Dotfiles Kaldır"
 nvim_remove_desc = "nvim yapılandırma, veri ve önbelleğini sil"
 audio_dsp = "Hoparlör Ses DSP'si"
 audio_dsp_desc = "EasyEffects + ROG G513RM preseti; kulaklıkta otomatik devre dışı"
+ddcci_backlight = "DDC/CI Backlight (Harici Monitör)"
+ddcci_backlight_desc = "Harici monitöre backlight aygıtı kazandırır, böylece parlaklık tuşları ona ulaşır: ddcutil + DKMS sürücüsü + i2c yolunu adlandıran bağlama betiği. Bedeli her çekirdek güncellemesinde bir DKMS derlemesi"
 coredump_cap = "Çekirdek Dökümü Tavanı"
 coredump_cap_desc = "systemd-coredump 1 GB ile sınırlanır (varsayılan: 4 GiB)"
 ssd_trim = "SSD TRIM Zamanlayıcısı"

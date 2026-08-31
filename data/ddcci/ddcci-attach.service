@@ -1,0 +1,15 @@
+[Unit]
+Description=Attach ddcci backlight devices (i2c bus derived from ddcutil)
+Documentation=file:///usr/local/bin/ddcci-attach.sh
+Wants=systemd-modules-load.service
+After=systemd-modules-load.service display-manager.service
+
+[Service]
+# Type=exec, not oneshot: multi-user.target must not wait for this to finish.
+# The old ddcci-backlight-retry.service was oneshot and cost 4.206s of boot.
+Type=exec
+ExecStart=/usr/local/bin/ddcci-attach.sh
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
