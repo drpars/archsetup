@@ -403,11 +403,28 @@ istiyor. Bir sonraki tur için liste burada dursun.
       `sudo nvme format`, `sudo blockdev --rereadpt`. `disk-prepare` 1,13 s,
       `disk-erase` 0,30 s. **Bir kusur çıkardı ve düzeltildi** → aşağıdaki
       "hayalet bölüm" tuzağı
-- [ ] **`nvme sanitize`** — hâlâ hiçbir yerde koşmadı, ve archsetup onu
-      **bilerek uygulamıyor**. Artık ölçülebilir olduğu biliniyor: yukarıdaki
-      Crucial `sanicap 0x40000002` bildiriyor — **Block Erase var**, crypto
-      ve overwrite yok. QEMU'nun emülesi `sanicap 0` verdiği için rig bu kolu
-      hiç açamaz; gerçek donanım şart
+- [x] **`nvme sanitize` (Block Erase)** — 2026-09-01'de aynı Crucial'da koştu,
+      iki kez. archsetup onu **hâlâ bilerek uygulamıyor** ve ölçüm o kararı
+      **güçlendirdi**, çürütmedi. `--sanact=2`, `SSTAT` `0x00` → `0x101`
+      (başarılı + Global Data Erased), `SCDW10 0x2`. **Komut işi yapmıyor,
+      zamanlıyor:** `rc=0` **0,032 / 0,037 s**'de döndü, iş `sanitize-log`'dan
+      izlendi ve **≤14,4 s** / **5,2 s**'de bitti (denetleyici tahmini 20 s).
+      `SPROG` yalnız `0 / 32767 / 65535` veriyor — iki adım, ilerleme çubuğu
+      olmaz. İlk koşu **vakumdu** (disk zaten sıfırdı), o yüzden ikincisi
+      düzgün kuruldu: beş noktaya `urandom` yazıldı, varlığı doğrulandı
+      (~1.044.4xx/1.048.576 sıfır-olmayan), sanitize sonrası tam disk taraması
+      **sıfır-olmayan 0** / 1.000.204.886.016 (17 dk 56 sn, örnekleme değil).
+      **Neden eklenmiyor:** `--ses 1`
+      aynı işi 0,30 s'de yapıyor, ve sanitize asenkron olduğu için düz bir
+      `run()` çağrısı disk hâlâ silinirken *"silindi"* derdi — `sanitize-log`
+      yoklayan bir döngü + `sanicap` kapısı gerekir, ve o kapı rig'de
+      **test edilemez** (QEMU emülesi ve buradaki öbür NVMe `sanicap 0`)
+- [x] **Aletin belgesi ikilisiyle çelişebiliyor, ve yıkıcı komutta bedeli
+      ağır.** `man nvme-sanitize` synopsis'i `[--force]` listeliyor; ikilide
+      **yok** (`tanınmayan seçenek`, `rc=1`). İyi haber: komut hiç koşmadı
+      (`SSTAT` 0'da kaldı), yani sözdizimini yıkıcı komutu *göndererek*
+      öğrenmek gerekmedi. `--dry-run` de tanınıyor ve göndermiyor **ama
+      hiçbir şey basmıyor** — zararsız, faydasız
 - [ ] **`sudo dd` üzerine yazma kolu gerçek donanımda** — `disk-erase`'in dd
       dalı yalnız **NVMe olmayan** aygıtta koşar, bu makinedeki iki disk de
       NVMe. QEMU'da koştu (2026-08-30, 64 MiB virtio) ama **`sudo`'suz**,

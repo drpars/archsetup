@@ -26,11 +26,28 @@ sanitize operation of any kind. Neither drive offers crypto erase
 (`fna` bit 2 clear on both), which is why `crypto_supported()` exists
 and why the mode never appears in the menu here.
 
-**`nvme sanitize` is deliberately not implemented.** The Crucial does
-advertise Block Erase, so the branch is reachable on exactly one device
-in reach -- but it has never been run, and an unmeasured recipe is not
-written into this repo. `--ses 1` is measured, covers the same need, and
-is what the Crucial's own erase went through.
+**`nvme sanitize` is deliberately not implemented, and it has now been
+measured rather than merely avoided.** Block Erase ran twice on the
+Crucial on 2026-09-01 (`--sanact=2`, SSTAT 0x00 -> 0x101, reading back
+as zeros at five places that carried random data a moment earlier).
+It works. Three things came out of running it,
+and together they say the same decision for better reasons:
+
+* **It is asynchronous.** `rc=0` came back in 0.032 s and 0.037 s while
+  the drive kept working for 5.2 s and =<14.4 s; the only way to know it
+  finished is to poll `nvme sanitize-log`. Every task in this repo is a
+  function that returns an exit code when the work is done, so a plain
+  `run()` here would tell the user "erased" mid-erase -- the failure
+  class this repo keeps writing down.
+* **`--ses 1` already covers the need and is faster** -- 0.30 s end to
+  end through the menu, against 5.2 s at best here, with the same
+  zero readback.
+* **The gate could not be tested.** Offering it needs a `sanicap` check,
+  and nothing in the rig can exercise it: QEMU's emulated controller
+  reports `sanicap 0`, and so does the other NVMe on this machine.
+
+So the cost is a polling loop plus an untestable capability gate, bought
+for a second destructive path that does the same job more slowly.
 """
 
 from __future__ import annotations
