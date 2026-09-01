@@ -954,6 +954,7 @@ no_size = "Capacity for {dev} could not be read; overwriting needs an exact leng
 overwriting = "Writing zeros over {dev}; Ctrl-C to stop."
 done = "{dev} has been erased."
 failed = "{dev} could not be erased (exit {rc})."
+reread_failed = "{dev} was erased, but the kernel could not be made to re-read its partition table: the old partitions may keep showing up in /dev and in lsblk. The data on the disk is gone all the same; what is left is a cache. A reboot clears it."
 
 [net_static]
 status_no_device = "No configurable network interface."

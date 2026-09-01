@@ -379,19 +379,42 @@ istiyor. Bir sonraki tur için liste burada dursun.
       hayatta kaldı, askıda geçen süre (`BOOTTIME − MONOTONIC`) ≈0'dan
       **76,81 s**'ye çıktı, ve `journalctl --list-boots` gidiş ile dönüşü
       **tek boot** olarak gösteriyor
-- [ ] **`nvme format --ses 1`** ve `nvme sanitize` gerçek donanımda —
-      ölçülemez değil, harcanabilir NVMe yok
+- [x] **`nvme format --ses 1` gerçek donanımda** — 2026-09-01'de koştu, ve
+      **kurulum sonrası kipin kendi yüzeyinden** (`./archsetup disk-erase`,
+      `sudo nvme format --ses 1 --force`). Disk: Crucial P3 Plus
+      `CT1000P3PSSD8_2306E6A91DBB`, FW `P9CR40A`, kullanıcı harcanabilir
+      dedi (üzerinde BitLocker'lı bir Windows kurulumu vardı). `rc=0`,
+      *"Success formatting namespace:**ffffffff**"* — `fna 0x1` bit 0 set,
+      yani biçimlendirme denetleyicinin **tüm** ad alanlarına uygulanıyor;
+      öbür NVMe ayrı denetleyicidedir, dokunulmadı. Kripto reddi bu kez
+      **gerçek bir hayır**: `fna` bit 2 boş, ve sonda root'la koştu.
+      Kanıt — imzalar: önce `gpt@0x200` + `gpt@0xe8e0db5e00` + `PMBR@0x1fe`,
+      sonra `wipefs` **hiçbir şey** bulmuyor; ilk 100 MiB'ın sha256'sı
+      100 MiB `/dev/zero`'nunkiyle **birebir aynı**
+      (`20492a4d0d84f8be…`); 100000 MiB ofsetinde önce **1.044.494 /
+      1.048.576** bayt sıfır-olmayan (BitLocker şifre metni), sonra **0**.
+      Tam disk taraması ayrıca koştu → arşiv
+- [x] **Kurulum sonrası kipin yıkıcı yarısı** (yüzey 2026-09-01'de eklendi,
+      aynı gün gerçek donanımda koştu). Reddetme yarısı: `disk-prepare`,
+      `/dev/nvme0n1` seçildi → *"kullanımda (/)"*, `rc=1`, hiçbir komut yok.
+      Yıkıcı yarısı: `sudo wipefs -a` (bölümler önce, sonra disk — QEMU'da
+      ölçülen sıra **gerçek donanımda doğrulandı**), `sudo blkdiscard`
+      (`discard_max_bytes` = 2.199.023.255.040 → kapı ateşledi, atlanmadı),
+      `sudo nvme format`, `sudo blockdev --rereadpt`. `disk-prepare` 1,13 s,
+      `disk-erase` 0,30 s. **Bir kusur çıkardı ve düzeltildi** → aşağıdaki
+      "hayalet bölüm" tuzağı
+- [ ] **`nvme sanitize`** — hâlâ hiçbir yerde koşmadı, ve archsetup onu
+      **bilerek uygulamıyor**. Artık ölçülebilir olduğu biliniyor: yukarıdaki
+      Crucial `sanicap 0x40000002` bildiriyor — **Block Erase var**, crypto
+      ve overwrite yok. QEMU'nun emülesi `sanicap 0` verdiği için rig bu kolu
+      hiç açamaz; gerçek donanım şart
+- [ ] **`sudo dd` üzerine yazma kolu gerçek donanımda** — `disk-erase`'in dd
+      dalı yalnız **NVMe olmayan** aygıtta koşar, bu makinedeki iki disk de
+      NVMe. QEMU'da koştu (2026-08-30, 64 MiB virtio) ama **`sudo`'suz**,
+      kurucu kolundan
 - [ ] **ATA Secure Erase**: doğrudan bağlı harcanabilir SATA aygıtı yok, USB
       köprüleri ATA SECURITY geçirmiyor. `disk-erase` bunu sessizce geçmiyor,
       yazıyor
-- [ ] **Kurulum sonrası kipin yıkıcı yarısı** (yüzey 2026-09-01'de eklendi).
-      Reddetme yarısı gerçek makinede koştu — `./archsetup disk-prepare`,
-      `/dev/nvme0n1` seçildi, *"kullanımda (/)"* deyip `rc=1` döndü ve hiçbir
-      komut çalışmadı. **Koşmayan şey `sudo`'lu dal:** kurulu bir misafirde
-      `SCRATCH=1`'in boş diskinde `disk-prepare` + `disk-erase`, yani
-      `sudo wipefs` / `sudo dd` / `sudo nvme format`'ın fiilen geçtiği yol.
-      Ayrı bir kol, çünkü kurucu root koşuyor ve aynı satırlar orada `sudo`
-      görmüyor
 - [ ] **Kökü device-mapper üzerinde olan bir makinede kapının üçüncü sebebi.**
       `blockdev.in_use_disks()` LUKS/LVM kökünü `lsblk -s` ile bulmak için var
       ve tam o adım **hiçbir yerde ölçülmedi** — erişilebilir iki makinede de
@@ -401,6 +424,29 @@ istiyor. Bir sonraki tur için liste burada dursun.
       koruyan şey ESP'nin çıplak bir bölümden bağlı olması, ve bu
       **tesadüf**: şifreli `/boot`, ya da ESP'yi bağlı tutmayan bir makine o
       satırı taşımaz — yani kapı sessizce açık kalır
+
+**Tuzak — silme başarılı olduğu hâlde `lsblk` eski içeriği gösteriyor, ve bu
+"olmadı" diye okunuyor.** 2026-09-01'de gerçek donanımda ölçüldü ve düzeltildi.
+`nvme format` **denetleyiciye** giden bir admin komutudur; blok katmanına
+hiçbir şey söylenmez. Sonuç: disk kanıtlanabilir biçimde bomboşken
+(`wipefs` hiçbir imza bulmuyor, ilk 100 MiB sıfırın sha256'sı) çekirdek
+`/sys/block/nvme1n1` altında **dört bölümü de** listelemeye devam etti,
+düğümler `/dev`'de durdu, `lsblk -f` silinmiş bölüm için **`BitLocker`** dedi,
+ve `blockdev.partitions()` **dört hayalet** döndürdü.
+
+Pahalı yanı iki uçlu: (a) kurucu bu satırı bölümlemeden **önce** sunuyor, yani
+bir sonraki ekran diskte var olmayan aygıtları seçtirir, ve peşinden koşan bir
+`prepare` arkasında hiçbir şey olmayan düğümlere `wipefs` atar; (b) silmeyi
+doğrulayan insan `lsblk`'e bakar — ve **temiz bir olumsuz** okur.
+
+Çare `blockdev --rereadpt` (util-linux, `wipefs` ile aynı paket, yeni bağımlılık
+yok) ve `erase_disk()` başarıdan **sonra** çağırıyor; başarısız olursa uyarı
+basılıp `rc=0` korunuyor — veri zaten gitti, önbellek yüzünden "silinemedi"
+denmez. **A/B ölçüldü:** `prepare_disk()` bu çağrıyı yapmıyor ve yapmamalı —
+`wipefs -a` ioctl'i kendi atıyor ve çıktısında **söylüyor** (*"disk bölümleme
+tablosunu yeniden okumak için ioctl çağrılıyor: Başarılı"*). Düzeltme aynı
+diskte doğrulandı: hayaletler kuruldu, `disk-erase` koştu, sonrasında sysfs
+boş, `/dev`'de yalnız `/dev/nvme1n1`, `lsblk -f` temiz.
 
 **Rig tuzağı — S4 dönüşünden sonra `virtio-gpu` asılıyor, ve bu kurucunun
 kusuru değil.** 2026-08-31'de bir kez ölçüldü: hazırda bekletmeden dönen misafir

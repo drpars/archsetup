@@ -954,6 +954,7 @@ no_size = "{dev} için kapasite okunamadı; üzerine yazma tam boy gerektirir, t
 overwriting = "{dev} üzerine sıfır yazılıyor; kesmek için Ctrl-C."
 done = "{dev} silindi."
 failed = "{dev} silinemedi (çıkış {rc})."
+reread_failed = "{dev} silindi, ama çekirdeğe bölüm tablosunu yeniden okutulamadı: eski bölümler /dev'de ve lsblk'de görünmeye devam edebilir. Diskteki veri yine de gitti; kalan şey önbellek. Yeniden başlatmak temizler."
 
 [net_static]
 status_no_device = "Yapılandırılabilir ağ arayüzü yok."

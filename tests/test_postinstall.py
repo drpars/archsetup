@@ -2319,7 +2319,7 @@ def test_prepare_on_the_live_iso_does_not_prefix_sudo(wipe_env, monkeypatch):
 def test_erase_overwrite_goes_through_sudo(wipe_env, monkeypatch):
     _answers(monkeypatch, ["1", "/dev/sdb"])
     assert tasks.disk_erase() == 0
-    assert wipe_env.calls[-1][:2] == ["sudo", "dd"]
+    assert any(c[:2] == ["sudo", "dd"] for c in wipe_env.calls)
 
 
 def test_erase_asks_the_nvme_controller_with_the_same_privilege(
@@ -2343,7 +2343,50 @@ def test_erase_asks_the_nvme_controller_with_the_same_privilege(
 
     assert tasks.disk_erase() == 0
     assert seen["sudo"] is True
-    assert wipe_env.calls[-1][:2] == ["sudo", "nvme"]
+    assert any(c[:2] == ["sudo", "nvme"] for c in wipe_env.calls)
+
+
+def test_erase_makes_the_kernel_drop_the_partition_table(wipe_env, monkeypatch):
+    """`nvme format` talks to the controller; the block layer hears nothing.
+
+    Measured 2026-09-01 on a real Crucial P3 Plus through this very row:
+    the disk came back provably blank (no signature, first 100 MiB hashing
+    to the sha256 of 100 MiB of zeros) while /sys/block still listed four
+    partitions and lsblk still answered "BitLocker" for one of them.
+    """
+    _answers(monkeypatch, ["1", "/dev/sdb"])
+    assert tasks.disk_erase() == 0
+    assert ["sudo", "blockdev", "--rereadpt", "/dev/sdb"] in wipe_env.calls
+    # After the erase, never before it: re-reading a table that is still
+    # there would only put the partitions back.
+    order = [i for i, c in enumerate(wipe_env.calls) if c[:2] == ["sudo", "dd"]]
+    reread = wipe_env.calls.index(["sudo", "blockdev", "--rereadpt", "/dev/sdb"])
+    assert order and reread > order[0]
+
+
+def test_a_failed_reread_does_not_turn_a_finished_erase_into_a_failure(
+    wipe_env, monkeypatch, capsys
+):
+    """The data is already gone; a warm cache must not be reported as loss."""
+    def failing(cmd, **kwargs):
+        wipe_env.calls.append(cmd)
+        return 0 if cmd[:2] != ["sudo", "blockdev"] else 1
+
+    monkeypatch.setattr(diskwipe, "run", failing)
+    _answers(monkeypatch, ["1", "/dev/sdb"])
+
+    assert tasks.disk_erase() == 0
+    out = capsys.readouterr().out
+    assert i18n.t("erase.reread_failed", dev="/dev/sdb") in out
+
+
+def test_prepare_does_not_reread_because_wipefs_already_did(wipe_env, monkeypatch):
+    """Measured the same session, same drive: wipefs prints "calling ioctl
+    to re-read partition table: Success" itself. A second call here would
+    be noise pretending to be care."""
+    _answers(monkeypatch, ["1"])
+    assert tasks.disk_prepare() == 0
+    assert not any(c[:2] == ["sudo", "blockdev"] for c in wipe_env.calls)
 
 
 def test_the_disk_the_system_runs_on_is_refused(wipe_env, monkeypatch, capsys):

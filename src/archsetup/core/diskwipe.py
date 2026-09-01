@@ -151,6 +151,46 @@ def prepare_disk(
     return 0
 
 
+def _reread_partitions(dev: str, sudo: bool = False) -> None:
+    """Tell the kernel the partition table it is holding no longer exists.
+
+    Measured 2026-09-01 on a real Crucial P3 Plus, through this module's
+    own `disk-erase` row: after `nvme format --ses 1` the disk was
+    provably blank -- `wipefs` found no signature at all, and the first
+    100 MiB hashed to exactly the sha256 of 100 MiB of /dev/zero -- while
+    the kernel still listed all four partitions in /sys/block, /dev still
+    carried their nodes, and `lsblk -f` still answered `BitLocker` for a
+    partition that no longer existed. `blockdev.partitions()` returned
+    four phantoms.
+
+    The reason is the command, not the drive: `nvme format` is an admin
+    command to the controller, so the block layer is never told anything
+    changed. `dd` over the whole-disk node does not announce it either,
+    which is why this runs on both branches rather than only the NVMe one.
+
+    Not cosmetic. The installer offers this row before partitioning, so
+    the next screen would list devices the on-disk table no longer has,
+    and a `prepare` run afterwards would call wipefs on nodes with
+    nothing behind them. It is worse for whoever checks the work: `lsblk`
+    is what a person reaches for to confirm an erase, and it reports the
+    old contents -- a clean negative saying the erase failed at the exact
+    moment it succeeded.
+
+    **`prepare_disk()` needs no such call and deliberately does not make
+    one.** `wipefs -a` issues the ioctl itself and says so in its own
+    output (*"calling ioctl to re-read partition table: Success"*),
+    measured in the same session on the same drive. Adding a second call
+    there would be noise pretending to be care.
+
+    A failure here is reported, never propagated: the data is already
+    gone, and the caller must not be told the erase failed because a
+    cache stayed warm.
+    """
+    prefix = ["sudo"] if sudo else []
+    if run([*prefix, "blockdev", "--rereadpt", dev]) != 0:
+        print(t("erase.reread_failed", dev=dev))
+
+
 def _nvme_plan(disk: Disk, sudo: bool = False) -> int | None:
     """The SES setting to format with, or None when the user backed out."""
     if not nvme.ensure_tool(sudo=sudo):
@@ -208,6 +248,7 @@ def erase_disk(
     if rc != 0:
         print(t("erase.failed", dev=disk.path, rc=rc))
         return rc
+    _reread_partitions(disk.path, sudo=sudo)
     if on_wiped is not None:
         on_wiped(disk.path)
     print(t("erase.done", dev=disk.path))
