@@ -16,10 +16,9 @@ import os
 import subprocess
 from pathlib import Path
 
-from ..core import env, i18n
+from ..core import blockdev, env, i18n
 from ..core.pacman import run
 from ..core.prompt import ask_yes
-from . import blockdev
 from .state import state
 
 t = i18n.t

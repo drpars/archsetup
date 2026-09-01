@@ -11,8 +11,10 @@ import pytest
 from archsetup.core import (
     asus,
     audio_dsp,
+    blockdev,
     coding_agents,
     coredump,
+    diskwipe,
     dkms,
     dotfiles,
     ethernet_pm,
@@ -23,6 +25,7 @@ from archsetup.core import (
     kmscon,
     network,
     nvidia_laptop,
+    nvme,
     sddm,
     sysedit,
     tasks,
@@ -2259,3 +2262,201 @@ def test_wifi_status_does_not_run_iw_when_there_is_no_interface(
     monkeypatch.setattr(wifi_power_save, "NET_DEVICES", tmp_path / "empty")
     monkeypatch.setattr(wifi_power_save.subprocess, "run", explode)
     assert wifi_power_save.status() == i18n.t("wifi_power_save.status_no_device")
+
+
+# ------------------------------------------- whole-disk surfaces, installed
+
+
+def _wipe_disk(path="/dev/sdb", *, tran="usb", size_bytes=1024, discard=0):
+    return blockdev.Disk(
+        path=path, size="1T", tran=tran, model="SSD",
+        discard=discard, size_bytes=size_bytes,
+    )
+
+
+@pytest.fixture
+def wipe_env(monkeypatch, runlog, tmp_path):
+    """The installed-system caller: no archiso, no root, one disk to offer.
+
+    `in_use_disks` is stubbed empty on purpose -- it shells out to lsblk,
+    and left real every test here would ask the machine running the suite
+    about its own disks. The tests that are *about* that gate put it back.
+    """
+    monkeypatch.setattr(diskwipe, "run", runlog)
+    monkeypatch.setattr(diskwipe, "ask_yes", lambda q: True)
+    monkeypatch.setattr(blockdev, "list_disks", lambda: [_wipe_disk()])
+    monkeypatch.setattr(blockdev, "live_medium", lambda: "")
+    monkeypatch.setattr(blockdev, "in_use_disks", dict)
+    monkeypatch.setattr(blockdev, "BLOCK", tmp_path / "block")
+    return runlog
+
+
+def _answers(monkeypatch, values):
+    it = iter(values)
+    monkeypatch.setattr(diskwipe, "input", lambda prompt="": next(it), raising=False)
+
+
+def test_prepare_runs_every_destructive_command_through_sudo(wipe_env, monkeypatch):
+    """The installed system refuses to run archsetup as root, so the tool
+    has to raise its own privilege for the two commands that need it."""
+    _answers(monkeypatch, ["1"])
+    assert tasks.disk_prepare() == 0
+    assert ["sudo", "wipefs", "-a", "/dev/sdb"] in wipe_env.calls
+
+
+def test_prepare_on_the_live_iso_does_not_prefix_sudo(wipe_env, monkeypatch):
+    """Same body, other caller: installer mode is already root, and a sudo
+    that is not installed on the ISO would turn a working step into a
+    command-not-found."""
+    from archsetup.installer import erase
+
+    monkeypatch.setattr(erase, "guard", lambda: True)
+    _answers(monkeypatch, ["1"])
+    assert erase.prepare_disk() == 0
+    assert ["wipefs", "-a", "/dev/sdb"] in wipe_env.calls
+
+
+def test_erase_overwrite_goes_through_sudo(wipe_env, monkeypatch):
+    _answers(monkeypatch, ["1", "/dev/sdb"])
+    assert tasks.disk_erase() == 0
+    assert wipe_env.calls[-1][:2] == ["sudo", "dd"]
+
+
+def test_erase_asks_the_nvme_controller_with_the_same_privilege(
+    wipe_env, monkeypatch
+):
+    """A probe that cannot reach the device answers "no crypto" otherwise.
+
+    Measured 2026-09-01 (nvme-cli 2.16): `nvme id-ctrl` unprivileged exits
+    1, so a two-valued reader files "permission denied" as a fact about
+    the drive.
+    """
+    seen = {}
+    monkeypatch.setattr(blockdev, "list_disks", lambda: [_wipe_disk("/dev/nvme0n1", tran="nvme")])
+    monkeypatch.setattr(nvme, "ensure_tool", lambda sudo=False: True)
+    monkeypatch.setattr(
+        nvme, "crypto_supported",
+        lambda dev, sudo=False: seen.setdefault("sudo", sudo) and False,
+    )
+    monkeypatch.setattr(nvme, "run", wipe_env)
+    _answers(monkeypatch, ["1", "1", "/dev/nvme0n1"])
+
+    assert tasks.disk_erase() == 0
+    assert seen["sudo"] is True
+    assert wipe_env.calls[-1][:2] == ["sudo", "nvme"]
+
+
+def test_the_disk_the_system_runs_on_is_refused(wipe_env, monkeypatch, capsys):
+    """The gate the installed-system mode needed and the ISO never did.
+
+    `live_medium()` answers "" here -- unanswered, not safe -- so without
+    a third reason `refuse()` would hand back the running root disk.
+    """
+    monkeypatch.setattr(blockdev, "in_use_disks", lambda: {"/dev/sdb": "/"})
+    _answers(monkeypatch, ["1"])
+
+    assert tasks.disk_prepare() == 1
+    assert wipe_env.calls == []
+    assert "/dev/sdb" in capsys.readouterr().out
+
+
+def test_the_running_disk_is_found_through_a_device_mapper_name(monkeypatch):
+    """What busy() cannot do: /dev/mapper/root shares no prefix with /dev/sda.
+
+    Until this signal existed, the only thing standing between a LUKS or
+    LVM root and its own disk in the erase list was the ESP happening to
+    be mounted from a bare partition of it.
+    """
+    mounts = ["/dev/mapper/root / ext4 rw 0 0"]
+    monkeypatch.setattr(
+        blockdev, "_in_use_entries", lambda: [("/dev/mapper/root", "/")]
+    )
+    monkeypatch.setattr(
+        blockdev, "depends_on",
+        lambda source: ["/dev/sda"] if source == "/dev/mapper/root" else [],
+    )
+    assert blockdev.in_use_disks() == {"/dev/sda": "/"}
+    # busy() is the older signal and answers the older question; it is kept
+    # because it needs no subprocess, not because it covers this.
+    assert mounts and blockdev.busy("/dev/sda") is None
+
+
+def test_depends_on_reads_only_the_disk_rows(monkeypatch):
+    """lsblk -s walks upward and prints every layer; only `disk` is a target.
+
+    Shape measured 2026-09-01 on this machine: /dev/nvme0n1p2 answers
+    `nvme0n1p2 part` then `nvme0n1 disk`.
+    """
+    payload = "cryptroot crypt\nsda2 part\nsda disk\n"
+    monkeypatch.setattr(
+        blockdev.subprocess, "run",
+        lambda *a, **k: type("P", (), {"returncode": 0, "stdout": payload})(),
+    )
+    assert blockdev.depends_on("/dev/mapper/cryptroot") == ["/dev/sda"]
+    # A source that is not a device path is not worth a subprocess.
+    monkeypatch.setattr(
+        blockdev.subprocess, "run",
+        lambda *a, **k: pytest.fail("lsblk calistirildi"),
+    )
+    assert blockdev.depends_on("tmpfs") == []
+
+
+def test_an_unanswerable_crypto_probe_is_not_reported_as_a_no(monkeypatch, capsys):
+    monkeypatch.setattr(
+        nvme.subprocess, "run",
+        lambda *a, **k: type("P", (), {"returncode": 1, "stdout": ""})(),
+    )
+    assert nvme.crypto_supported("/dev/nvme0n1") is None
+
+    modes = nvme.modes("/dev/nvme0n1")
+    out = capsys.readouterr().out
+    assert i18n.t("nvme.crypto_unknown", dev="/dev/nvme0n1") in out
+    assert i18n.t("nvme.no_crypto") not in out
+    assert [ses for ses, _ in modes] == [nvme.SES_USER, nvme.SES_NONE]
+
+
+def test_the_installed_system_does_not_partially_upgrade_for_nvme_cli(
+    monkeypatch, runlog
+):
+    """`pacman -Sy` without -u is the one call Arch tells you never to make,
+    and it would be made here to fetch a tool for a task the user can still
+    cancel at the confirmation prompt."""
+    monkeypatch.setattr(nvme, "run", runlog)
+    monkeypatch.setattr(nvme.Path, "exists", lambda self: False)
+
+    assert nvme.ensure_tool(sudo=True) is True
+    assert runlog.calls == [["sudo", "pacman", "-S", "--needed", "nvme-cli"]]
+
+    runlog.calls.clear()
+    assert nvme.ensure_tool() is True
+    assert runlog.calls == [["pacman", "-Sy", "--needed", "--noconfirm", "nvme-cli"]]
+
+
+def test_the_installer_shell_still_gates_and_forgets(monkeypatch, wipe_env):
+    """The two things that stayed behind in installer/erase.py."""
+    from archsetup.installer import erase
+    from archsetup.installer.state import state
+
+    monkeypatch.setattr(erase, "guard", lambda: False)
+    assert erase.prepare_disk() == 1
+    assert wipe_env.calls == []
+
+    monkeypatch.setattr(erase, "guard", lambda: True)
+    state.rootdev = "/dev/sdb2"
+    _answers(monkeypatch, ["1"])
+    assert erase.prepare_disk() == 0
+    assert state.rootdev is None
+
+
+def test_the_installed_system_tasks_do_not_touch_installer_state(
+    wipe_env, monkeypatch
+):
+    """A selection made in an installer session is not this mode's business,
+    and reaching for it would put core/ back on top of installer/."""
+    from archsetup.installer.state import state
+
+    state.rootdev = "/dev/sdb2"
+    _answers(monkeypatch, ["1"])
+    assert tasks.disk_prepare() == 0
+    assert state.rootdev == "/dev/sdb2"
+    state.rootdev = None

@@ -513,6 +513,7 @@ CONFIG_SUBMENUS = (
     ("appearance", "menu.appearance"),
     ("virt", "menu.virt"),
     ("system", "menu.system"),
+    ("disk", "menu.disk"),
 )
 
 

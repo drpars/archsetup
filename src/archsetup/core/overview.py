@@ -29,6 +29,7 @@ GROUP_ORDER: tuple[str, ...] = (
     "appearance",
     "virt",
     "system",
+    "disk",
     "config",
 )
 

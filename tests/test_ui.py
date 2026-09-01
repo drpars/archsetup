@@ -168,6 +168,36 @@ async def test_dotfiles_menu_holds_every_dotfiles_task():
             assert task_id in ids
 
 
+async def test_the_disk_menu_holds_the_two_whole_disk_surfaces():
+    """Kendi alt menüsü, "Sistem"in içinde değil.
+
+    Oradaki her satır çalışan makinede bir ayar değiştiriyor; bu ikisi bir
+    aygıtın tamamını yok ediyor. Aynı listede "SSD TRIM"in eşiti gibi
+    okunmaları riskin kendisi.
+    """
+    app = ArchSetupApp(ask_language=False)
+    async with app.run_test(size=(100, 40)) as pilot:
+        await pilot.pause()
+        config_index = list(app.screen._items).index("config")
+        app.screen.query_one(OptionList).highlighted = config_index
+        await pilot.press("enter")
+        await pilot.pause()
+
+        config_ids = list(app.screen._items)
+        assert "disk" in config_ids
+        app.screen.query_one(OptionList).highlighted = config_ids.index("disk")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert list(app.screen._items) == ["disk-prepare", "disk-erase"]
+
+        # Ve "Sistem"e sızmamışlar.
+        from archsetup.core import tasks
+
+        system_ids = [task.id for task in tasks.TASKS if task.group == "system"]
+        assert "disk-prepare" not in system_ids and "disk-erase" not in system_ids
+
+
 def test_every_task_group_is_reachable():
     """Hiçbir görev grubu menüsüz kalmamalı.
 

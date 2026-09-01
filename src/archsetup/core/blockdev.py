@@ -59,8 +59,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..core import i18n
-from ..core.writeback import backing_disk
+from . import i18n
+from .writeback import backing_disk
 
 t = i18n.t
 
@@ -194,12 +194,15 @@ def partitions(name: str) -> list[str]:
     return [f"/dev/{d.name}" for d in entries if (d / "partition").exists()]
 
 
-def busy(dev: str) -> str | None:
-    """Mountpoint or 'swap' if `dev` -- or any partition of it -- is in use.
+def _in_use_entries() -> list[tuple[str, str]]:
+    """(device, where) for everything the running system has mounted or swapping.
 
-    The prefix match is deliberate: /dev/nvme0n1p2 being mounted means the
-    whole disk is off limits, not just that partition.
+    Read from files rather than asked of a tool, for the reason
+    `partitions()` gives: this runs before a destructive step and must not
+    need privilege. `/proc/swaps` carries a header line, which is dropped
+    by the same test that drops anything else not naming a device.
     """
+    entries = []
     for source, label in IN_USE_SOURCES:
         try:
             text = Path(source).read_text(encoding="utf-8")
@@ -207,9 +210,84 @@ def busy(dev: str) -> str | None:
             continue
         for line in text.splitlines():
             fields = line.split()
-            if fields and fields[0].startswith(dev):
-                return label or (fields[1] if len(fields) > 1 else dev)
+            if not fields:
+                continue
+            where = label or (fields[1] if len(fields) > 1 else fields[0])
+            entries.append((fields[0], where))
+    return entries
+
+
+def busy(dev: str) -> str | None:
+    """Mountpoint or 'swap' if `dev` -- or any partition of it -- is in use.
+
+    The prefix match is deliberate: /dev/nvme0n1p2 being mounted means the
+    whole disk is off limits, not just that partition.
+    """
+    for device, where in _in_use_entries():
+        if device.startswith(dev):
+            return where
     return None
+
+
+def depends_on(source: str) -> list[str]:
+    """/dev paths of the whole disks `source` sits on, deepest layer last.
+
+    `lsblk -s` walks the dependency chain *upward* -- from a mount source
+    towards the hardware -- which is the direction the prefix match in
+    `busy()` cannot follow. Measured 2026-09-01 on this machine:
+    `/dev/nvme0n1p2` answers `nvme0n1p2 part` then `nvme0n1 disk`, so the
+    disk is named even though nothing in its own name appears in the mount
+    line's spelling.
+    """
+    if not source.startswith("/dev/"):
+        return []
+    try:
+        out = subprocess.run(
+            ["lsblk", "-nrso", "NAME,TYPE", source], capture_output=True, text=True
+        )
+    except OSError:
+        return []
+    if out.returncode != 0:
+        return []
+    disks = []
+    for line in out.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[1] == "disk":
+            disks.append(f"/dev/{fields[0]}")
+    return disks
+
+
+def in_use_disks() -> dict[str, str]:
+    """Whole disk -> the first place the running system is using it.
+
+    The second signal, and independent of `busy()` by construction: that
+    one matches the *spelling* of a mount source against a disk path, this
+    one asks the block layer what a mount source is built on. They agree
+    on a plain partitioned disk -- measured here, both name /dev/nvme0n1
+    for a root at /dev/nvme0n1p2 -- and they stop agreeing exactly where
+    the spelling stops carrying the answer: a root on LUKS or LVM is
+    `/dev/mapper/...` in /proc/mounts, which shares no prefix with the
+    disk underneath it.
+
+    The gap that needs closing is not hypothetical, but its closure here
+    is **not measured**: neither machine in reach has a device-mapper
+    device, so the crypt/lvm hop of `lsblk -s` is read from its
+    documentation, not from a run. That is why this is added beside
+    `busy()` rather than in place of it -- on a plain layout the older,
+    subprocess-free test still answers first, and it is the one that has
+    been exercised.
+
+    What incidentally covered the dm case until now was the ESP: `/efi`
+    is mounted from a bare partition of the same disk, so `busy()` caught
+    it through that line instead. Incidental is the word -- an encrypted
+    /boot, or a machine that does not keep the ESP mounted, has no such
+    line, and nothing would have refused the disk the system is running on.
+    """
+    found: dict[str, str] = {}
+    for device, where in _in_use_entries():
+        for disk in depends_on(device):
+            found.setdefault(disk, where)
+    return found
 
 
 def live_medium() -> str:
@@ -226,10 +304,21 @@ def refuse(dev: str) -> str | None:
     """The reason `dev` must not be touched, or None.
 
     One place, so that every destructive surface refuses for the same
-    reasons in the same order.
+    reasons in the same order. Cheapest and most-exercised test first:
+    `busy()` reads two files, `live_medium()` runs findmnt+lsblk once,
+    `in_use_disks()` runs lsblk per mounted device and only ever answers
+    for something the first test already missed.
+
+    The order also decides which sentence the user reads, and the last
+    one is the one worth reaching post-install: `live_medium()` answers ""
+    on an installed system -- its own docstring says empty is not "safe",
+    it is "unanswered" -- so without the third test the installed-system
+    mode would have had no gate naming the disk it is running on.
     """
     if (where := busy(dev)) is not None:
         return t("blockdev.busy", dev=dev, where=where)
     if (live := live_medium()) and dev == live:
         return t("blockdev.live_medium", dev=dev)
+    if (where := in_use_disks().get(dev)) is not None:
+        return t("blockdev.running_system", dev=dev, where=where)
     return None

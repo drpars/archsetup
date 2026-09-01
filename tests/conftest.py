@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from archsetup.core import (  # noqa: E402
+    blockdev,
     ddcci,
     ethernet_pm,
     i18n,
@@ -17,7 +18,7 @@ from archsetup.core import (  # noqa: E402
     secureboot,
     wifi_power_save,
 )
-from archsetup.installer import blockdev, bootloaders, disk  # noqa: E402
+from archsetup.installer import bootloaders, disk  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

@@ -6,15 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from archsetup.core import hardware, i18n, repos, writeback
+from archsetup.core import blockdev, diskwipe, hardware, i18n, nvme, repos, writeback
 from archsetup.installer import (
     base,
-    blockdev,
     bootloaders,
     chroot,
     disk,
     erase,
-    nvme,
     pickers,
 )
 from archsetup.installer.state import state
@@ -892,12 +890,24 @@ def _disk(path, *, tran="nvme", size="1T", model="SSD", discard=0, size_bytes=10
 
 @pytest.fixture
 def erase_env(monkeypatch, runlog):
+    """The surfaces are core/diskwipe now; erase.py is the live-ISO caller.
+
+    The tests keep calling `erase.*` on purpose -- that path runs the
+    installer's gate and its partition-forgetting on top of the shared
+    body, so patching one layer down still exercises both.
+
+    `in_use_disks` is stubbed empty because it shells out to lsblk: left
+    real, every one of these would ask the machine running the suite what
+    its own disks are, and the fake /dev/nvme0n1 shares a name with a real
+    one here.
+    """
     monkeypatch.setattr(erase, "guard", lambda: True)
-    monkeypatch.setattr(erase, "run", runlog)
-    monkeypatch.setattr(nvme, "ensure_tool", lambda: True)
-    monkeypatch.setattr(nvme, "crypto_supported", lambda dev: False)
+    monkeypatch.setattr(diskwipe, "run", runlog)
+    monkeypatch.setattr(nvme, "ensure_tool", lambda sudo=False: True)
+    monkeypatch.setattr(nvme, "crypto_supported", lambda dev, sudo=False: False)
     monkeypatch.setattr(nvme, "run", runlog)
     monkeypatch.setattr(blockdev, "list_disks", lambda: [_disk("/dev/nvme0n1")])
+    monkeypatch.setattr(blockdev, "in_use_disks", dict)
     return runlog
 
 
@@ -980,7 +990,11 @@ def test_the_classifier_never_reads_rotational():
     assert not reads_rotational('"""rotational is deliberately not read."""\nx = 1\n')
     assert not reads_rotational("# rotational is not consulted\nx = 1\n")
 
-    root = Path(__file__).resolve().parents[1] / "src/archsetup/installer"
+    # The whole package, not just installer/. The three modules this guard
+    # was written for now live in core/, and a root that still named the
+    # old directory would keep passing while scanning nothing -- the exact
+    # shape of a clean negative: green, fast, and about a different question.
+    root = Path(__file__).resolve().parents[1] / "src/archsetup"
     offenders = [
         path.name
         for path in sorted(root.rglob("*.py"))
@@ -991,13 +1005,13 @@ def test_the_classifier_never_reads_rotational():
 
 def test_erase_requires_the_device_path_typed_out(erase_env, monkeypatch):
     """A y/n prompt is too easy to answer by reflex for a whole-disk erase."""
-    _feed(monkeypatch, erase, ["1", "1", "evet"])
+    _feed(monkeypatch, diskwipe, ["1", "1", "evet"])
     assert erase.erase_disk() == 1
     assert erase_env.calls == []
 
 
 def test_erase_formats_an_nvme_after_confirmation(erase_env, monkeypatch):
-    _feed(monkeypatch, erase, ["1", "1", "/dev/nvme0n1"])
+    _feed(monkeypatch, diskwipe, ["1", "1", "/dev/nvme0n1"])
     state.rootdev = "/dev/nvme0n1p2"
     assert erase.erase_disk() == 0
     assert ["nvme", "format", "--ses", "1", "--force", "/dev/nvme0n1"] in erase_env.calls
@@ -1010,7 +1024,7 @@ def test_erase_refuses_a_disk_in_use(erase_env, monkeypatch, tmp_path):
     mounts = tmp_path / "mounts"
     mounts.write_text("/dev/nvme0n1p2 /mnt ext4 rw 0 0\n")
     monkeypatch.setattr(blockdev, "IN_USE_SOURCES", ((str(mounts), None),))
-    _feed(monkeypatch, erase, ["1"])
+    _feed(monkeypatch, diskwipe, ["1"])
     assert erase.erase_disk() == 1
     assert erase_env.calls == []
 
@@ -1019,7 +1033,7 @@ def test_erase_refuses_the_medium_it_booted_from(erase_env, monkeypatch):
     """guard() asks whether we are in the live ISO, which is a different
     question from whether this is the stick we are running on."""
     monkeypatch.setattr(blockdev, "live_medium", lambda: "/dev/nvme0n1")
-    _feed(monkeypatch, erase, ["1"])
+    _feed(monkeypatch, diskwipe, ["1"])
     assert erase.erase_disk() == 1
     assert erase_env.calls == []
 
@@ -1035,7 +1049,7 @@ def test_erase_overwrites_a_non_nvme_disk_to_an_exact_length(erase_env, monkeypa
         blockdev, "list_disks",
         lambda: [_disk("/dev/sdb", tran="usb", model="KINGSTON", size_bytes=240057409536)],
     )
-    _feed(monkeypatch, erase, ["1", "/dev/sdb"])
+    _feed(monkeypatch, diskwipe, ["1", "/dev/sdb"])
     assert erase.erase_disk() == 0
     assert [
         "dd", "if=/dev/zero", "of=/dev/sdb", "count=240057409536",
@@ -1047,7 +1061,7 @@ def test_erase_refuses_to_overwrite_a_disk_it_cannot_size(erase_env, monkeypatch
     monkeypatch.setattr(
         blockdev, "list_disks", lambda: [_disk("/dev/sdb", tran="usb", size_bytes=0)]
     )
-    _feed(monkeypatch, erase, ["1", "/dev/sdb"])
+    _feed(monkeypatch, diskwipe, ["1", "/dev/sdb"])
     assert erase.erase_disk() == 1
     assert erase_env.calls == []
 
@@ -1060,8 +1074,8 @@ def test_prepare_skips_blkdiscard_when_the_path_advertises_none(erase_env, monke
     monkeypatch.setattr(
         blockdev, "list_disks", lambda: [_disk("/dev/sdb", tran="usb", discard=0)]
     )
-    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
-    _feed(monkeypatch, erase, ["1"])
+    monkeypatch.setattr(diskwipe, "ask_yes", lambda q: True)
+    _feed(monkeypatch, diskwipe, ["1"])
     assert erase.prepare_disk() == 0
     assert ["wipefs", "-a", "/dev/sdb"] in erase_env.calls
     assert not any(call[0] == "blkdiscard" for call in erase_env.calls)
@@ -1072,8 +1086,8 @@ def test_prepare_discards_when_the_path_advertises_it(erase_env, monkeypatch):
         blockdev, "list_disks",
         lambda: [_disk("/dev/nvme0n1", discard=2199023255040)],
     )
-    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
-    _feed(monkeypatch, erase, ["1"])
+    monkeypatch.setattr(diskwipe, "ask_yes", lambda q: True)
+    _feed(monkeypatch, diskwipe, ["1"])
     assert erase.prepare_disk() == 0
     assert ["blkdiscard", "/dev/nvme0n1"] in erase_env.calls
 
@@ -1098,8 +1112,8 @@ def test_prepare_wipes_partition_signatures_before_the_table(erase_env, monkeypa
         (block / "nvme0n1" / part / "partition").write_text("1\n")
     (block / "nvme0n1" / "queue").mkdir()  # a sibling that is not a partition
     monkeypatch.setattr(blockdev, "BLOCK", block)
-    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
-    _feed(monkeypatch, erase, ["1"])
+    monkeypatch.setattr(diskwipe, "ask_yes", lambda q: True)
+    _feed(monkeypatch, diskwipe, ["1"])
 
     assert erase.prepare_disk() == 0
     wipes = [c[2] for c in erase_env.calls if c[0] == "wipefs"]
@@ -1111,8 +1125,8 @@ def test_prepare_still_wipes_a_disk_with_no_partitions(erase_env, monkeypatch, t
     block = tmp_path / "block"
     (block / "nvme0n1" / "queue").mkdir(parents=True)
     monkeypatch.setattr(blockdev, "BLOCK", block)
-    monkeypatch.setattr(erase, "ask_yes", lambda q: True)
-    _feed(monkeypatch, erase, ["1"])
+    monkeypatch.setattr(diskwipe, "ask_yes", lambda q: True)
+    _feed(monkeypatch, diskwipe, ["1"])
 
     assert erase.prepare_disk() == 0
     assert [c[2] for c in erase_env.calls if c[0] == "wipefs"] == ["/dev/nvme0n1"]

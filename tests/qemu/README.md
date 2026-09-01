@@ -225,8 +225,13 @@ dd if=/dev/vda bs=440 count=1 | strings | head   # MBR'de GRUB kodu
 `disk-prepare`, `disk-erase` ve `nvme format` **geri dönüşü olmayan** işler
 yapıyor, yani gerçek makinede denemek için harcanabilir bir aygıt gerekiyor.
 `SCRATCH=1 ./run-vm.sh` bunu veriyor: 512M ve 64M iki virtio disk, artı emüle
-bir **NVMe denetleyicisi** — `erase.py`'nin firmware kolu yalnız orada koşuyor,
-çünkü bu makinedeki iki gerçek NVMe de veri tutuyor.
+bir **NVMe denetleyicisi** — `core/diskwipe.py`'nin firmware kolu yalnız orada
+koşuyor, çünkü bu makinedeki iki gerçek NVMe de veri tutuyor.
+
+Aynı iki yüzey 2026-09-01'den beri **kurulum sonrası** modda da var
+(`Yapılandırma → Disk`); gövde ortak, ISO çağırıcısı `installer/erase.py`.
+Buradaki işaretli kayıtların hepsi **kurucu** kolunda alınmıştır — `sudo`'lu
+kol ayrıca koşturulmalı, aşağıdaki listede duruyor.
 
 ```bash
 SCRATCH=1 ./run-vm.sh
@@ -379,6 +384,23 @@ istiyor. Bir sonraki tur için liste burada dursun.
 - [ ] **ATA Secure Erase**: doğrudan bağlı harcanabilir SATA aygıtı yok, USB
       köprüleri ATA SECURITY geçirmiyor. `disk-erase` bunu sessizce geçmiyor,
       yazıyor
+- [ ] **Kurulum sonrası kipin yıkıcı yarısı** (yüzey 2026-09-01'de eklendi).
+      Reddetme yarısı gerçek makinede koştu — `./archsetup disk-prepare`,
+      `/dev/nvme0n1` seçildi, *"kullanımda (/)"* deyip `rc=1` döndü ve hiçbir
+      komut çalışmadı. **Koşmayan şey `sudo`'lu dal:** kurulu bir misafirde
+      `SCRATCH=1`'in boş diskinde `disk-prepare` + `disk-erase`, yani
+      `sudo wipefs` / `sudo dd` / `sudo nvme format`'ın fiilen geçtiği yol.
+      Ayrı bir kol, çünkü kurucu root koşuyor ve aynı satırlar orada `sudo`
+      görmüyor
+- [ ] **Kökü device-mapper üzerinde olan bir makinede kapının üçüncü sebebi.**
+      `blockdev.in_use_disks()` LUKS/LVM kökünü `lsblk -s` ile bulmak için var
+      ve tam o adım **hiçbir yerde ölçülmedi** — erişilebilir iki makinede de
+      dm aygıtı yok, `lsblk -s`'in crypt/lvm katmanını basacağı belgeden
+      okundu. Ölçülen tek şey düz bölümlü hâli: `/dev/nvme0n1p2` →
+      `nvme0n1p2 part`, `nvme0n1 disk` (2026-09-01). Bugün dm'li bir kökü
+      koruyan şey ESP'nin çıplak bir bölümden bağlı olması, ve bu
+      **tesadüf**: şifreli `/boot`, ya da ESP'yi bağlı tutmayan bir makine o
+      satırı taşımaz — yani kapı sessizce açık kalır
 
 **Rig tuzağı — S4 dönüşünden sonra `virtio-gpu` asılıyor, ve bu kurucunun
 kusuru değil.** 2026-08-31'de bir kez ölçüldü: hazırda bekletmeden dönen misafir

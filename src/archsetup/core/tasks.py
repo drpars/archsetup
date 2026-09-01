@@ -19,6 +19,7 @@ from . import (
     coding_agents,
     coredump,
     ddcci,
+    diskwipe,
     dotfiles,
     ethernet_pm,
     gitid,
@@ -139,6 +140,23 @@ def remove_db_lock() -> int:
         print(t("msg.no_db_lock"))
         return 0
     return run(["sudo", "rm", str(PACMAN_LOCK)])
+
+
+def disk_prepare() -> int:
+    """The installer's signature wipe, on the machine that is already running.
+
+    Same body as the live-ISO row, minus the two things that were only
+    ever about installing (the archiso gate and the partition selection)
+    and plus `sudo`. What changes is not the disk work, it is who the
+    caller is: here the machine offering the list is also on one of the
+    disks in it, and `blockdev.refuse()` carries the test that keeps that
+    one out.
+    """
+    return diskwipe.prepare_disk(sudo=True)
+
+
+def disk_erase() -> int:
+    return diskwipe.erase_disk(sudo=True)
 
 
 @dataclass(frozen=True)
@@ -374,6 +392,21 @@ TASKS: tuple[Task, ...] = (
         "task.bootloader_info",
         bootloader.info,
         group="system",
+    ),
+    # Their own group rather than "system": every other row there changes a
+    # setting on the running machine, and these two destroy a whole device.
+    # Reading as an equal of "SSD TRIM" in the same list is the risk.
+    Task(
+        "disk-prepare",
+        "task.disk_prepare",
+        disk_prepare,
+        group="disk",
+    ),
+    Task(
+        "disk-erase",
+        "task.disk_erase",
+        disk_erase,
+        group="disk",
     ),
 )
 

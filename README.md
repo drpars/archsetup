@@ -19,7 +19,7 @@ yazılmıştır. `installarch` (canlı ISO'dan kurulum) ve `installarchde`
   dosyalarındadır. Yeni uygulama eklemek = birkaç satır TOML.
 - **Alt menülerle gruplama:** Görevler `group` alanına göre menülere düşer.
   Yapılandırma yalnızca alt menüleri barındırır; aynı alanın görevleri
-  (dotfiles, ağ, sanallaştırma, sistem) tek yerde toplanır.
+  (dotfiles, ağ, sanallaştırma, sistem, disk) tek yerde toplanır.
 - **İki mod:** Canlı ISO'da *kurucu* modu (bölümleme, pacstrap, chroot
   yapılandırması, önyükleyici); kurulu sistemde *kurulum sonrası* modu.
   Ortam otomatik algılanır.
@@ -154,6 +154,34 @@ paket AUR'dan kalkmış mı, **resmi depoya terfi etmiş mi** (`aur = true` art�
 yanlış: imzalı ikili varken kaynaktan derleniyor), ve bakımsız/eskimiş olarak
 işaretli mi. Ağa ulaşılamazsa denetim düşmez, o paketler "denetlenmedi"
 sayılır — "soramadık" ile "yok" birbirine karıştırılmaz.
+
+### Disk: aynı iki yüzey, iki modda
+
+Kurucunun 2. aşamasındaki **hazırla** ve **sil** satırları kurulum sonrası
+modda da var: `Yapılandırma → Disk`, ya da `./archsetup disk-prepare` /
+`./archsetup disk-erase`. Gövde tek (`core/diskwipe.py`); mod farkı iki
+şeydedir — kurucu root olarak koşar, kurulu sistemde her yıkıcı komut `sudo`
+ile gider; ve reddedilmesi gereken disk değişir.
+
+| Görev | Ne yapar | Onay |
+|---|---|---|
+| `disk-prepare` | Bölüm tablosu + dosya sistemi imzaları (`wipefs`, yol bildiriyorsa `blkdiscard`). Veri blokları durur, kaybolan şey diskin **kimliği**dir | evet/hayır |
+| `disk-erase` | İçeriğin tamamı: NVMe'de `nvme format`, diğerlerinde diskin tam boyuna `dd` | aygıt yolu **elle yazılır** |
+
+Kapı üç bağımsız sebeple reddeder, ve üçüncüsü tam da bu mod için var:
+
+1. **Kullanımda** — disk ya da herhangi bir bölümü `/proc/mounts`/`/proc/swaps`'ta.
+2. **Canlı medya** — canlı oturumun açıldığı aygıt. Kurulu sistemde bu soru
+   cevapsızdır (`""` döner), yani tek başına yeterli değil.
+3. **Çalışan sistemin diski** — bağlama kaynağından `lsblk -s` ile *yukarı*
+   yürünüp bulunur. Birincisi yolun **yazımını** eşliyor, bu blok katmanına
+   soruyor: LUKS/LVM kökü `/proc/mounts`'ta `/dev/mapper/...` diye görünür ve
+   altındaki diskle hiçbir öneki paylaşmaz. Kapsam notu: device-mapper adımı
+   bu depoda **ölçülmedi** (erişilebilir makinelerde dm aygıtı yok), o yüzden
+   birincinin yerine değil **yanına** kondu.
+
+ATA Secure Erase bilerek yok: yarım kalan bir silme diski parola-kilitli
+bırakır ve o dal hiçbir donanımda ölçülemedi.
 
 ### SSH yönetimi
 
@@ -353,10 +381,12 @@ data/        paket tanımları (TOML) — betiğin "içeriği"; `audio/` altınd
              altında DDC/CI backlight görevinin dağıttığı dört dosya
 locales/     tr.toml, en.toml — tüm arayüz metinleri
 src/archsetup/
-  core/      i18n, pacman, donanım tespiti, önyükleyici, görevler
+  core/      i18n, pacman, donanım tespiti, önyükleyici, görevler; artı iki
+             modun paylaştığı disk yüzeyleri — blockdev (envanter + ortak
+             kapılar), nvme, diskwipe (imza temizliği + geri dönüşsüz silme)
   ui/        Textual ekranları
-  installer/ canlı ISO modu: blockdev (envanter + ortak kapılar), erase,
-             disk, pacstrap, chroot, önyükleyiciler
+  installer/ canlı ISO modu: erase (diskwipe'ın ISO çağırıcısı), disk,
+             pacstrap, chroot, önyükleyiciler
 ```
 
 ## Testler
