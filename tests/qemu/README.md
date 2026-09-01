@@ -393,7 +393,7 @@ istiyor. Bir sonraki tur için liste burada dursun.
       100 MiB `/dev/zero`'nunkiyle **birebir aynı**
       (`20492a4d0d84f8be…`); 100000 MiB ofsetinde önce **1.044.494 /
       1.048.576** bayt sıfır-olmayan (BitLocker şifre metni), sonra **0**.
-      Tam disk taraması ayrıca koştu → arşiv
+      Tam disk taraması **örnekleme değil**: 1.000.204.886.016 baytın tamamı okundu, sıfır-olmayan bayt **0** (18 dk 12 sn)
 - [x] **Kurulum sonrası kipin yıkıcı yarısı** (yüzey 2026-09-01'de eklendi,
       aynı gün gerçek donanımda koştu). Reddetme yarısı: `disk-prepare`,
       `/dev/nvme0n1` seçildi → *"kullanımda (/)"*, `rc=1`, hiçbir komut yok.
