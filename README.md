@@ -411,9 +411,11 @@ için QEMU düzeneği: [tests/qemu/README.md](tests/qemu/README.md).
       yazılır — UKI (`/etc/kernel/cmdline`), systemd-boot girdileri
       (`/boot/loader/entries`), GRUB (`/etc/default/grub` + grub-mkconfig)
       ve rEFInd (`refind_linux.conf`)
-- [x] ASUS ROG/TUF araçları: [ogc] deposunu kurma (anahtar + pacman.conf),
-      asusctl/rog-control-center, servisler; supergfxctl ayrı bir isteğe
-      bağlı görev (upstream arşivledi, paket yalnız AUR'da)
+- [x] ASUS ROG/TUF araçları: asusctl/rog-control-center + power-profiles-daemon,
+      switcheroo-control ve servisleri. 2026-09-06'da sadeleşti — iki ASUS
+      paketi de [extra]'ya girdi, yani görev artık ne üçüncü taraf deposu
+      yazıyor ne anahtar güveniyor ne de AUR'a düşüyor. supergfxctl 2026-08-21'de
+      tümüyle kalktı (upstream arşivli, hiçbir depoda yok)
 - [x] NVIDIA hibrit dizüstü güç yönetimi ([asus-linux.org rehberi](https://asus-linux.org/guides/arch-guide/)): S0ix + runtime PM için
       `modprobe.d`/`udev` kuralları, Turing/Ampere ayrımı, nvidia-suspend/
       resume/hibernate/powerd servisleri

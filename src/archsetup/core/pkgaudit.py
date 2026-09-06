@@ -161,12 +161,16 @@ def task_aur_packages() -> list[TaskPackage] | None:
             tree = ast.parse(module.read_text(encoding="utf-8"))
         except (OSError, SyntaxError):
             continue
-        # Module constants first, then per-function locals: `aur_pkgs` in the
-        # ASUS task is assigned in one branch of an if/else and left empty in
-        # the other, so the names only exist inside that function.
-        # Two passes, because ast.walk() is not source order and one of these
-        # names is defined in terms of another: `aur_pkgs = [*ASUS_PACKAGES]`
-        # only resolves once the module constant is already known.
+        # Module constants first, then per-function locals, because a task may
+        # decide its AUR list inside a function -- a name assigned in one
+        # branch of an if/else and left empty in the other exists nowhere else.
+        # Two passes, because ast.walk() is not source order and such a local
+        # can be defined in terms of a module constant (`aur_pkgs =
+        # [*SOME_PACKAGES]`), which only resolves once that constant is known.
+        # The ASUS task was the founding case for both until 2026-09-06, when
+        # its packages landed in [extra] and the branch went; no task in the
+        # tree has that shape today, so what holds this half honest is
+        # test_task_packages_survive_all_three_call_shapes, which builds one.
         scope: dict[str, list[str]] = {}
         for resolve_through_scope in (False, True):
             for node in ast.walk(tree):

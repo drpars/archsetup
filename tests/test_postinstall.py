@@ -26,6 +26,7 @@ from archsetup.core import (
     network,
     nvidia_laptop,
     nvme,
+    repos,
     sddm,
     sysedit,
     tasks,
@@ -467,109 +468,43 @@ def test_wait_online_skipped_without_networkd(tmp_path, monkeypatch, runlog):
     assert runlog.calls == []
 
 
-def test_asus_repo_routing(tmp_path, monkeypatch):
+def test_asus_tools_come_from_the_repositories_with_no_aur_half(monkeypatch):
+    """Tek yol kaldı: iki paket de [extra]'da (ölçüldü 2026-09-06).
+
+    AUR yarısı **boş** olmalı, sadece "asusctl repo yarısında" değil: eski kod
+    bu ikisini bir if/else'in öbür kolunda AUR'a yolluyordu ve o kol artık
+    yanlış cevap -- resmi depodaki adı AUR'dan derlemek demek.
+    """
     installs, enables = [], []
-    monkeypatch.setattr(asus.pacman, "install", lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
+    monkeypatch.setattr(asus.pacman, "install",
+                        lambda r, a: installs.append((tuple(r), tuple(a))) or 0)
     monkeypatch.setattr(asus.pacman, "is_installed", lambda p: p == "power-profiles-daemon")
     monkeypatch.setattr(asus.services, "enable", lambda n: enables.append(n) or 0)
-    monkeypatch.setattr(asus.prompt, "ask_yes", lambda q: False)
 
-    conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n[ogc]\nServer = x\n")
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
-    asus.install()
-    assert "asusctl" in installs[0][0]  # repo'dan
-
-    # [g14] tek başına yetmiyor: asusctl'i oradan çözmek 2026-04 derlemesini
-    # almak demek. Kullanıcı [ogc] eklemeyi reddettiği için AUR'a düşüyor.
-    conf.write_text("[options]\n[g14]\nServer = x\n")
-    asus.install()
-    assert "asusctl" in installs[1][1]
-
-    conf.write_text("[options]\n")
-    asus.install()
-    assert "asusctl" in installs[2][1]  # depo reddedildi -> AUR'dan
-    assert enables == ["power-profiles-daemon"] * 3  # yalnız kurulu paketin servisi
+    assert asus.install() == 0
+    repo_pkgs, aur_pkgs = installs[0]
+    assert {"asusctl", "rog-control-center"} <= set(repo_pkgs)
+    assert aur_pkgs == ()
+    assert enables == ["power-profiles-daemon"]  # yalnız kurulu paketin servisi
     # supergfxctl artık varsayılan kümede değil (upstream arşivledi)
-    assert all("supergfxctl" not in repo + aur for repo, aur in installs)
+    assert "supergfxctl" not in repo_pkgs + aur_pkgs
 
 
-def test_asus_repo_setup_keeps_official_first(tmp_path, monkeypatch, fake_write, runlog):
-    conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n[core]\nInclude = /etc/pacman.d/mirrorlist\n")
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
-    monkeypatch.setattr(asus, "run", runlog)
-    monkeypatch.setattr(asus, "sudo_write", fake_write)
-    # setup_repo ends by asking the live pacman whether the repo resolves.
-    # Unpinned, this test answers with the machine under it: yes on a box that
-    # already has [ogc], FileNotFoundError on the CI runner, no anywhere else.
-    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
+def test_asus_task_writes_no_repository_at_all():
+    """Depo aygıtı 2026-09-06'da kalktı; geri gelmesi burada durur.
 
-    assert asus.setup_repo() is True
-    text = conf.read_text()
-    assert "[ogc]" in text
-    # [core] önce gelmeli: resmi depolar üçüncü taraf karşısında önceliğini korur
-    assert text.index("[core]") < text.index("[ogc]")
-    assert ["sudo", "pacman-key", "--lsign-key", asus.REPO.key] in runlog.calls
-
-
-def test_asus_repo_setup_outranks_g14(tmp_path, monkeypatch, fake_write, runlog):
-    """Sıra sürümü yener: sona eklenen [ogc] hiç görünmez, asusctl [g14]'ten gelir."""
-    conf = tmp_path / "pacman.conf"
-    conf.write_text(
-        "[options]\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[g14]\nServer = y\n"
-    )
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
-    monkeypatch.setattr(asus, "run", runlog)
-    monkeypatch.setattr(asus, "sudo_write", fake_write)
-    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
-
-    assert asus.setup_repo() is True
-    text = conf.read_text()
-    assert text.index("[core]") < text.index("[ogc]") < text.index("[g14]")
-    assert text.count("[g14]") == 1
-
-
-def test_asus_repo_survives_a_declined_upgrade(tmp_path, monkeypatch, fake_write):
-    """Ölçüldü 2026-08-13: kullanıcı yükseltmeyi reddetti, pacman 1 döndü, depo
-    kusursuz kuruluydu — ve eski kod bunu başarısızlık sayıp AUR'a gidiyordu."""
-    conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n[core]\nInclude = x\n")
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
-    monkeypatch.setattr(asus, "sudo_write", fake_write)
-    # pacman-key başarılı, `pacman -Suy` reddedildi.
-    monkeypatch.setattr(
-        asus, "run", lambda cmd, **kw: 1 if cmd[:3] == ["sudo", "pacman", "-Suy"] else 0
-    )
-    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: True)
-
-    assert asus.setup_repo() is True
-    assert "[ogc]" in conf.read_text()
-
-    # Ama depo gerçekten çözünmüyorsa cevap yine hayır.
-    monkeypatch.setattr(asus, "repo_usable", lambda repo=asus.REPO: False)
-    conf.write_text("[options]\n[core]\nInclude = x\n")
-    assert asus.setup_repo() is False
-
-
-def test_repo_usable_says_no_where_there_is_no_pacman(monkeypatch):
-    """Hiç pacman olmayan makinede cevap "hayır"dır, traceback değil."""
-
-    def missing(cmd, **kwargs):
-        raise FileNotFoundError(2, "No such file or directory", "pacman")
-
-    monkeypatch.setattr(asus.subprocess, "run", missing)
-    assert asus.repo_usable() is False
-
-
-def test_asus_repo_setup_aborts_when_key_import_fails(tmp_path, monkeypatch):
-    conf = tmp_path / "pacman.conf"
-    conf.write_text("[options]\n")
-    monkeypatch.setattr(asus, "PACMAN_CONF", conf)
-    monkeypatch.setattr(asus, "run", lambda cmd, **kw: 1)
-
-    assert asus.setup_repo() is False
-    assert "[ogc]" not in conf.read_text()
+    Ölçüm: `pacman -Sl` extra/asusctl 6.4.0-2 ve extra/rog-control-center
+    6.4.0-2 veriyor. Sıra kuralı ölmedi, sahibi değişti -- [ogc]'yi hâlâ
+    yazan tek yer installer.base, ve orada gerekçesi linux-ogc. Bu görevin
+    kendi anahtarını güvenip kendi stanza'sını yazması ise artık kullanıcıya
+    gereksiz bir üçüncü taraf depo sormak demek.
+    """
+    for gone in ("setup_repo", "repo_usable", "has_repo", "REPO", "OUTRANKS",
+                 "PACMAN_CONF", "sudo_write"):
+        assert not hasattr(asus, gone), gone
+    # Kural gerçekten kalkmadı, yalnız burada kullanılmıyor.
+    assert repos.OGC.name == "ogc"
+    assert repos.OUTRANKED == "g14"
 
 
 def test_supergfxctl_is_gone_from_the_tool(tmp_path):
@@ -1349,8 +1284,9 @@ def _pin_kernel_tree(tmp_path, monkeypatch, *, headers: bool, pkgbase: str | Non
 
     Unpinned it answers from the machine under the test -- which today has
     the headers installed, so the branch that matters would silently never
-    run. Same leak the chassis check, the Samba tests and repo_usable() each
-    shipped once.
+    run. Same leak the chassis check, the Samba tests and the ASUS task's
+    old repo probe each shipped once (that probe went with the repository
+    apparatus on 2026-09-06).
 
     The constant lives in core/dkms.py since the ddcci task started needing the
     same check; waydroid reads it from there, so this pins it there.

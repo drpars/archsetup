@@ -161,13 +161,6 @@ path_missing = "{path} PATH'te değil; kabuk yapılandırmanıza ekleyin."
 done = "{name} hazır. Çalıştırmak için: {command}"
 
 [asus]
-repo_found = "[{repo}] deposu bulundu: ASUS paketleri oradan kurulacak."
-repo_missing = "[{repo}] deposu yok: asusctl/rog-control-center AUR'dan kurulacak."
-repo_setup_q = "[{repo}] deposu ({server}) eklensin mi? asusctl'in üstkaynağı buraya taşındı; [g14] 2026-07-19'dan beri yayın yapmıyor."
-key_failed = "[{repo}] imzalama anahtarı alınamadı; depo eklenmedi."
-upgrade_skipped = "Sistem yükseltmesi yapılmadı; [{repo}] yine de kuruldu ve kullanılabilir. Yükseltmeyi sonra `sudo pacman -Syu` ile yapın."
-above_g14 = "[ogc], [g14]'ün ÜSTÜNE yazıldı: pacman bir adı dosyada önce gelen depodan çözer, sürüme bakmaz."
-pacman_conf_unreadable = "{path} okunamadı; depo eklenmedi."
 nvidia_hint = "NVIDIA hibrit dizüstünüz varsa 'NVIDIA Dizüstü Güç Yönetimi' görevini de çalıştırın."
 
 [nvidia_laptop]
@@ -600,7 +593,7 @@ sddm_silent_desc = "Silent temasını kur, /etc/sddm.conf'u yaz, greeter'ın iml
 kmscon = "KMSCON Kur"
 kmscon_desc = "kmscon (extra) + seçilen TTY için hizmet değişimi"
 asus_tools = "ASUS ROG/TUF Araçları"
-asus_tools_desc = "[ogc] deposu + asusctl, rog-control-center, power-profiles-daemon"
+asus_tools_desc = "asusctl, rog-control-center (extra) + power-profiles-daemon, switcheroo-control"
 nvidia_laptop_power = "NVIDIA Dizüstü Güç Yönetimi"
 nvidia_laptop_power_desc = "S0ix/runtime PM için modprobe.d + udev kuralları ve nvidia servisleri"
 nvidia_sleep = "NVIDIA Uyku Birimleri"

@@ -269,12 +269,19 @@ def add_kernel_repo_live(repo: repos.Repo) -> int:
     return _add_repo(repo, LIVE_PACMAN_CONF, [])
 
 
-def add_asus_repo() -> int:
-    """Menu entry: the ASUS repository, for the tools rather than for a kernel.
+def add_ogc_repo() -> int:
+    """Menu entry: [ogc] on its own, for someone who did not pick linux-ogc.
 
-    [ogc] is the only ASUS repository archsetup writes. A [g14] already in the
-    file is outranked, not removed: a machine still running linux-g14 would be
-    left with no source for its kernel at all, and nothing here knows which
-    kernel booted.
+    It used to be here for asusctl and rog-control-center. Those landed in
+    [extra] on 2026-09-06 and core.asus stopped writing any repository at all,
+    so what is left for this entry is the rest of what [ogc] carries --
+    linux-ogc for a kernel switch later, linux-unstable-ogc, the gamescope
+    sessions. Choosing linux-ogc at install time still needs nothing from
+    here: pacstrap_base adds the repository on both sides by itself.
+
+    [ogc] is the only ASUS-adjacent repository archsetup writes. A [g14]
+    already in the file is outranked, not removed: a machine still running
+    linux-g14 would be left with no source for its kernel at all, and nothing
+    here knows which kernel booted.
     """
     return add_kernel_repo(repos.OGC)

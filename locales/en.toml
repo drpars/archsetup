@@ -161,13 +161,6 @@ path_missing = "{path} is not on PATH; add it in your shell configuration."
 done = "{name} is ready. Run it with: {command}"
 
 [asus]
-repo_found = "[{repo}] repository found: ASUS packages will be installed from it."
-repo_missing = "No [{repo}] repository: asusctl/rog-control-center will come from the AUR."
-repo_setup_q = "Add the [{repo}] repository ({server})? asusctl's upstream moved there; [g14] has published nothing since 2026-07-19."
-key_failed = "Could not import the [{repo}] signing key; repository not added."
-upgrade_skipped = "The system upgrade did not run; [{repo}] is set up and usable anyway. Run `sudo pacman -Syu` later."
-above_g14 = "[ogc] was written ABOVE [g14]: pacman resolves a name from the first repository in the file, regardless of version."
-pacman_conf_unreadable = "Could not read {path}; repository not added."
 nvidia_hint = "On a hybrid NVIDIA laptop, also run the 'NVIDIA Laptop Power Management' task."
 
 [nvidia_laptop]
@@ -600,7 +593,7 @@ sddm_silent_desc = "Install the Silent theme, write /etc/sddm.conf, place the gr
 kmscon = "Install KMSCON"
 kmscon_desc = "kmscon (extra) + service swap for the chosen TTY"
 asus_tools = "ASUS ROG/TUF Tools"
-asus_tools_desc = "[ogc] repository + asusctl, rog-control-center, power-profiles-daemon"
+asus_tools_desc = "asusctl, rog-control-center (extra) + power-profiles-daemon, switcheroo-control"
 nvidia_laptop_power = "NVIDIA Laptop Power Management"
 nvidia_laptop_power_desc = "modprobe.d + udev rules for S0ix/runtime PM and the nvidia services"
 nvidia_sleep = "NVIDIA Sleep Units"
