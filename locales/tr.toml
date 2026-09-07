@@ -127,6 +127,8 @@ done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında g
 overwrite_q = "{path} zaten bir karşılayıcı seçiyor: {command}. Üzerine yazılsın mı? (Yedeği alınır)"
 tuigreet_config = "{path} da var: tuigreet komut satırının değinmediği her ayarı oradan okuyor (renkler, oturum komutu, yerleşim). Görünüşü değiştirmek için o dosya düzenlenir."
 done = "greetd tuigreet'e yönlendirildi: {path}. Değişiklik bir sonraki oturum açma ekranında görünür."
+appearance_pending = "Greeter'ın GÖRÜNÜMÜ burada kurulmadı — renkler, oturum komutu ve konsol paleti ayrı ve root isteyen bir adım; bu araç yalnız greetd'nin kendi config'ini yazar."
+appearance_script = "Bu makinede o adımın betiği: {path}"
 
 [gitid]
 git_missing = "git kurulu degil; once git paketini kurun."

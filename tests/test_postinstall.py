@@ -338,6 +338,36 @@ def test_greetd_names_the_second_config_file_when_there_is_one(
     assert "tuigreet.toml" in capsys.readouterr().out
 
 
+def test_greetd_says_the_appearance_step_is_missing_on_a_fresh_machine(
+    tmp_path, monkeypatch, fake_write, runlog, capsys
+):
+    """The run that most needs telling is the one that used to say nothing.
+
+    The message above fires only when /etc/tuigreet/config.toml already
+    exists, which on a fresh machine it does not -- so the first install, the
+    one that leaves no colours, no session command and no console palette,
+    was the silent one. It did not look silent: greetd enabled, a greeter on
+    the next boot, exit 0.
+
+    The concrete script is named only when it is actually here. An
+    unconditional path would be a claim about another repo's layout, and that
+    is the failure this branch was handed over for.
+    """
+    _greetd_env(tmp_path, monkeypatch, fake_write, runlog, "agreety --cmd /bin/sh")
+    monkeypatch.setattr(greetd.dotfiles, "DOTFILES_DIR", tmp_path / "dotfiles")
+
+    assert greetd.configure() == 0
+    without_repo = capsys.readouterr().out
+    assert i18n.t("greetd.appearance_pending") in without_repo
+    assert "install.sh" not in without_repo
+
+    script = tmp_path / "dotfiles" / "greetd" / "install.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\n")
+    assert greetd.configure() == 0
+    assert str(script) in capsys.readouterr().out
+
+
 def test_sddm_cursor_theme_is_one_name():
     """Both greeter cursor paths must be told the same theme.
 

@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import i18n
+from . import dotfiles, i18n
 from .prompt import ask_yes
 from .sysedit import write_with_backup
 
@@ -122,4 +122,27 @@ def configure() -> int:
         print(t("greetd.tuigreet_config", path=TUIGREET_CONFIG))
     else:
         print(t("greetd.done", path=CONFIG))
+        _say_appearance_is_elsewhere()
     return 0
+
+
+def _say_appearance_is_elsewhere() -> None:
+    """Name the step this module deliberately does not perform.
+
+    The branch above only fires when TUIGREET_CONFIG already exists, which on
+    a fresh machine it does not -- so the one run that most needs telling was
+    the one run that said nothing. What it left behind looked complete:
+    greetd enabled, a greeter on the next boot, exit 0, and no colours, no
+    session command and no console palette, with nothing naming the step that
+    would have supplied them.
+
+    The concrete path is printed only when it is on this machine. A path
+    written down unconditionally is a claim about another repo's layout, and
+    that is the exact failure this was handed over for: archsetup's own
+    SECTIONS comment kept describing a dotfiles folder for a month after it
+    was deleted, because nothing here reads those names.
+    """
+    print(t("greetd.appearance_pending"))
+    script = dotfiles.DOTFILES_DIR / "greetd" / "install.sh"
+    if script.is_file():
+        print(t("greetd.appearance_script", path=script))

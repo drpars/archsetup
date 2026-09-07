@@ -127,6 +127,8 @@ done = "SDDM theme installed. Visible on the next login screen."
 overwrite_q = "{path} already selects a greeter: {command}. Overwrite it? (A backup is kept)"
 tuigreet_config = "{path} exists too: tuigreet reads every setting the command line leaves alone from there (colours, session command, layout). Edit that file to change how the greeter looks."
 done = "greetd now points at tuigreet: {path}. Visible on the next login screen."
+appearance_pending = "The greeter's APPEARANCE was not installed here -- colours, session command and console palette are a separate, root-owned step; this tool only writes greetd's own config."
+appearance_script = "On this machine that step's script is: {path}"
 
 [gitid]
 git_missing = "git is not installed; install the git package first."

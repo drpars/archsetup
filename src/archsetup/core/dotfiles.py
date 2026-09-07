@@ -41,10 +41,18 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 #
 # Depodaki her ust klasor bir bolum degildir, bilerek:
 #   browser/  Firefox profil dizini rastgele adli, sabit hedef yok
-#   sddm/     /etc altina gider, root ister -- core/sddm.py'nin isi
+#   greetd/   /etc altina gider, root ister -- kendi install.sh'i var
+#             (greeter'in gorunumu + konsol paleti; core/greetd.py yalnizca
+#              greetd'nin kendi config'ini yazar, bu bolumu kurmaz)
 #   windows/  baska bir isletim sistemi
 #   docs/     belge, kurulacak bir sey degil
 #   claude/   kendi install.sh'i var
+#
+# Bu liste baska bir deponun anlik goruntusu, yani tek tarafli bayatlar ve
+# sessizce: buradaki hicbir kod klasor adlarini okumuyor. 2026-09-07'de iki
+# uctan birden bayatladi -- sddm/ satiri duruyordu ama o klasor silinmisti,
+# yerine gelen greetd/ hic yazmiyordu. Bugunku hali su komutla karsilastirilir:
+#   ls -d ~/.dotfiles/*/ | xargs -n1 basename
 SECTIONS: dict[str, tuple[str, Path]] = {
     "config": ("config", Path.home() / ".config"),
     "home": ("home", Path.home()),
