@@ -123,6 +123,11 @@ greeter_home_missing = "{user} hesabının ev dizini yok; greeter'ın kendi imle
 cursor_done = "Greeter imleç teması ({theme}) yerleştirildi: {path}"
 done = "SDDM teması kuruldu. Değişiklik bir sonraki oturum açma ekranında görünür."
 
+[greetd]
+overwrite_q = "{path} zaten bir karşılayıcı seçiyor: {command}. Üzerine yazılsın mı? (Yedeği alınır)"
+tuigreet_config = "{path} da var: tuigreet komut satırının değinmediği her ayarı oradan okuyor (renkler, oturum komutu, yerleşim). Görünüşü değiştirmek için o dosya düzenlenir."
+done = "greetd tuigreet'e yönlendirildi: {path}. Değişiklik bir sonraki oturum açma ekranında görünür."
+
 [gitid]
 git_missing = "git kurulu degil; once git paketini kurun."
 key_missing = "Bu makinenin GitHub anahtari yok: {path} — once 'SSH Kimligi ve Agent' gorevini calistirin."
@@ -509,6 +514,7 @@ sddm_desc = "Qt giriş yöneticisi (Plasma önerilen)"
 sddm-git_desc = "SDDM geliştirme sürümü (AUR)"
 lxdm_desc = "LXDE giriş yöneticisi"
 lightdm_desc = "Hafif giriş yöneticisi (GTK karşılayıcı ile)"
+greetd_desc = "TTY giriş yöneticisi (tuigreet; X ve GPU gerektirmez)"
 
 [menu.settings]
 title = "Ayarlar"

@@ -167,9 +167,38 @@ def test_webapp_manager_has_a_browser_to_write_exec_lines_for():
 
 def test_display_managers():
     dms = data.load_display_managers()
-    assert [d.id for d in dms] == ["gdm", "sddm", "sddm-git", "lxdm", "lightdm"]
+    assert [d.id for d in dms] == [
+        "gdm", "sddm", "sddm-git", "lxdm", "lightdm", "greetd",
+    ]
     assert next(d for d in dms if d.id == "sddm-git").aur is True
     assert next(d for d in dms if d.id == "lightdm").package == "lightdm-gtk-greeter"
+    # greetd is the entry that needs a greeter package of its own. Asserted by
+    # name because installing only the daemon leaves a service that starts,
+    # fails to exec its greeter and is restarted forever -- a broken machine
+    # that the install itself reports as successful.
+    greetd_dm = next(d for d in dms if d.id == "greetd")
+    assert greetd_dm.extra == ("greetd-tuigreet",)
+    assert all(d.extra == () for d in dms if d.id != "greetd")
+
+
+def test_greetd_config_names_the_greeter_it_installs():
+    """The written command has to run the package the entry installs.
+
+    These two live in different files -- the package list in
+    displaymanagers.toml, the command in core/greetd.py -- and nothing but
+    this test makes them agree. Getting it wrong is silent: greetd starts,
+    the config parses, and the greeter is whatever the command happens to
+    name.
+    """
+    from archsetup.core import greetd
+
+    dm = next(d for d in data.load_display_managers() if d.id == "greetd")
+    binary = greetd.GREETER_CMD.split()[0]
+    assert any(binary in pkg for pkg in (dm.package, *dm.extra))
+    assert f'command = "{greetd.GREETER_CMD}"' in greetd.CONFIG_TEMPLATE
+    # The shipped config's greeter is what `configure()` treats as "nobody has
+    # chosen yet", so it must not be what we write.
+    assert "agreety" not in greetd.GREETER_CMD
 
 
 def test_fix_terminal_env(monkeypatch):

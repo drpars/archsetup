@@ -18,7 +18,7 @@ from textual.widgets import Footer, Header, Input, OptionList, SelectionList, St
 from textual.widgets.option_list import Option
 from textual.widgets.selection_list import Selection
 
-from ..core import data, dotfiles, hardware, i18n, pacman, services, tasks
+from ..core import data, dotfiles, greetd, hardware, i18n, pacman, services, tasks
 
 t = i18n.t
 
@@ -463,13 +463,35 @@ def make_update_menu() -> MenuScreen:
     return MenuScreen(t("menu.update.title"), _task_items("update"))
 
 
+# Display managers that need a config file written between the install and the
+# enable. Keyed by id and kept here rather than in displaymanagers.toml so the
+# data file stays data: a TOML entry naming a Python callable would be a code
+# reference no test or import could follow.
+#
+# Order matters for the one member: greetd's shipped config runs agreety, so
+# enabling the service before the rewrite would arm the wrong greeter, and the
+# rewrite before the install would point it at a binary that is not there yet.
+DM_SETUP = {"greetd": greetd.configure}
+
+
 def make_dm_menu() -> MenuScreen:
     def install_dm(screen: MenuScreen, dm: data.DisplayManager) -> None:
         def fn() -> int:
-            repo = [] if dm.aur else [dm.package]
+            # `extra` is repo-only: the one AUR entry here (sddm-git) has none,
+            # and an AUR helper call for an empty list would be pure noise.
+            repo = list(dm.extra) if dm.aur else [dm.package, *dm.extra]
             aur = [dm.package] if dm.aur else []
             rc = pacman.install(repo, aur)
+            if rc == 0 and (setup := DM_SETUP.get(dm.id)):
+                rc = setup()
             if rc == 0:
+                # Fails loudly, and that is the whole handling: enabling a
+                # second display manager cannot silently half-work, because
+                # every one of these units installs the same
+                # Alias=display-manager.service symlink and systemd refuses to
+                # replace one that points elsewhere (measured 2026-09-07:
+                # `systemctl enable --root=<fake> greetd` with sddm already
+                # enabled -> rc=1, naming the unit that holds it).
                 rc = services.enable(dm.service)
             return rc
 

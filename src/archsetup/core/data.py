@@ -47,6 +47,12 @@ class DisplayManager:
     package: str
     service: str
     aur: bool = False
+    # Repo packages installed alongside `package`. greetd is why this exists:
+    # the daemon and its greeter ship as separate packages, and a greetd whose
+    # config names a greeter that is not installed starts, fails to exec it,
+    # and is restarted by systemd forever. `package` stays singular because it
+    # is also the entry's label and the name the package audit reports under.
+    extra: tuple[str, ...] = ()
 
 
 def _note(raw: object) -> str:
@@ -99,6 +105,7 @@ def load_display_managers(section: str = "postinstall") -> list[DisplayManager]:
             package=dm.get("package", dm["id"]),
             service=dm["service"],
             aur=dm.get("aur", False),
+            extra=tuple(dm.get("extra", [])),
         )
         for dm in raw.get("dm", [])
     ]

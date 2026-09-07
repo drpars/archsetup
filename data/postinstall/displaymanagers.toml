@@ -1,5 +1,9 @@
 # Display managers: single-choice install + systemctl enable.
 # Display names/descriptions come from locale keys dm.<id>_desc.
+#
+# `extra` names repo packages installed with the entry; `setup` in
+# ui/screens.py names the one entry that also has to write a config file.
+# Only greetd uses either, and it needs both.
 
 [[dm]]
 id = "gdm"
@@ -26,3 +30,11 @@ service = "lxdm"
 id = "lightdm"
 package = "lightdm-gtk-greeter"
 service = "lightdm"
+
+# The only TTY greeter here, and the only entry that installs two packages:
+# greetd is the daemon, greetd-tuigreet the greeter. Both are in [extra].
+[[dm]]
+id = "greetd"
+package = "greetd"
+extra = ["greetd-tuigreet"]
+service = "greetd"

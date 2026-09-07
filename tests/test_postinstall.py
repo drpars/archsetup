@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,7 @@ from archsetup.core import (
     dkms,
     dotfiles,
     ethernet_pm,
+    greetd,
     i18n,
     iwd,
     hardware,
@@ -228,6 +230,112 @@ def test_sddm_silent(tmp_path, monkeypatch, fake_write):
 
     monkeypatch.setattr(sddm, "_sddm_installed", lambda: False)
     assert sddm.install_silent() == 1
+
+
+def _greetd_env(tmp_path, monkeypatch, fake_write, runlog, current: str):
+    """A fake /etc/greetd/config.toml holding `current` as its greeter command."""
+    conf = tmp_path / "config.toml"
+    conf.write_text(f'[terminal]\nvt = 1\n\n[default_session]\ncommand = "{current}"\n')
+    monkeypatch.setattr(greetd, "CONFIG", conf)
+    monkeypatch.setattr(greetd, "TUIGREET_CONFIG", tmp_path / "tuigreet.toml")
+    monkeypatch.setattr(sysedit, "run", runlog)
+    monkeypatch.setattr(sysedit, "sudo_write", fake_write)
+    return conf
+
+
+def test_greetd_rewrites_the_shipped_agreety_config_without_asking(
+    tmp_path, monkeypatch, fake_write, runlog
+):
+    """The package's own config is not a choice anyone made.
+
+    greetd ships /etc/greetd/config.toml, so the file always exists and a
+    plain "overwrite?" prompt would fire on every single fresh install. An
+    always-yes question is one people stop reading, so the shipped agreety
+    command is treated as "nobody has been here yet".
+    """
+    conf = _greetd_env(
+        tmp_path, monkeypatch, fake_write, runlog, "agreety --cmd /bin/sh"
+    )
+    monkeypatch.setattr(
+        greetd, "ask_yes", lambda prompt: pytest.fail("sorulmamaliydi")
+    )
+
+    assert greetd.configure() == 0
+    assert f'command = "{greetd.GREETER_CMD}"' in conf.read_text()
+    # Backed up rather than replaced outright, like every other config here.
+    assert ["sudo", "cp", str(conf), f"{conf}.bak"] in runlog.calls
+
+
+def test_greetd_asks_before_taking_a_greeter_someone_else_chose(
+    tmp_path, monkeypatch, fake_write, runlog
+):
+    """Declining has to leave the file byte-identical, not merely unenabled.
+
+    The case this protects is real and lives one repo over: dotfiles' greetd
+    section writes `tuigreet --config /etc/tuigreet/config.toml`, which is
+    where that machine's palette, session and clock come from. Overwriting it
+    with this module's flag line would look like an upgrade and quietly drop
+    all of it.
+    """
+    dotfiles_cmd = "tuigreet --config /etc/tuigreet/config.toml"
+    conf = _greetd_env(tmp_path, monkeypatch, fake_write, runlog, dotfiles_cmd)
+    before = conf.read_text()
+    asked = []
+    monkeypatch.setattr(greetd, "ask_yes", lambda prompt: asked.append(prompt) or False)
+
+    assert greetd.configure() == 0
+    assert conf.read_text() == before
+    assert len(asked) == 1
+    # The prompt names what is being replaced; "a file exists" would not let
+    # anyone tell this case from the shipped default.
+    assert dotfiles_cmd in asked[0]
+
+    # Saying yes is the other half, and it does write.
+    monkeypatch.setattr(greetd, "ask_yes", lambda prompt: True)
+    assert greetd.configure() == 0
+    assert f'command = "{greetd.GREETER_CMD}"' in conf.read_text()
+
+
+def test_greetd_never_writes_the_flag_that_would_void_its_own_flags(tmp_path):
+    """--config is the one tuigreet flag this module must not write.
+
+    Measured 2026-09-07, greetd-tuigreet 0.11.1-2, `--dump-config` both ways:
+    with `--config <file>` the file wins outright (`--width 42` reported the
+    file's 80, `--title` reported false, both exit 0); without it the same
+    file is still read -- it is tuigreet's default path -- but only fills in
+    what the command line leaves alone (42 and true, while window_padding
+    still came from the file).
+
+    So writing --config here would silently demote every flag beside it to
+    decoration. The greeter would still come up, which is what makes it worth
+    a test rather than a comment.
+    """
+    # Parsed rather than grepped: the template's own comment explains why
+    # --config is absent, so a substring search over the file finds it and
+    # passes for the wrong reason. Parsing also proves the file greetd is
+    # handed is valid TOML, which nothing else here checks.
+    written = tomllib.loads(greetd.CONFIG_TEMPLATE)
+    assert "--config" not in written["default_session"]["command"]
+    assert written["default_session"]["command"] == greetd.GREETER_CMD
+    assert written["default_session"]["user"] == "greeter"
+    assert written["terminal"]["vt"] == 1
+
+
+def test_greetd_names_the_second_config_file_when_there_is_one(
+    tmp_path, monkeypatch, fake_write, runlog, capsys
+):
+    """Two files decide how the greeter looks; the run has to say so.
+
+    Everything the flags do not name -- colours, session command, layout --
+    comes from /etc/tuigreet/config.toml when it exists. Printing nothing
+    would leave whoever next wants to change a colour editing the file this
+    module just wrote, where no colour is.
+    """
+    _greetd_env(tmp_path, monkeypatch, fake_write, runlog, "agreety --cmd /bin/sh")
+    (tmp_path / "tuigreet.toml").write_text("[display]\nshow_time = true\n")
+
+    assert greetd.configure() == 0
+    assert "tuigreet.toml" in capsys.readouterr().out
 
 
 def test_sddm_cursor_theme_is_one_name():

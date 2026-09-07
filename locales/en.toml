@@ -123,6 +123,11 @@ greeter_home_missing = "The {user} account has no home directory; the greeter's 
 cursor_done = "Greeter cursor theme ({theme}) placed: {path}"
 done = "SDDM theme installed. Visible on the next login screen."
 
+[greetd]
+overwrite_q = "{path} already selects a greeter: {command}. Overwrite it? (A backup is kept)"
+tuigreet_config = "{path} exists too: tuigreet reads every setting the command line leaves alone from there (colours, session command, layout). Edit that file to change how the greeter looks."
+done = "greetd now points at tuigreet: {path}. Visible on the next login screen."
+
 [gitid]
 git_missing = "git is not installed; install the git package first."
 key_missing = "This machine has no GitHub key: {path} — run the 'SSH Identity and Agent' task first."
@@ -509,6 +514,7 @@ sddm_desc = "Qt display manager (recommended for Plasma)"
 sddm-git_desc = "SDDM development version (AUR)"
 lxdm_desc = "LXDE display manager"
 lightdm_desc = "Lightweight display manager (with GTK greeter)"
+greetd_desc = "TTY display manager (tuigreet; needs no X and no GPU)"
 
 [menu.settings]
 title = "Settings"

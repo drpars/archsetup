@@ -315,9 +315,16 @@ def _entries(path: Path) -> list[tuple[str, str, bool]]:
     for cat in raw.get("category", []):
         for pkg in cat.get("packages", []):
             found.append((cat["id"], pkg["name"], bool(pkg.get("aur", False))))
-    # displaymanagers.toml keeps its packages under a different key.
+    # displaymanagers.toml keeps its packages under a different key, and an
+    # entry may install more than one: `extra` is walked too, or a greeter
+    # that vanished from the repos would pass the audit while the entry it
+    # belongs to installs nothing but a daemon with no greeter. Those are
+    # repo packages by definition -- see DisplayManager.extra -- so the aur
+    # flag rides with `package` only.
     for dm in raw.get("dm", []):
-        found.append(("dm", dm.get("package", dm["id"]), bool(dm.get("aur", False))))
+        is_aur = bool(dm.get("aur", False))
+        found.append(("dm", dm.get("package", dm["id"]), is_aur))
+        found.extend(("dm", name, False) for name in dm.get("extra", []))
     return found
 
 
