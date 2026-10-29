@@ -47,11 +47,16 @@ IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 #   windows/  baska bir isletim sistemi
 #   docs/     belge, kurulacak bir sey degil
 #   claude/   kendi install.sh'i var
+#   pkgbuild/ depolarda olmayan paketlerin yerel PKGBUILD'leri; hedefi bir
+#             dizin degil pacman -- derleyip kuran betik dotfiles'in kendi
+#             (nuvio/ -> config/scripts/nuvio-update)
 #
 # Bu liste baska bir deponun anlik goruntusu, yani tek tarafli bayatlar ve
 # sessizce: buradaki hicbir kod klasor adlarini okumuyor. 2026-09-07'de iki
 # uctan birden bayatladi -- sddm/ satiri duruyordu ama o klasor silinmisti,
-# yerine gelen greetd/ hic yazmiyordu. Bugunku hali su komutla karsilastirilir:
+# yerine gelen greetd/ hic yazmiyordu; 2026-09-23'te eklenen pkgbuild/ de
+# 2026-10-29'a kadar yazmiyordu.
+# Bugunku hali su komutla karsilastirilir:
 #   ls -d ~/.dotfiles/*/ | xargs -n1 basename
 SECTIONS: dict[str, tuple[str, Path]] = {
     "config": ("config", Path.home() / ".config"),
